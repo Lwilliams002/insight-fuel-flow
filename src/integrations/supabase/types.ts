@@ -52,6 +52,158 @@ export type Database = {
           },
         ]
       }
+      deal_commissions: {
+        Row: {
+          commission_amount: number
+          commission_percent: number
+          commission_type: Database["public"]["Enums"]["commission_type"]
+          created_at: string
+          deal_id: string
+          id: string
+          paid: boolean
+          paid_date: string | null
+          rep_id: string
+          updated_at: string
+        }
+        Insert: {
+          commission_amount?: number
+          commission_percent?: number
+          commission_type: Database["public"]["Enums"]["commission_type"]
+          created_at?: string
+          deal_id: string
+          id?: string
+          paid?: boolean
+          paid_date?: string | null
+          rep_id: string
+          updated_at?: string
+        }
+        Update: {
+          commission_amount?: number
+          commission_percent?: number
+          commission_type?: Database["public"]["Enums"]["commission_type"]
+          created_at?: string
+          deal_id?: string
+          id?: string
+          paid?: boolean
+          paid_date?: string | null
+          rep_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_commissions_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "deal_commissions_rep_id_fkey"
+            columns: ["rep_id"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deal_photos: {
+        Row: {
+          created_at: string
+          deal_id: string
+          description: string | null
+          file_name: string
+          file_type: string | null
+          file_url: string
+          id: string
+          uploaded_by: string | null
+        }
+        Insert: {
+          created_at?: string
+          deal_id: string
+          description?: string | null
+          file_name: string
+          file_type?: string | null
+          file_url: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Update: {
+          created_at?: string
+          deal_id?: string
+          description?: string | null
+          file_name?: string
+          file_type?: string | null
+          file_url?: string
+          id?: string
+          uploaded_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "deal_photos_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      deals: {
+        Row: {
+          address: string
+          city: string | null
+          completion_date: string | null
+          created_at: string
+          homeowner_email: string | null
+          homeowner_name: string
+          homeowner_phone: string | null
+          id: string
+          install_date: string | null
+          notes: string | null
+          signed_date: string | null
+          state: string | null
+          status: Database["public"]["Enums"]["deal_status"]
+          total_price: number
+          updated_at: string
+          zip_code: string | null
+        }
+        Insert: {
+          address: string
+          city?: string | null
+          completion_date?: string | null
+          created_at?: string
+          homeowner_email?: string | null
+          homeowner_name: string
+          homeowner_phone?: string | null
+          id?: string
+          install_date?: string | null
+          notes?: string | null
+          signed_date?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["deal_status"]
+          total_price?: number
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Update: {
+          address?: string
+          city?: string | null
+          completion_date?: string | null
+          created_at?: string
+          homeowner_email?: string | null
+          homeowner_name?: string
+          homeowner_phone?: string | null
+          id?: string
+          install_date?: string | null
+          notes?: string | null
+          signed_date?: string | null
+          state?: string | null
+          status?: Database["public"]["Enums"]["deal_status"]
+          total_price?: number
+          updated_at?: string
+          zip_code?: string | null
+        }
+        Relationships: []
+      }
       import_rows_raw: {
         Row: {
           created_at: string
@@ -387,6 +539,16 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "rep"
+      commission_type: "setter" | "closer" | "self_gen"
+      deal_status:
+        | "lead"
+        | "signed"
+        | "permit"
+        | "install_scheduled"
+        | "installed"
+        | "complete"
+        | "paid"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -515,6 +677,17 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "rep"],
+      commission_type: ["setter", "closer", "self_gen"],
+      deal_status: [
+        "lead",
+        "signed",
+        "permit",
+        "install_scheduled",
+        "installed",
+        "complete",
+        "paid",
+        "cancelled",
+      ],
     },
   },
 } as const

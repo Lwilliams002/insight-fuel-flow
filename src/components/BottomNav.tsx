@@ -1,11 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Building2, User } from 'lucide-react';
+import { LayoutDashboard, Home, ClipboardPlus } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/accounts', icon: Building2, label: 'Accounts' },
-  { href: '/profile', icon: User, label: 'Profile' },
+  { href: '/deals', icon: Home, label: 'My Deals' },
+  { href: '/submit', icon: ClipboardPlus, label: 'New Deal' },
 ];
 
 export function BottomNav() {
@@ -22,9 +22,7 @@ export function BottomNav() {
               to={item.href}
               className={cn(
                 'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
-                isActive
-                  ? 'text-primary'
-                  : 'text-muted-foreground hover:text-foreground'
+                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
               )}
             >
               <item.icon className="h-5 w-5" />

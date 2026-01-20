@@ -7,11 +7,13 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import RepDashboard from "./pages/RepDashboard";
+import RepDeals from "./pages/rep/RepDeals";
+import RepJotForm from "./pages/rep/RepJotForm";
 import AdminDashboard from "./pages/AdminDashboard";
 import RepsManagement from "./pages/admin/RepsManagement";
-import MerchantsManagement from "./pages/admin/MerchantsManagement";
-import StatementUpload from "./pages/admin/StatementUpload";
-import AccountsUpload from "./pages/admin/AccountsUpload";
+import AdminDeals from "./pages/admin/AdminDeals";
+import AdminCommissions from "./pages/admin/AdminCommissions";
+import AdminJotForm from "./pages/admin/AdminJotForm";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +28,8 @@ const App = () => (
           <Routes>
             <Route path="/" element={<Navigate to="/auth" replace />} />
             <Route path="/auth" element={<Auth />} />
+            
+            {/* Rep Routes */}
             <Route
               path="/dashboard"
               element={
@@ -34,6 +38,24 @@ const App = () => (
                 </ProtectedRoute>
               }
             />
+            <Route
+              path="/deals"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <RepDeals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/submit"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <RepJotForm />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Admin Routes */}
             <Route
               path="/admin"
               element={
@@ -51,26 +73,26 @@ const App = () => (
               }
             />
             <Route
-              path="/admin/merchants"
+              path="/admin/deals"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <MerchantsManagement />
+                  <AdminDeals />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/upload"
+              path="/admin/commissions"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <StatementUpload />
+                  <AdminCommissions />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/admin/accounts-upload"
+              path="/admin/jotform"
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
-                  <AccountsUpload />
+                  <AdminJotForm />
                 </ProtectedRoute>
               }
             />
