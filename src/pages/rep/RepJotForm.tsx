@@ -1,66 +1,73 @@
+import { useState, useEffect } from 'react';
 import { RepLayout } from '@/components/RepLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, FileWarning } from 'lucide-react';
 
 export default function RepJotForm() {
-  // You can set a default JotForm URL here or let admins configure it
-  const [jotFormUrl, setJotFormUrl] = useState('');
-  const defaultPlaceholder = 'https://form.jotform.com/YOUR_FORM_ID';
+  const [jotFormUrl, setJotFormUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchJotFormUrl();
+  }, []);
+
+  const fetchJotFormUrl = async () => {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'jotform_url')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching JotForm URL:', error);
+    }
+    
+    setJotFormUrl(data?.value || '');
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <RepLayout title="Submit New Deal">
+        <div className="flex items-center justify-center h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </RepLayout>
+    );
+  }
+
+  if (!jotFormUrl) {
+    return (
+      <RepLayout title="Submit New Deal">
+        <div className="p-4">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <FileWarning className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <CardTitle>Form Not Configured</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center text-muted-foreground">
+              <p>The deal submission form hasn't been set up yet.</p>
+              <p className="mt-2">Please contact your administrator to configure the form.</p>
+            </CardContent>
+          </Card>
+        </div>
+      </RepLayout>
+    );
+  }
 
   return (
     <RepLayout title="Submit New Deal">
-      <div className="p-4 space-y-4">
-        {!jotFormUrl ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">JotForm Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Enter your JotForm URL to embed the deal submission form.
-                </AlertDescription>
-              </Alert>
-              
-              <div className="space-y-2">
-                <Label htmlFor="jotform-url">JotForm Embed URL</Label>
-                <Input
-                  id="jotform-url"
-                  placeholder={defaultPlaceholder}
-                  value={jotFormUrl}
-                  onChange={(e) => setJotFormUrl(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Paste your JotForm URL here. It should look like: https://form.jotform.com/123456789
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="h-[calc(100vh-180px)] rounded-lg overflow-hidden border bg-background">
-            <iframe
-              src={jotFormUrl}
-              title="Deal Submission Form"
-              className="w-full h-full border-0"
-              allow="geolocation; microphone; camera"
-              allowFullScreen
-            />
-          </div>
-        )}
-
-        {jotFormUrl && (
-          <button
-            onClick={() => setJotFormUrl('')}
-            className="text-sm text-muted-foreground underline"
-          >
-            Change JotForm URL
-          </button>
-        )}
+      <div className="h-[calc(100vh-140px)] bg-card">
+        <iframe
+          src={jotFormUrl}
+          title="Deal Submission Form"
+          className="w-full h-full border-0"
+          allow="geolocation; microphone; camera"
+          allowFullScreen
+        />
       </div>
     </RepLayout>
   );

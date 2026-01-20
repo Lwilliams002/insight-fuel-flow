@@ -1,73 +1,92 @@
+import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { useState } from 'react';
-import { AlertCircle } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, Settings, FileWarning } from 'lucide-react';
 
 export default function AdminJotForm() {
-  // You can set a default JotForm URL here or let admins configure it
-  const [jotFormUrl, setJotFormUrl] = useState('');
-  const defaultPlaceholder = 'https://form.jotform.com/YOUR_FORM_ID';
+  const [jotFormUrl, setJotFormUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchJotFormUrl();
+  }, []);
+
+  const fetchJotFormUrl = async () => {
+    const { data, error } = await supabase
+      .from('app_settings')
+      .select('value')
+      .eq('key', 'jotform_url')
+      .single();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching JotForm URL:', error);
+    }
+    
+    setJotFormUrl(data?.value || '');
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <AdminLayout title="Submit New Deal">
+        <div className="flex items-center justify-center h-[60vh]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </AdminLayout>
+    );
+  }
+
+  if (!jotFormUrl) {
+    return (
+      <AdminLayout title="Submit New Deal">
+        <div className="p-4">
+          <Card className="max-w-md mx-auto">
+            <CardHeader className="text-center">
+              <div className="mx-auto mb-4 h-12 w-12 rounded-full bg-muted flex items-center justify-center">
+                <FileWarning className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <CardTitle>Form Not Configured</CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-4">
+              <p className="text-muted-foreground">
+                Configure your JotForm URL in settings to enable deal submissions.
+              </p>
+              <Link to="/admin/settings">
+                <Button>
+                  <Settings className="h-4 w-4 mr-2" />
+                  Go to Settings
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </AdminLayout>
+    );
+  }
 
   return (
     <AdminLayout title="Submit New Deal">
-      <div className="p-4 space-y-4">
-        {!jotFormUrl ? (
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">JotForm Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <Alert>
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Enter your JotForm URL to embed the deal submission form. This form should collect:
-                  <ul className="list-disc ml-4 mt-2 space-y-1">
-                    <li>Homeowner name & contact info</li>
-                    <li>Property address</li>
-                    <li>Total job price</li>
-                    <li>Commission type (Setter, Closer, Self-Gen)</li>
-                    <li>Rep name/ID</li>
-                  </ul>
-                </AlertDescription>
-              </Alert>
-              
-              <div className="space-y-2">
-                <Label htmlFor="jotform-url">JotForm Embed URL</Label>
-                <Input
-                  id="jotform-url"
-                  placeholder={defaultPlaceholder}
-                  value={jotFormUrl}
-                  onChange={(e) => setJotFormUrl(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Paste your JotForm URL here. It should look like: https://form.jotform.com/123456789
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="h-[calc(100vh-180px)] rounded-lg overflow-hidden border bg-background">
-            <iframe
-              src={jotFormUrl}
-              title="Deal Submission Form"
-              className="w-full h-full border-0"
-              allow="geolocation; microphone; camera"
-              allowFullScreen
-            />
-          </div>
-        )}
-
-        {jotFormUrl && (
-          <button
-            onClick={() => setJotFormUrl('')}
-            className="text-sm text-muted-foreground underline"
-          >
-            Change JotForm URL
-          </button>
-        )}
+      <div className="space-y-4">
+        <div className="flex justify-end">
+          <Link to="/admin/settings">
+            <Button variant="outline" size="sm">
+              <Settings className="h-4 w-4 mr-2" />
+              Configure Form
+            </Button>
+          </Link>
+        </div>
+        <div className="h-[calc(100vh-180px)] rounded-lg overflow-hidden border border-border bg-card">
+          <iframe
+            src={jotFormUrl}
+            title="Deal Submission Form"
+            className="w-full h-full border-0"
+            allow="geolocation; microphone; camera"
+            allowFullScreen
+          />
+        </div>
       </div>
     </AdminLayout>
   );
