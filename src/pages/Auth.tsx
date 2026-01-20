@@ -4,9 +4,10 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Mountain, Loader2 } from 'lucide-react';
+import { Logo } from '@/components/Logo';
+import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
 
@@ -97,17 +98,17 @@ export default function Auth() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      <div className="mb-8 flex items-center gap-3">
-        <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary">
-          <Mountain className="h-7 w-7 text-primary-foreground" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">RoofCommission Pro</h1>
-          <p className="text-sm text-muted-foreground">Track your roofing commissions</p>
-        </div>
+      {/* Gradient background effect */}
+      <div className="fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute -top-1/2 -left-1/2 h-full w-full rounded-full bg-primary/5 blur-3xl" />
+        <div className="absolute -bottom-1/2 -right-1/2 h-full w-full rounded-full bg-accent/5 blur-3xl" />
       </div>
 
-      <Card className="w-full max-w-md shadow-lg">
+      <div className="mb-8">
+        <Logo size="xl" showText />
+      </div>
+
+      <Card className="w-full max-w-md border-border/50 shadow-2xl">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <CardHeader className="space-y-1 pb-4">
             <TabsList className="grid w-full grid-cols-2">

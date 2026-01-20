@@ -14,6 +14,7 @@ import RepsManagement from "./pages/admin/RepsManagement";
 import AdminDeals from "./pages/admin/AdminDeals";
 import AdminCommissions from "./pages/admin/AdminCommissions";
 import AdminJotForm from "./pages/admin/AdminJotForm";
+import AdminSettings from "./pages/admin/AdminSettings";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -93,6 +94,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminJotForm />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminSettings />
                 </ProtectedRoute>
               }
             />
