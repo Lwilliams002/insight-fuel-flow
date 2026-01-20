@@ -102,8 +102,8 @@ export default function Auth() {
           <Mountain className="h-7 w-7 text-primary-foreground" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Apex Commissions</h1>
-          <p className="text-sm text-muted-foreground">Track your earnings</p>
+          <h1 className="text-2xl font-bold text-foreground">RoofCommission Pro</h1>
+          <p className="text-sm text-muted-foreground">Track your roofing commissions</p>
         </div>
       </div>
 
