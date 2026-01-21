@@ -12,7 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 
-type CommissionLevel = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+type CommissionLevel = 'bronze' | 'silver' | 'gold';
 
 interface CommissionLevelInfo {
   level: CommissionLevel;
@@ -36,8 +36,6 @@ const levelColors: Record<CommissionLevel, string> = {
   bronze: 'bg-orange-500/20 text-orange-700 border-orange-500/30',
   silver: 'bg-slate-400/20 text-slate-600 border-slate-400/30',
   gold: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30',
-  platinum: 'bg-cyan-500/20 text-cyan-700 border-cyan-500/30',
-  diamond: 'bg-purple-500/20 text-purple-700 border-purple-500/30',
 };
 
 export default function RepsManagement() {
