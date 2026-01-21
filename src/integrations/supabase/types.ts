@@ -632,6 +632,13 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      check_address_exists: {
+        Args: { check_address: string }
+        Returns: {
+          exists_already: boolean
+          owner_rep_id: string
+        }[]
+      }
       get_rep_id: { Args: never; Returns: string }
       has_role: {
         Args: {
