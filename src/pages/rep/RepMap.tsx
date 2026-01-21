@@ -207,9 +207,9 @@ export default function RepMap() {
 
   return (
     <RepLayout title="My Map">
-      <div className="flex flex-col h-[calc(100vh-8rem)]">
+      <div className="flex flex-col" style={{ height: 'calc(100vh - 8rem)' }}>
         {/* Legend */}
-        <div className="flex items-center gap-4 p-3 bg-card border-b border-border">
+        <div className="flex items-center gap-4 p-3 bg-card border-b border-border flex-shrink-0">
           <span className="text-xs text-muted-foreground">Tap map to add pin:</span>
           {(['lead', 'followup', 'installed'] as PinStatus[]).map((status) => (
             <div key={status} className="flex items-center gap-1">
@@ -223,16 +223,25 @@ export default function RepMap() {
         </div>
 
         {/* Map */}
-        <div className="flex-1">
+        <div className="flex-1 relative" style={{ minHeight: '400px' }}>
           <MapContainer
             center={userLocation}
-            zoom={13}
-            className="h-full w-full"
-            style={{ height: '100%', width: '100%' }}
+            zoom={17}
+            scrollWheelZoom={true}
+            className="absolute inset-0"
+            style={{ height: '100%', width: '100%', zIndex: 1 }}
           >
+            {/* Esri World Imagery - FREE satellite tiles, great for house-level detail */}
             <TileLayer
-              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              attribution='&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
+            />
+            {/* Labels overlay for street names */}
+            <TileLayer
+              attribution=''
+              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+              maxZoom={19}
             />
             <MapClickHandler onMapClick={handleMapClick} />
             
