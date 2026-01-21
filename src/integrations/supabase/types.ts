@@ -649,6 +649,14 @@ export type Database = {
           owner_rep_id: string
         }[]
       }
+      create_deal_from_pin: {
+        Args: {
+          _homeowner_email?: string
+          _homeowner_phone?: string
+          _pin_id: string
+        }
+        Returns: string
+      }
       get_rep_id: { Args: never; Returns: string }
       has_role: {
         Args: {
