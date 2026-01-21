@@ -441,7 +441,7 @@ export default function RepMap() {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background">
+    <div className="fixed inset-0 bottom-16 flex flex-col bg-background">
       {/* Top Toggle */}
       <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
         <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
