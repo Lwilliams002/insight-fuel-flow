@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     if (role === 'rep') {
       const { error: repError } = await serviceClient.from('reps').insert({
         user_id: userId,
-        default_commission_percent: 10,
+        commission_level: 'silver',
       })
 
       if (repError) {

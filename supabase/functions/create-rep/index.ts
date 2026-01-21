@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     }
 
     // Get request body
-    const { email, password, fullName, commissionPercent } = await req.json()
+    const { email, password, fullName, commissionLevel } = await req.json()
 
     if (!email || !password || !fullName) {
       return new Response(JSON.stringify({ error: 'Missing required fields' }), {
@@ -65,6 +65,9 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       })
     }
+
+    const validLevels = ['bronze', 'silver', 'gold', 'platinum', 'diamond']
+    const level = validLevels.includes(commissionLevel) ? commissionLevel : 'silver'
 
     // Create the user using admin API
     const { data: authData, error: createUserError } = await serviceClient.auth.admin.createUser({
@@ -97,7 +100,7 @@ Deno.serve(async (req) => {
     // Create rep record
     const { error: repError } = await serviceClient.from('reps').insert({
       user_id: userId,
-      default_commission_percent: commissionPercent || 10,
+      commission_level: level,
     })
 
     if (repError) {

@@ -76,6 +76,30 @@ export type Database = {
         }
         Relationships: []
       }
+      commission_levels: {
+        Row: {
+          commission_percent: number
+          created_at: string
+          description: string | null
+          display_name: string
+          level: Database["public"]["Enums"]["commission_level"]
+        }
+        Insert: {
+          commission_percent: number
+          created_at?: string
+          description?: string | null
+          display_name: string
+          level: Database["public"]["Enums"]["commission_level"]
+        }
+        Update: {
+          commission_percent?: number
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          level?: Database["public"]["Enums"]["commission_level"]
+        }
+        Relationships: []
+      }
       deal_commissions: {
         Row: {
           commission_amount: number
@@ -350,6 +374,7 @@ export type Database = {
           effective_from: string | null
           effective_to: string | null
           id: string
+          level_override: Database["public"]["Enums"]["commission_level"] | null
           merchant_id: string
           percent_override: number | null
           rep_id: string
@@ -360,6 +385,9 @@ export type Database = {
           effective_from?: string | null
           effective_to?: string | null
           id?: string
+          level_override?:
+            | Database["public"]["Enums"]["commission_level"]
+            | null
           merchant_id: string
           percent_override?: number | null
           rep_id: string
@@ -370,6 +398,9 @@ export type Database = {
           effective_from?: string | null
           effective_to?: string | null
           id?: string
+          level_override?:
+            | Database["public"]["Enums"]["commission_level"]
+            | null
           merchant_id?: string
           percent_override?: number | null
           rep_id?: string
@@ -503,6 +534,7 @@ export type Database = {
       }
       reps: {
         Row: {
+          commission_level: Database["public"]["Enums"]["commission_level"]
           created_at: string
           default_commission_percent: number
           id: string
@@ -510,6 +542,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          commission_level?: Database["public"]["Enums"]["commission_level"]
           created_at?: string
           default_commission_percent?: number
           id?: string
@@ -517,6 +550,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          commission_level?: Database["public"]["Enums"]["commission_level"]
           created_at?: string
           default_commission_percent?: number
           id?: string
@@ -563,6 +597,7 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "rep"
+      commission_level: "bronze" | "silver" | "gold" | "platinum" | "diamond"
       commission_type: "setter" | "closer" | "self_gen"
       deal_status:
         | "lead"
@@ -701,6 +736,7 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "rep"],
+      commission_level: ["bronze", "silver", "gold", "platinum", "diamond"],
       commission_type: ["setter", "closer", "self_gen"],
       deal_status: [
         "lead",
