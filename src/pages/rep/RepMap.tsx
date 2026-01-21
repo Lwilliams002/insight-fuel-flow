@@ -318,49 +318,17 @@ export default function RepMap() {
     },
   });
 
-  // Convert pin to deal mutation
+  // Convert pin to deal mutation using secure server-side function
   const convertToDealMutation = useMutation({
     mutationFn: async (pin: Pin) => {
-      if (!repData) throw new Error('Rep data not found');
+      const { data, error } = await supabase.rpc('create_deal_from_pin', {
+        _pin_id: pin.id,
+        _homeowner_phone: formData.phone || null,
+        _homeowner_email: formData.email || null,
+      });
       
-      // 1. Create the deal
-      const { data: deal, error: dealError } = await supabase
-        .from('deals')
-        .insert({
-          homeowner_name: pin.homeowner_name || 'Unknown',
-          homeowner_phone: formData.phone || null,
-          homeowner_email: formData.email || null,
-          address: pin.address || '',
-          notes: pin.notes || null,
-          status: 'lead',
-        })
-        .select('id')
-        .single();
-      
-      if (dealError) throw dealError;
-      
-      // 2. Create deal commission linking rep to deal
-      const { error: commissionError } = await supabase
-        .from('deal_commissions')
-        .insert({
-          deal_id: deal.id,
-          rep_id: repData,
-          commission_type: 'self_gen' as const,
-          commission_percent: 0,
-          commission_amount: 0,
-        });
-      
-      if (commissionError) throw commissionError;
-      
-      // 3. Update pin with deal_id
-      const { error: pinError } = await supabase
-        .from('rep_pins')
-        .update({ deal_id: deal.id })
-        .eq('id', pin.id);
-      
-      if (pinError) throw pinError;
-      
-      return deal.id;
+      if (error) throw error;
+      return data as string;
     },
     onSuccess: (dealId) => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
