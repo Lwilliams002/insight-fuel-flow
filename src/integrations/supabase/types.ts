@@ -536,6 +536,7 @@ export type Database = {
         Row: {
           address: string | null
           created_at: string
+          deal_id: string | null
           homeowner_name: string | null
           id: string
           latitude: number
@@ -548,6 +549,7 @@ export type Database = {
         Insert: {
           address?: string | null
           created_at?: string
+          deal_id?: string | null
           homeowner_name?: string | null
           id?: string
           latitude: number
@@ -560,6 +562,7 @@ export type Database = {
         Update: {
           address?: string | null
           created_at?: string
+          deal_id?: string | null
           homeowner_name?: string | null
           id?: string
           latitude?: number
@@ -570,6 +573,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "rep_pins_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "deals"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rep_pins_rep_id_fkey"
             columns: ["rep_id"]
