@@ -1,19 +1,20 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from '@/integrations/supabase/client';
-import { RepLayout } from '@/components/RepLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
-import { Trash2, MapPin } from 'lucide-react';
+import { 
+  Search, MapPin, SlidersHorizontal, Crosshair, Layers, 
+  X, User, Phone, Mail, Trash2, List, Map
+} from 'lucide-react';
 
 // Fix Leaflet default icon issue
 import icon from 'leaflet/dist/images/marker-icon.png';
@@ -40,16 +41,10 @@ interface Pin {
   created_at: string;
 }
 
-const statusColors: Record<PinStatus, string> = {
-  lead: '#f59e0b',
-  followup: '#3b82f6',
-  installed: '#22c55e',
-};
-
-const statusLabels: Record<PinStatus, string> = {
-  lead: 'Lead',
-  followup: 'Follow-up',
-  installed: 'Installed',
+const statusConfig: Record<PinStatus, { color: string; label: string }> = {
+  lead: { color: '#a855f7', label: 'Not Home' },
+  followup: { color: '#ec4899', label: 'Needs Follow-up' },
+  installed: { color: '#14b8a6', label: 'Installed' },
 };
 
 // Create custom colored markers
@@ -57,16 +52,26 @@ const createIcon = (status: PinStatus) => {
   return L.divIcon({
     className: 'custom-marker',
     html: `<div style="
-      background-color: ${statusColors[status]};
-      width: 24px;
-      height: 24px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      border: 2px solid white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.3);
-    "></div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 24],
+      background-color: ${statusConfig[status].color};
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 3px solid white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    ">
+      <div style="
+        width: 10px;
+        height: 10px;
+        background: white;
+        border-radius: 50%;
+        opacity: 0.9;
+      "></div>
+    </div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
   });
 };
 
@@ -84,16 +89,91 @@ function MapClickHandler({ onMapClick }: { onMapClick: (latlng: { lat: number; l
   return null;
 }
 
+function LocateButton({ userLocation }: { userLocation: [number, number] }) {
+  const map = useMap();
+  
+  const handleLocate = () => {
+    map.flyTo(userLocation, 18, { duration: 1 });
+  };
+
+  return (
+    <button
+      onClick={handleLocate}
+      className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+    >
+      <Crosshair className="w-5 h-5" />
+    </button>
+  );
+}
+
+function MapControls({ 
+  userLocation, 
+  onToggleView 
+}: { 
+  userLocation: [number, number];
+  onToggleView: () => void;
+}) {
+  const map = useMap();
+
+  const handleLocate = () => {
+    map.flyTo(userLocation, 18, { duration: 1 });
+  };
+
+  return (
+    <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
+      <button
+        onClick={() => {}}
+        className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+        title="Search"
+      >
+        <Search className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => {}}
+        className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+        title="Drop Pin"
+      >
+        <MapPin className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => {}}
+        className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+        title="Filter"
+      >
+        <SlidersHorizontal className="w-5 h-5" />
+      </button>
+      <button
+        onClick={handleLocate}
+        className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+        title="My Location"
+      >
+        <Crosshair className="w-5 h-5" />
+      </button>
+      <button
+        onClick={() => {}}
+        className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+        title="Layers"
+      >
+        <Layers className="w-5 h-5" />
+      </button>
+    </div>
+  );
+}
+
 export default function RepMap() {
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [activeView, setActiveView] = useState<'map' | 'list'>('map');
+  const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
+  const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [newPin, setNewPin] = useState<NewPinData | null>(null);
   const [formData, setFormData] = useState({
     status: 'lead' as PinStatus,
     address: '',
     homeowner_name: '',
+    phone: '',
+    email: '',
     notes: '',
   });
-  const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]); // Center of US
+  const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const queryClient = useQueryClient();
 
   // Get user's location
@@ -103,9 +183,7 @@ export default function RepMap() {
         (position) => {
           setUserLocation([position.coords.latitude, position.coords.longitude]);
         },
-        () => {
-          // Default to center of US if location denied
-        }
+        () => {}
       );
     }
   }, []);
@@ -148,7 +226,7 @@ export default function RepMap() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
-      setIsDialogOpen(false);
+      setIsSheetOpen(false);
       setNewPin(null);
       resetForm();
       toast.success('Pin added successfully');
@@ -159,8 +237,8 @@ export default function RepMap() {
   });
 
   const updatePinMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: PinStatus }) => {
-      const { error } = await supabase.from('rep_pins').update({ status }).eq('id', id);
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pin> }) => {
+      const { error } = await supabase.from('rep_pins').update(updates).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -179,6 +257,8 @@ export default function RepMap() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      setIsSheetOpen(false);
+      setSelectedPin(null);
       toast.success('Pin deleted');
     },
     onError: (error) => {
@@ -187,182 +267,302 @@ export default function RepMap() {
   });
 
   const resetForm = () => {
-    setFormData({ status: 'lead', address: '', homeowner_name: '', notes: '' });
+    setFormData({ status: 'lead', address: '', homeowner_name: '', phone: '', email: '', notes: '' });
   };
 
   const handleMapClick = (latlng: { lat: number; lng: number }) => {
     setNewPin({ lat: latlng.lat, lng: latlng.lng });
-    setIsDialogOpen(true);
+    setSelectedPin(null);
+    resetForm();
+    setIsSheetOpen(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newPin) return;
-    createPinMutation.mutate({
-      lat: newPin.lat,
-      lng: newPin.lng,
-      ...formData,
+  const handlePinClick = (pin: Pin) => {
+    setSelectedPin(pin);
+    setNewPin(null);
+    setFormData({
+      status: pin.status,
+      address: pin.address || '',
+      homeowner_name: pin.homeowner_name || '',
+      phone: '',
+      email: '',
+      notes: pin.notes || '',
     });
+    setIsSheetOpen(true);
+  };
+
+  const handleSave = () => {
+    if (newPin) {
+      createPinMutation.mutate({
+        lat: newPin.lat,
+        lng: newPin.lng,
+        status: formData.status,
+        address: formData.address,
+        homeowner_name: formData.homeowner_name,
+        notes: formData.notes,
+      });
+    } else if (selectedPin) {
+      updatePinMutation.mutate({
+        id: selectedPin.id,
+        updates: {
+          status: formData.status,
+          address: formData.address || null,
+          homeowner_name: formData.homeowner_name || null,
+          notes: formData.notes || null,
+        },
+      });
+    }
   };
 
   return (
-    <RepLayout title="My Map">
-      <div className="flex flex-col" style={{ height: 'calc(100vh - 8rem)' }}>
-        {/* Legend */}
-        <div className="flex items-center gap-4 p-3 bg-card border-b border-border flex-shrink-0">
-          <span className="text-xs text-muted-foreground">Tap map to add pin:</span>
-          {(['lead', 'followup', 'installed'] as PinStatus[]).map((status) => (
-            <div key={status} className="flex items-center gap-1">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: statusColors[status] }}
-              />
-              <span className="text-xs">{statusLabels[status]}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Map */}
-        <div className="flex-1 relative" style={{ minHeight: '400px' }}>
-          <MapContainer
-            center={userLocation}
-            zoom={17}
-            scrollWheelZoom={true}
-            className="absolute inset-0"
-            style={{ height: '100%', width: '100%', zIndex: 1 }}
+    <div className="fixed inset-0 flex flex-col bg-background">
+      {/* Top Toggle */}
+      <div className="absolute top-4 left-1/2 -translate-x-1/2 z-[1000]">
+        <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
+          <button
+            onClick={() => setActiveView('map')}
+            className={`px-6 py-2 text-sm font-medium transition-colors ${
+              activeView === 'map' 
+                ? 'bg-card text-foreground' 
+                : 'bg-muted text-muted-foreground'
+            }`}
           >
-            {/* Esri World Imagery - FREE satellite tiles, great for house-level detail */}
-            <TileLayer
-              attribution='&copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics'
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-            {/* Labels overlay for street names */}
-            <TileLayer
-              attribution=''
-              url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
-              maxZoom={19}
-            />
-            <MapClickHandler onMapClick={handleMapClick} />
-            
-            {pins?.map((pin) => (
-              <Marker
-                key={pin.id}
-                position={[pin.latitude, pin.longitude]}
-                icon={createIcon(pin.status)}
-              >
-                <Popup>
-                  <div className="min-w-[200px] space-y-2">
-                    <div className="flex items-center justify-between">
-                      <Badge
-                        style={{ backgroundColor: statusColors[pin.status] }}
-                        className="text-white"
-                      >
-                        {statusLabels[pin.status]}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6"
-                        onClick={() => deletePinMutation.mutate(pin.id)}
-                      >
-                        <Trash2 className="h-3 w-3 text-destructive" />
-                      </Button>
-                    </div>
-                    
-                    {pin.homeowner_name && (
-                      <p className="font-medium text-sm">{pin.homeowner_name}</p>
-                    )}
-                    {pin.address && (
-                      <p className="text-xs text-muted-foreground">{pin.address}</p>
-                    )}
-                    {pin.notes && (
-                      <p className="text-xs">{pin.notes}</p>
-                    )}
-                    
-                    <div className="flex gap-1 pt-1">
-                      {(['lead', 'followup', 'installed'] as PinStatus[]).map((status) => (
-                        <Button
-                          key={status}
-                          size="sm"
-                          variant={pin.status === status ? 'default' : 'outline'}
-                          className="text-xs h-6 px-2"
-                          style={pin.status === status ? { backgroundColor: statusColors[status] } : {}}
-                          onClick={() => updatePinMutation.mutate({ id: pin.id, status })}
-                        >
-                          {statusLabels[status]}
-                        </Button>
-                      ))}
-                    </div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
-          </MapContainer>
+            Map
+          </button>
+          <button
+            onClick={() => setActiveView('list')}
+            className={`px-6 py-2 text-sm font-medium transition-colors ${
+              activeView === 'list' 
+                ? 'bg-card text-foreground' 
+                : 'bg-muted text-muted-foreground'
+            }`}
+          >
+            List
+          </button>
         </div>
       </div>
 
-      {/* Add Pin Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <MapPin className="h-5 w-5" />
-              Add New Pin
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label>Status</Label>
-              <Select
-                value={formData.status}
-                onValueChange={(v) => setFormData({ ...formData, status: v as PinStatus })}
+      {activeView === 'map' ? (
+        <MapContainer
+          center={userLocation}
+          zoom={17}
+          scrollWheelZoom={true}
+          zoomControl={false}
+          className="flex-1 w-full"
+          style={{ height: '100%', width: '100%' }}
+        >
+          <TileLayer
+            attribution='&copy; Esri'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+          <TileLayer
+            attribution=''
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+          <MapClickHandler onMapClick={handleMapClick} />
+          <MapControls userLocation={userLocation} onToggleView={() => setActiveView('list')} />
+          
+          {pins?.map((pin) => (
+            <Marker
+              key={pin.id}
+              position={[pin.latitude, pin.longitude]}
+              icon={createIcon(pin.status)}
+              eventHandlers={{
+                click: () => handlePinClick(pin),
+              }}
+            />
+          ))}
+        </MapContainer>
+      ) : (
+        <div className="flex-1 pt-16 pb-20 overflow-auto">
+          <div className="p-4 space-y-3">
+            {pins?.map((pin) => (
+              <button
+                key={pin.id}
+                onClick={() => {
+                  handlePinClick(pin);
+                  setActiveView('map');
+                }}
+                className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="lead">Lead</SelectItem>
-                  <SelectItem value="followup">Follow-up</SelectItem>
-                  <SelectItem value="installed">Installed</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <p className="font-medium text-foreground">
+                      {pin.homeowner_name || 'Unknown'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
+                    </p>
+                  </div>
+                  <div 
+                    className="px-3 py-1 rounded-full text-xs font-medium text-white"
+                    style={{ backgroundColor: statusConfig[pin.status].color }}
+                  >
+                    {statusConfig[pin.status].label}
+                  </div>
+                </div>
+              </button>
+            ))}
+            {(!pins || pins.length === 0) && (
+              <div className="text-center py-12 text-muted-foreground">
+                <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>No pins yet. Tap the map to add one!</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
-            <div className="space-y-2">
-              <Label>Address (optional)</Label>
-              <Input
-                value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                placeholder="123 Main St"
-              />
-            </div>
+      {/* Bottom Sheet */}
+      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl px-0">
+          <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4" />
+          
+          <ScrollArea className="h-full px-5 pb-20">
+            <div className="space-y-6">
+              {/* Header */}
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Address</span>
+                <button className="text-sm text-primary flex items-center gap-1">
+                  <MapPin className="w-4 h-4" />
+                  Pin Linked
+                </button>
+              </div>
 
-            <div className="space-y-2">
-              <Label>Homeowner Name (optional)</Label>
-              <Input
-                value={formData.homeowner_name}
-                onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
-                placeholder="John Smith"
-              />
-            </div>
+              {/* Address Input */}
+              <div className="relative">
+                <Input
+                  value={formData.address}
+                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                  placeholder="Enter address..."
+                  className="pr-10 bg-muted border-0 h-12"
+                />
+                {formData.address && (
+                  <button 
+                    onClick={() => setFormData({ ...formData, address: '' })}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
 
-            <div className="space-y-2">
-              <Label>Notes (optional)</Label>
-              <Textarea
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                placeholder="Any notes about this location..."
-                rows={2}
-              />
-            </div>
+              {/* Status Tags */}
+              <ScrollArea className="w-full whitespace-nowrap">
+                <div className="flex gap-2">
+                  {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
+                    <button
+                      key={status}
+                      onClick={() => setFormData({ ...formData, status })}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shrink-0 ${
+                        formData.status === status 
+                          ? 'bg-muted border-2 border-primary' 
+                          : 'bg-muted border-2 border-transparent'
+                      }`}
+                    >
+                      <div 
+                        className="w-4 h-4 rounded-full"
+                        style={{ backgroundColor: statusConfig[status].color }}
+                      />
+                      <span className="text-sm font-medium">{statusConfig[status].label}</span>
+                    </button>
+                  ))}
+                </div>
+                <ScrollBar orientation="horizontal" />
+              </ScrollArea>
 
-            <Button type="submit" className="w-full" disabled={createPinMutation.isPending}>
-              {createPinMutation.isPending ? 'Adding...' : 'Add Pin'}
+              {/* Action Buttons */}
+              <div className="space-y-3">
+                <Button variant="secondary" className="w-full h-12 text-primary bg-muted hover:bg-muted/80">
+                  View Project Sunroof
+                </Button>
+                <Button variant="secondary" className="w-full h-12 text-primary bg-muted hover:bg-muted/80">
+                  Get Homeowner Info
+                </Button>
+              </div>
+
+              {/* Form Fields */}
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Full Name</Label>
+                  <div className="relative">
+                    <Input
+                      value={formData.homeowner_name}
+                      onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
+                      placeholder="Enter name..."
+                      className="pr-10 bg-muted border-0 h-12"
+                    />
+                    <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Phone Number</Label>
+                  <div className="relative">
+                    <Input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="Enter phone..."
+                      className="pr-10 bg-muted border-0 h-12"
+                    />
+                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Email</Label>
+                  <div className="relative">
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      placeholder="Enter email..."
+                      className="pr-10 bg-muted border-0 h-12"
+                    />
+                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-muted-foreground">Note</Label>
+                  <Textarea
+                    value={formData.notes}
+                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    placeholder="Add notes..."
+                    className="bg-muted border-0 min-h-[100px] resize-none"
+                  />
+                </div>
+              </div>
+
+              {/* Delete Button (only for existing pins) */}
+              {selectedPin && (
+                <Button
+                  variant="ghost"
+                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={() => deletePinMutation.mutate(selectedPin.id)}
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete Pin
+                </Button>
+              )}
+            </div>
+          </ScrollArea>
+
+          {/* Save Button - Fixed at bottom */}
+          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+            <Button 
+              onClick={handleSave}
+              disabled={createPinMutation.isPending || updatePinMutation.isPending}
+              className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-full"
+            >
+              {createPinMutation.isPending || updatePinMutation.isPending ? 'Saving...' : 'Save'}
             </Button>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </RepLayout>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </div>
   );
 }
