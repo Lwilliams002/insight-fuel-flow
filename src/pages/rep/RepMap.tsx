@@ -4,6 +4,7 @@ import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-lea
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import { supabase } from '@/integrations/supabase/client';
+import { BottomNav } from '@/components/BottomNav';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -702,6 +703,9 @@ export default function RepMap() {
           </div>
         </SheetContent>
       </Sheet>
+      
+      {/* Bottom Navigation */}
+      <BottomNav />
     </div>
   );
 }
