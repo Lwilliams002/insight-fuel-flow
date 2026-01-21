@@ -321,11 +321,61 @@ export default function RepMap() {
     setFormData({ status: 'lead', address: '', homeowner_name: '', phone: '', email: '', notes: '' });
   };
 
-  const handleMapClick = (latlng: { lat: number; lng: number }) => {
-    setNewPin({ lat: latlng.lat, lng: latlng.lng });
-    setSelectedPin(null);
-    resetForm();
-    setIsSheetOpen(true);
+  const handleMapClick = async (latlng: { lat: number; lng: number }) => {
+    // Show loading toast
+    const loadingToast = toast.loading('Getting address...');
+    
+    try {
+      // 1. Reverse geocoding to get address
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latlng.lat}&lon=${latlng.lng}`
+      );
+      const data = await response.json();
+      const address = data.display_name || '';
+
+      if (!address) {
+        toast.dismiss(loadingToast);
+        toast.error('Could not determine address for this location.');
+        return;
+      }
+
+      // 2. Check if address already exists (across all reps)
+      const { data: existingPin, error: checkError } = await supabase
+        .rpc('check_address_exists', { check_address: address });
+
+      if (checkError) {
+        console.error('Error checking address:', checkError);
+        // Continue anyway if check fails
+      }
+
+      if (existingPin && existingPin.length > 0 && existingPin[0].exists_already) {
+        toast.dismiss(loadingToast);
+        toast.error('This address already has a pin. Please contact management.', {
+          duration: 5000,
+        });
+        return;
+      }
+
+      toast.dismiss(loadingToast);
+      
+      // 3. Open sheet with pre-filled address
+      setNewPin({ lat: latlng.lat, lng: latlng.lng });
+      setSelectedPin(null);
+      setFormData({ 
+        status: 'lead', 
+        address: address, 
+        homeowner_name: '', 
+        phone: '', 
+        email: '', 
+        notes: '' 
+      });
+      setIsSheetOpen(true);
+      
+    } catch (error) {
+      toast.dismiss(loadingToast);
+      console.error('Error during pin creation:', error);
+      toast.error('Failed to get address. Please try again.');
+    }
   };
 
   const handlePinClick = (pin: Pin) => {
