@@ -7,18 +7,38 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
+
+type CommissionLevel = 'bronze' | 'silver' | 'gold' | 'platinum' | 'diamond';
+
+interface CommissionLevelInfo {
+  level: CommissionLevel;
+  display_name: string;
+  commission_percent: number;
+  description: string;
+}
 
 interface Rep {
   id: string;
   user_id: string;
+  commission_level: CommissionLevel;
   default_commission_percent: number;
   profile: {
     full_name: string | null;
     email: string;
   } | null;
 }
+
+const levelColors: Record<CommissionLevel, string> = {
+  bronze: 'bg-orange-500/20 text-orange-700 border-orange-500/30',
+  silver: 'bg-slate-400/20 text-slate-600 border-slate-400/30',
+  gold: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30',
+  platinum: 'bg-cyan-500/20 text-cyan-700 border-cyan-500/30',
+  diamond: 'bg-purple-500/20 text-purple-700 border-purple-500/30',
+};
 
 export default function RepsManagement() {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -27,22 +47,32 @@ export default function RepsManagement() {
     email: '',
     password: '',
     fullName: '',
-    commissionPercent: '10',
+    commissionLevel: 'silver' as CommissionLevel,
   });
   const queryClient = useQueryClient();
+
+  const { data: levels } = useQuery({
+    queryKey: ['commission-levels'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('commission_levels')
+        .select('*')
+        .order('commission_percent', { ascending: true });
+      if (error) throw error;
+      return data as CommissionLevelInfo[];
+    },
+  });
 
   const { data: reps, isLoading } = useQuery({
     queryKey: ['reps'],
     queryFn: async () => {
-      // First get all reps
       const { data: repsData, error: repsError } = await supabase
         .from('reps')
-        .select('id, user_id, default_commission_percent')
+        .select('id, user_id, commission_level, default_commission_percent')
         .order('created_at', { ascending: false });
 
       if (repsError) throw repsError;
 
-      // Then get profiles for those reps
       const userIds = repsData.map(r => r.user_id);
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
@@ -51,7 +81,6 @@ export default function RepsManagement() {
 
       if (profilesError) throw profilesError;
 
-      // Join them
       return repsData.map(rep => ({
         ...rep,
         profile: profilesData.find(p => p.id === rep.user_id) || null,
@@ -61,7 +90,6 @@ export default function RepsManagement() {
 
   const createRepMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      // Use edge function to create rep (runs with service role)
       const { data: sessionData } = await supabase.auth.getSession();
       
       const response = await fetch(
@@ -76,7 +104,7 @@ export default function RepsManagement() {
             email: data.email,
             password: data.password,
             fullName: data.fullName,
-            commissionPercent: parseFloat(data.commissionPercent),
+            commissionLevel: data.commissionLevel,
           }),
         }
       );
@@ -101,10 +129,10 @@ export default function RepsManagement() {
   });
 
   const updateRepMutation = useMutation({
-    mutationFn: async ({ repId, commissionPercent }: { repId: string; commissionPercent: number }) => {
+    mutationFn: async ({ repId, commissionLevel }: { repId: string; commissionLevel: CommissionLevel }) => {
       const { error } = await supabase
         .from('reps')
-        .update({ default_commission_percent: commissionPercent })
+        .update({ commission_level: commissionLevel })
         .eq('id', repId);
 
       if (error) throw error;
@@ -138,7 +166,7 @@ export default function RepsManagement() {
       email: '',
       password: '',
       fullName: '',
-      commissionPercent: '10',
+      commissionLevel: 'silver',
     });
   };
 
@@ -152,9 +180,12 @@ export default function RepsManagement() {
     if (!editingRep) return;
     updateRepMutation.mutate({
       repId: editingRep.id,
-      commissionPercent: parseFloat(formData.commissionPercent),
+      commissionLevel: formData.commissionLevel,
     });
   };
+
+  const getLevelInfo = (level: CommissionLevel) => 
+    levels?.find(l => l.level === level);
 
   return (
     <AdminLayout title="Manage Reps">
@@ -206,17 +237,28 @@ export default function RepsManagement() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="commissionPercent">Default Commission %</Label>
-                  <Input
-                    id="commissionPercent"
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    max="100"
-                    value={formData.commissionPercent}
-                    onChange={(e) => setFormData({ ...formData, commissionPercent: e.target.value })}
-                    required
-                  />
+                  <Label htmlFor="commissionLevel">Commission Level</Label>
+                  <Select 
+                    value={formData.commissionLevel} 
+                    onValueChange={(v) => setFormData({ ...formData, commissionLevel: v as CommissionLevel })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select level" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {levels?.map((level) => (
+                        <SelectItem key={level.level} value={level.level}>
+                          <div className="flex items-center gap-2">
+                            <span>{level.display_name}</span>
+                            <span className="text-muted-foreground">({level.commission_percent}%)</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">
+                    {getLevelInfo(formData.commissionLevel)?.description}
+                  </p>
                 </div>
                 <Button type="submit" className="w-full" disabled={createRepMutation.isPending}>
                   {createRepMutation.isPending ? 'Creating...' : 'Create Rep'}
@@ -236,20 +278,24 @@ export default function RepsManagement() {
           </Card>
         ) : (
           <div className="space-y-3">
-            {reps?.map((rep) => (
+            {reps?.map((rep) => {
+              const levelInfo = getLevelInfo(rep.commission_level);
+              return (
               <Card key={rep.id}>
                 <CardContent className="flex items-center justify-between p-4">
-                  <div>
+                  <div className="space-y-1">
                     <p className="font-medium">{rep.profile?.full_name || 'Unnamed'}</p>
                     <p className="text-sm text-muted-foreground">{rep.profile?.email}</p>
-                    <p className="text-sm text-primary">{rep.default_commission_percent}% commission</p>
+                    <Badge variant="outline" className={levelColors[rep.commission_level]}>
+                      {levelInfo?.display_name || rep.commission_level} ({levelInfo?.commission_percent || rep.default_commission_percent}%)
+                    </Badge>
                   </div>
                   <div className="flex gap-2">
                     <Dialog open={editingRep?.id === rep.id} onOpenChange={(open) => {
                       if (!open) setEditingRep(null);
                       else {
                         setEditingRep(rep);
-                        setFormData({ ...formData, commissionPercent: rep.default_commission_percent.toString() });
+                        setFormData({ ...formData, commissionLevel: rep.commission_level });
                       }
                     }}>
                       <DialogTrigger asChild>
@@ -271,17 +317,28 @@ export default function RepsManagement() {
                             <Input value={rep.profile?.email || ''} disabled />
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="editCommission">Default Commission %</Label>
-                            <Input
-                              id="editCommission"
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              max="100"
-                              value={formData.commissionPercent}
-                              onChange={(e) => setFormData({ ...formData, commissionPercent: e.target.value })}
-                              required
-                            />
+                            <Label>Commission Level</Label>
+                            <Select 
+                              value={formData.commissionLevel} 
+                              onValueChange={(v) => setFormData({ ...formData, commissionLevel: v as CommissionLevel })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select level" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {levels?.map((level) => (
+                                  <SelectItem key={level.level} value={level.level}>
+                                    <div className="flex items-center gap-2">
+                                      <span>{level.display_name}</span>
+                                      <span className="text-muted-foreground">({level.commission_percent}%)</span>
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                              {getLevelInfo(formData.commissionLevel)?.description}
+                            </p>
                           </div>
                           <Button type="submit" className="w-full" disabled={updateRepMutation.isPending}>
                             {updateRepMutation.isPending ? 'Saving...' : 'Save Changes'}
@@ -303,7 +360,8 @@ export default function RepsManagement() {
                   </div>
                 </CardContent>
               </Card>
-            ))}
+            );
+            })}
           </div>
         )}
       </div>

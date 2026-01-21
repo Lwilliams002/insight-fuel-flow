@@ -165,15 +165,21 @@ export default function StatementUpload() {
         merchantByName.set(a.alias.toLowerCase().trim(), a.merchant_id);
       });
 
+      // Fetch commission levels lookup
+      const { data: commissionLevels } = await supabase.from('commission_levels').select('*');
+      const levelPercentMap = new Map<string, number>();
+      commissionLevels?.forEach(l => levelPercentMap.set(l.level, Number(l.commission_percent)));
+
       // Fetch merchant assignments with rep info
       const { data: assignments } = await supabase
         .from('merchant_assignments')
-        .select('merchant_id, rep_id, percent_override, reps(default_commission_percent)')
+        .select('merchant_id, rep_id, level_override, reps(commission_level)')
         .is('effective_to', null);
 
       const assignmentMap = new Map<string, { repId: string; percent: number }>();
       assignments?.forEach((a: any) => {
-        const percent = a.percent_override ?? a.reps?.default_commission_percent ?? 0;
+        const level = a.level_override ?? a.reps?.commission_level ?? 'silver';
+        const percent = levelPercentMap.get(level) ?? 10;
         assignmentMap.set(a.merchant_id, { repId: a.rep_id, percent });
       });
 
