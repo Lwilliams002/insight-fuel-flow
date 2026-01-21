@@ -13,7 +13,7 @@ import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { 
   Search, MapPin, SlidersHorizontal, Crosshair, Layers, 
-  X, User, Phone, Mail, Trash2, List, Map
+  X, User, Phone, Mail, Trash2, List, Map, Briefcase
 } from 'lucide-react';
 
 // Fix Leaflet default icon issue
@@ -39,6 +39,7 @@ interface Pin {
   homeowner_name: string | null;
   notes: string | null;
   created_at: string;
+  deal_id: string | null;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
@@ -314,6 +315,61 @@ export default function RepMap() {
     },
     onError: (error) => {
       toast.error('Failed to delete: ' + error.message);
+    },
+  });
+
+  // Convert pin to deal mutation
+  const convertToDealMutation = useMutation({
+    mutationFn: async (pin: Pin) => {
+      if (!repData) throw new Error('Rep data not found');
+      
+      // 1. Create the deal
+      const { data: deal, error: dealError } = await supabase
+        .from('deals')
+        .insert({
+          homeowner_name: pin.homeowner_name || 'Unknown',
+          homeowner_phone: formData.phone || null,
+          homeowner_email: formData.email || null,
+          address: pin.address || '',
+          notes: pin.notes || null,
+          status: 'lead',
+        })
+        .select('id')
+        .single();
+      
+      if (dealError) throw dealError;
+      
+      // 2. Create deal commission linking rep to deal
+      const { error: commissionError } = await supabase
+        .from('deal_commissions')
+        .insert({
+          deal_id: deal.id,
+          rep_id: repData,
+          commission_type: 'self_gen' as const,
+          commission_percent: 0,
+          commission_amount: 0,
+        });
+      
+      if (commissionError) throw commissionError;
+      
+      // 3. Update pin with deal_id
+      const { error: pinError } = await supabase
+        .from('rep_pins')
+        .update({ deal_id: deal.id })
+        .eq('id', pin.id);
+      
+      if (pinError) throw pinError;
+      
+      return deal.id;
+    },
+    onSuccess: (dealId) => {
+      queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      setIsSheetOpen(false);
+      setSelectedPin(null);
+      toast.success('Deal created successfully!');
+    },
+    onError: (error) => {
+      toast.error('Failed to create deal: ' + error.message);
     },
   });
 
@@ -629,16 +685,39 @@ export default function RepMap() {
                 </div>
               </div>
 
-              {/* Delete Button (only for existing pins) */}
+              {/* Action Buttons (only for existing pins) */}
               {selectedPin && (
-                <Button
-                  variant="ghost"
-                  className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => deletePinMutation.mutate(selectedPin.id)}
-                >
-                  <Trash2 className="w-4 h-4 mr-2" />
-                  Delete Pin
-                </Button>
+                <div className="space-y-3">
+                  {/* Turn into Deal Button - only show if not already a deal */}
+                  {!selectedPin.deal_id && (
+                    <Button
+                      variant="default"
+                      className="w-full h-12"
+                      onClick={() => convertToDealMutation.mutate(selectedPin)}
+                      disabled={convertToDealMutation.isPending}
+                    >
+                      <Briefcase className="w-4 h-4 mr-2" />
+                      {convertToDealMutation.isPending ? 'Creating Deal...' : 'Turn into Deal'}
+                    </Button>
+                  )}
+                  
+                  {/* Already a deal badge */}
+                  {selectedPin.deal_id && (
+                    <div className="flex items-center justify-center gap-2 py-3 px-4 bg-primary/10 rounded-lg text-primary">
+                      <Briefcase className="w-4 h-4" />
+                      <span className="font-medium">Already a Deal</span>
+                    </div>
+                  )}
+                  
+                  <Button
+                    variant="ghost"
+                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => deletePinMutation.mutate(selectedPin.id)}
+                  >
+                    <Trash2 className="w-4 h-4 mr-2" />
+                    Delete Pin
+                  </Button>
+                </div>
               )}
             </div>
           </ScrollArea>
