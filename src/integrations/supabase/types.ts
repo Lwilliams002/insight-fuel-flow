@@ -532,6 +532,53 @@ export type Database = {
         }
         Relationships: []
       }
+      rep_pins: {
+        Row: {
+          address: string | null
+          created_at: string
+          homeowner_name: string | null
+          id: string
+          latitude: number
+          longitude: number
+          notes: string | null
+          rep_id: string
+          status: Database["public"]["Enums"]["pin_status"]
+          updated_at: string
+        }
+        Insert: {
+          address?: string | null
+          created_at?: string
+          homeowner_name?: string | null
+          id?: string
+          latitude: number
+          longitude: number
+          notes?: string | null
+          rep_id: string
+          status?: Database["public"]["Enums"]["pin_status"]
+          updated_at?: string
+        }
+        Update: {
+          address?: string | null
+          created_at?: string
+          homeowner_name?: string | null
+          id?: string
+          latitude?: number
+          longitude?: number
+          notes?: string | null
+          rep_id?: string
+          status?: Database["public"]["Enums"]["pin_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rep_pins_rep_id_fkey"
+            columns: ["rep_id"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reps: {
         Row: {
           commission_level: Database["public"]["Enums"]["commission_level"]
@@ -608,6 +655,7 @@ export type Database = {
         | "complete"
         | "paid"
         | "cancelled"
+      pin_status: "lead" | "followup" | "installed"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -748,6 +796,7 @@ export const Constants = {
         "paid",
         "cancelled",
       ],
+      pin_status: ["lead", "followup", "installed"],
     },
   },
 } as const
