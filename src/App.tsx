@@ -8,6 +8,7 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import RepDashboard from "./pages/RepDashboard";
 import RepDeals from "./pages/rep/RepDeals";
+import RepMap from "./pages/rep/RepMap";
 import RepJotForm from "./pages/rep/RepJotForm";
 import AdminDashboard from "./pages/AdminDashboard";
 import RepsManagement from "./pages/admin/RepsManagement";
@@ -44,6 +45,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['rep']}>
                   <RepDeals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/map"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <RepMap />
                 </ProtectedRoute>
               }
             />
