@@ -80,12 +80,63 @@ interface NewPinData {
   lng: number;
 }
 
-function MapClickHandler({ onMapClick }: { onMapClick: (latlng: { lat: number; lng: number }) => void }) {
-  useMapEvents({
-    click(e) {
-      onMapClick(e.latlng);
-    },
-  });
+function MapLongPressHandler({ onLongPress }: { onLongPress: (latlng: { lat: number; lng: number }) => void }) {
+  const map = useMap();
+  const pressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pressPosition = useRef<L.LatLng | null>(null);
+
+  useEffect(() => {
+    const container = map.getContainer();
+
+    const clearTimer = () => {
+      if (pressTimer.current) {
+        clearTimeout(pressTimer.current);
+        pressTimer.current = null;
+      }
+    };
+
+    const handleStart = (e: MouseEvent | TouchEvent) => {
+      let latlng: L.LatLng;
+      if ('touches' in e) {
+        const touch = e.touches[0];
+        const point = map.containerPointToLatLng([touch.clientX - container.getBoundingClientRect().left, touch.clientY - container.getBoundingClientRect().top]);
+        latlng = point;
+      } else {
+        const point = map.containerPointToLatLng([e.clientX - container.getBoundingClientRect().left, e.clientY - container.getBoundingClientRect().top]);
+        latlng = point;
+      }
+      
+      pressPosition.current = latlng;
+      pressTimer.current = setTimeout(() => {
+        if (pressPosition.current) {
+          onLongPress({ lat: pressPosition.current.lat, lng: pressPosition.current.lng });
+        }
+      }, 600);
+    };
+
+    const handleEnd = () => clearTimer();
+    const handleMove = () => clearTimer();
+
+    container.addEventListener('mousedown', handleStart);
+    container.addEventListener('mouseup', handleEnd);
+    container.addEventListener('mouseleave', handleEnd);
+    container.addEventListener('mousemove', handleMove);
+    container.addEventListener('touchstart', handleStart, { passive: true });
+    container.addEventListener('touchend', handleEnd);
+    container.addEventListener('touchmove', handleMove, { passive: true });
+
+    return () => {
+      container.removeEventListener('mousedown', handleStart);
+      container.removeEventListener('mouseup', handleEnd);
+      container.removeEventListener('mouseleave', handleEnd);
+      container.removeEventListener('mousemove', handleMove);
+      container.removeEventListener('touchstart', handleStart);
+      container.removeEventListener('touchend', handleEnd);
+      container.removeEventListener('touchmove', handleMove);
+      clearTimer();
+    };
+  }, [map, onLongPress]);
+
   return null;
 }
 
@@ -361,7 +412,7 @@ export default function RepMap() {
             url="https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
             maxZoom={19}
           />
-          <MapClickHandler onMapClick={handleMapClick} />
+          <MapLongPressHandler onLongPress={handleMapClick} />
           <MapControls userLocation={userLocation} onToggleView={() => setActiveView('list')} />
           
           {pins?.map((pin) => (
@@ -408,7 +459,7 @@ export default function RepMap() {
             {(!pins || pins.length === 0) && (
               <div className="text-center py-12 text-muted-foreground">
                 <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No pins yet. Tap the map to add one!</p>
+                <p>No pins yet. Hold the map to add one!</p>
               </div>
             )}
           </div>
@@ -473,15 +524,6 @@ export default function RepMap() {
                 <ScrollBar orientation="horizontal" />
               </ScrollArea>
 
-              {/* Action Buttons */}
-              <div className="space-y-3">
-                <Button variant="secondary" className="w-full h-12 text-primary bg-muted hover:bg-muted/80">
-                  View Project Sunroof
-                </Button>
-                <Button variant="secondary" className="w-full h-12 text-primary bg-muted hover:bg-muted/80">
-                  Get Homeowner Info
-                </Button>
-              </div>
 
               {/* Form Fields */}
               <div className="space-y-4">
