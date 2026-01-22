@@ -9,6 +9,7 @@ import Auth from "./pages/Auth";
 import RepDashboard from "./pages/RepDashboard";
 import RepDeals from "./pages/rep/RepDeals";
 import RepMap from "./pages/rep/RepMap";
+import PinDetails from "./pages/rep/PinDetails";
 import RepJotForm from "./pages/rep/RepJotForm";
 import AdminDashboard from "./pages/AdminDashboard";
 import RepsManagement from "./pages/admin/RepsManagement";
@@ -53,6 +54,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['rep']}>
                   <RepMap />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/map/pin/:pinId"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <PinDetails />
                 </ProtectedRoute>
               }
             />
