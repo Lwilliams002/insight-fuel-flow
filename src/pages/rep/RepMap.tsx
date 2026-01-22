@@ -578,42 +578,14 @@ export default function RepMap() {
           <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
         )}
         
-        {/* Map Controls */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
-          <button
-            onClick={() => {}}
-            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-            title="Search"
-          >
-            <Search className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => {}}
-            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-            title="Drop Pin"
-          >
-            <MapPin className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => {}}
-            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-            title="Filter"
-          >
-            <SlidersHorizontal className="w-5 h-5" />
-          </button>
+        {/* Location Follow Button */}
+        <div className="absolute right-3 bottom-24 z-[1000]" style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
           <button
             onClick={handleLocate}
             className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
             title="My Location"
           >
             <Crosshair className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => {}}
-            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-            title="Layers"
-          >
-            <Layers className="w-5 h-5" />
           </button>
         </div>
         </div>
