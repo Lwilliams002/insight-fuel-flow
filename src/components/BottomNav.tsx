@@ -13,25 +13,36 @@ export function BottomNav() {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
-      <div className="flex h-16 items-center justify-around">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
-                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              <span className="text-xs font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+    <>
+      {/* Safe-area filler: ensures the very bottom (home indicator area) is painted in PWA mode */}
+      <div
+        className="fixed left-0 right-0 bottom-0 z-40 bg-card"
+        style={{ height: 'env(safe-area-inset-bottom, 0px)' }}
+      />
+
+      <nav
+        className="fixed left-0 right-0 z-50 border-t border-border bg-card"
+        style={{ bottom: 'env(safe-area-inset-bottom, 0px)' }}
+      >
+        <div className="flex h-16 items-center justify-around">
+          {navItems.map((item) => {
+            const isActive = location.pathname === item.href;
+            return (
+              <Link
+                key={item.href}
+                to={item.href}
+                className={cn(
+                  'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
+                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                <item.icon className="h-5 w-5" />
+                <span className="text-xs font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 }
