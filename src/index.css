@@ -209,4 +209,16 @@ All colors MUST be HSL.
   .safe-area-header {
     padding-top: calc(env(safe-area-inset-top) + 0.25rem);
   }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .top-safe {
+    top: env(safe-area-inset-top);
+  }
+  .bottom-safe {
+    bottom: env(safe-area-inset-bottom);
+  }
 }
