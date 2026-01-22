@@ -531,35 +531,36 @@ export default function RepMap() {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background pb-0">
-      {/* Top Toggle */}
-      <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-        <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
-          <button
-            onClick={() => setActiveView('map')}
-            className={`px-6 py-2 text-sm font-medium transition-colors ${
-              activeView === 'map'
-                ? 'bg-card text-foreground'
-                : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            Map
-          </button>
-          <button
-            onClick={() => setActiveView('list')}
-            className={`px-6 py-2 text-sm font-medium transition-colors ${
-              activeView === 'list'
-                ? 'bg-card text-foreground'
-                : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            List
-          </button>
+    <div className="flex min-h-[100dvh] flex-col bg-background">
+      <main className="relative flex-1 overflow-hidden">
+        {/* Top Toggle */}
+        <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+          <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
+            <button
+              onClick={() => setActiveView('map')}
+              className={`px-6 py-2 text-sm font-medium transition-colors ${
+                activeView === 'map'
+                  ? 'bg-card text-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              Map
+            </button>
+            <button
+              onClick={() => setActiveView('list')}
+              className={`px-6 py-2 text-sm font-medium transition-colors ${
+                activeView === 'list'
+                  ? 'bg-card text-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              List
+            </button>
+          </div>
         </div>
-      </div>
 
-      {/* Map View - Always mounted, visibility controlled via CSS */}
-      <div className={`${activeView === 'map' ? 'block' : 'hidden'}`}>
+        {/* Map View - Always mounted, visibility controlled via CSS */}
+        <div className={`${activeView === 'map' ? 'block' : 'hidden'}`}>
         {!mapboxToken ? (
           <div className="absolute inset-0 flex items-center justify-center p-6" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
             <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
@@ -615,11 +616,14 @@ export default function RepMap() {
             <Layers className="w-5 h-5" />
           </button>
         </div>
-      </div>
+        </div>
 
-      {/* List View */}
-      <div className={`flex-1 pt-16 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`} style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
-        <div className="p-4 space-y-3">
+        {/* List View */}
+        <div
+          className={`absolute inset-0 pt-16 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`}
+          style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="p-4 space-y-3">
           {pins?.map((pin) => (
             <button
               key={pin.id}
@@ -653,8 +657,8 @@ export default function RepMap() {
               <p>No pins yet. Hold the map to add one!</p>
             </div>
           )}
+          </div>
         </div>
-      </div>
 
       {/* Bottom Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
@@ -826,6 +830,8 @@ export default function RepMap() {
           </div>
         </SheetContent>
       </Sheet>
+
+      </main>
 
       {/* Bottom Navigation */}
       <BottomNav />
