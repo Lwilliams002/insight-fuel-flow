@@ -877,24 +877,22 @@ export default function RepMap() {
               </div>
               
               {/* Header */}
-              <div className="flex items-center justify-between px-5 py-3">
-                <h3 className="text-xl font-semibold text-foreground">
-                  {format(selectedCalendarDate, 'EEEE, MMMM d')}
+              <div className="flex items-center justify-between px-4 py-2">
+                <h3 className="text-base font-semibold text-foreground">
+                  {format(selectedCalendarDate, 'EEE, MMM d')}
                 </h3>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setSelectedCalendarDate(undefined)}
-                    className="p-2 rounded-full hover:bg-muted transition-colors"
-                  >
-                    <X className="w-5 h-5 text-muted-foreground" />
-                  </button>
-                </div>
+                <button
+                  onClick={() => setSelectedCalendarDate(undefined)}
+                  className="p-1.5 rounded-full hover:bg-muted transition-colors"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
               </div>
 
               {/* Appointments List */}
-              <div className="flex-1 overflow-auto px-5 pb-4">
+              <div className="flex-1 overflow-auto px-4 pb-3">
                 {selectedDateAppointments.length > 0 ? (
-                  <div className="space-y-1">
+                  <div className="space-y-0.5">
                     {selectedDateAppointments
                       .sort((a, b) => new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime())
                       .map((pin) => {
@@ -905,40 +903,40 @@ export default function RepMap() {
                           <button
                             key={pin.id}
                             onClick={() => handlePinClick(pin)}
-                            className="w-full flex items-center gap-3 py-3 hover:bg-muted/50 rounded-lg transition-colors -mx-2 px-2"
+                            className="w-full flex items-center gap-2 py-2 hover:bg-muted/50 rounded-lg transition-colors -mx-1.5 px-1.5"
                           >
                             {/* Time */}
-                            <div className="w-16 text-left shrink-0">
-                              <div className="text-sm font-medium text-muted-foreground">
+                            <div className="w-14 text-left shrink-0">
+                              <div className="text-xs font-medium text-muted-foreground">
                                 {format(apptTime, 'h:mm a')}
                               </div>
                             </div>
                             
                             {/* Colored Bar */}
-                            <div className="w-1 h-12 rounded-full bg-primary shrink-0" />
+                            <div className="w-0.5 h-8 rounded-full bg-primary shrink-0" />
                             
                             {/* Content */}
                             <div className="flex-1 min-w-0 text-left">
-                              <p className="font-semibold text-foreground truncate">
+                              <p className="text-sm font-medium text-foreground truncate">
                                 {pin.homeowner_name || 'Unknown'}
                               </p>
-                              <p className="text-sm text-muted-foreground truncate">
+                              <p className="text-xs text-muted-foreground truncate">
                                 {pin.address || 'No address'}
                               </p>
                             </div>
                             
                             {/* Avatar */}
-                            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
-                              <span className="text-sm font-semibold text-primary-foreground">{initial}</span>
+                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
+                              <span className="text-xs font-semibold text-primary-foreground">{initial}</span>
                             </div>
                           </button>
                         );
                       })}
                   </div>
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                    <p>No appointments on this day</p>
+                  <div className="text-center py-6 text-muted-foreground">
+                    <CalendarIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No appointments on this day</p>
                   </div>
                 )}
               </div>
@@ -959,53 +957,48 @@ export default function RepMap() {
             </div>
 
             {/* Scrollable Content */}
-            <div className="flex-1 overflow-y-auto px-5">
-              <div className="space-y-5 pb-6">
+            <div className="flex-1 overflow-y-auto px-4">
+              <div className="space-y-4 pb-4">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted-foreground">Address</span>
-                  <span className="text-sm text-primary flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />
+                  <span className="text-xs text-muted-foreground">Address</span>
+                  <span className="text-xs text-primary flex items-center gap-1">
+                    <MapPin className="w-3 h-3" />
                     Pin Linked
                   </span>
                 </div>
 
-                {/* Address Input */}
+                {/* Address Display */}
                 <div className="relative">
-                  <Input
-                    value={formData.address}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    placeholder="Enter address..."
-                    className="pr-10 bg-muted border-0 h-12"
-                  />
-                  {formData.address && (
-                    <button
-                      onClick={() => setFormData({ ...formData, address: '' })}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  )}
+                  <div className="p-3 bg-muted rounded-lg pr-10">
+                    <p className="text-sm text-foreground">{formData.address || 'No address'}</p>
+                  </div>
+                  <button
+                    onClick={() => setFormData({ ...formData, address: '' })}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
                 </div>
 
-                {/* Status Tags */}
+                {/* Status Pills */}
                 <ScrollArea className="w-full whitespace-nowrap">
-                  <div className="flex gap-2 pb-1">
+                  <div className="flex gap-2 pb-2">
                     {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
                       <button
                         key={status}
                         onClick={() => setFormData({ ...formData, status })}
-                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shrink-0 ${
+                        className={`flex items-center gap-1.5 px-3 py-2 rounded-full transition-colors shrink-0 ${
                           formData.status === status
                             ? 'bg-muted border-2 border-primary'
                             : 'bg-muted border-2 border-transparent'
                         }`}
                       >
                         <div
-                          className="w-4 h-4 rounded-full"
+                          className="w-3 h-3 rounded-full"
                           style={{ backgroundColor: statusConfig[status].color }}
                         />
-                        <span className="text-sm font-medium">{statusConfig[status].label}</span>
+                        <span className="text-xs font-medium">{statusConfig[status].label}</span>
                       </button>
                     ))}
                   </div>
@@ -1014,25 +1007,25 @@ export default function RepMap() {
 
                 {/* Appointment Date/Time - Only show when appointment status is selected */}
                 {formData.status === 'appointment' && (
-                  <div className="space-y-4 p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
-                    <div className="flex items-center gap-2 text-amber-600">
-                      <CalendarIcon className="w-4 h-4" />
-                      <span className="text-sm font-medium">Schedule Appointment</span>
+                  <div className="space-y-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
+                    <div className="flex items-center gap-2 text-primary">
+                      <CalendarIcon className="w-3.5 h-3.5" />
+                      <span className="text-xs font-medium">Schedule Appointment</span>
                     </div>
                     
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-muted-foreground text-xs">Date</Label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-[10px]">Date</Label>
                         <Popover>
                           <PopoverTrigger asChild>
                             <Button
                               variant="outline"
                               className={cn(
-                                "w-full justify-start text-left font-normal h-11 bg-muted border-0",
+                                "w-full justify-start text-left font-normal h-9 text-sm bg-muted border-0",
                                 !formData.appointment_date && "text-muted-foreground"
                               )}
                             >
-                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
                               {formData.appointment_date ? format(formData.appointment_date, "MMM d") : "Pick date"}
                             </Button>
                           </PopoverTrigger>
@@ -1048,16 +1041,16 @@ export default function RepMap() {
                         </Popover>
                       </div>
                       
-                      <div className="space-y-2">
-                        <Label className="text-muted-foreground text-xs">Time</Label>
+                      <div className="space-y-1">
+                        <Label className="text-muted-foreground text-[10px]">Time</Label>
                         <div className="relative">
                           <Input
                             type="time"
                             value={formData.appointment_time}
                             onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                            className="bg-muted border-0 h-11"
+                            className="bg-muted border-0 h-9 text-sm"
                           />
-                          <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                          <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
                         </div>
                       </div>
                     </div>
@@ -1065,55 +1058,55 @@ export default function RepMap() {
                 )}
 
                 {/* Form Fields */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Full Name</Label>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Full Name</Label>
                     <div className="relative">
                       <Input
                         value={formData.homeowner_name}
                         onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
                         placeholder=""
-                        className="pr-10 bg-muted border-0 h-12"
+                        className="pr-10 bg-muted border-0 h-10 text-sm"
                       />
-                      <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <User className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Phone Number</Label>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Phone Number</Label>
                     <div className="relative">
                       <Input
                         type="tel"
                         value={formData.phone}
                         onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
                         placeholder=""
-                        className="pr-10 bg-muted border-0 h-12"
+                        className="pr-10 bg-muted border-0 h-10 text-sm"
                       />
-                      <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Email</Label>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Email</Label>
                     <div className="relative">
                       <Input
                         type="email"
                         value={formData.email}
                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                         placeholder=""
-                        className="pr-10 bg-muted border-0 h-12"
+                        className="pr-10 bg-muted border-0 h-10 text-sm"
                       />
-                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Note</Label>
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-xs">Note</Label>
                     <Textarea
                       value={formData.notes}
                       onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                       placeholder=""
-                      className="bg-muted border-0 min-h-[100px] resize-none"
+                      className="bg-muted border-0 min-h-[80px] resize-none text-sm"
                     />
                   </div>
                 </div>
