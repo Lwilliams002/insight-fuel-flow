@@ -626,8 +626,21 @@ export default function RepMap() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <main className="relative flex-1 overflow-hidden">
-        {/* Top Toggle - 3 tabs */}
-        <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+        {/* Top Header Bar */}
+        <div className="absolute inset-x-0 z-[1000] flex items-center justify-between px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+          {/* Left Arrow - Calendar Nav or Filter */}
+          <div className="w-10 flex justify-start">
+            {activeView === 'calendar' && (
+              <button
+                onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
+                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
+              >
+                <ChevronLeft className="w-5 h-5 text-foreground" />
+              </button>
+            )}
+          </div>
+
+          {/* Center Tabs */}
           <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
             <button
               onClick={() => setActiveView('map')}
@@ -659,6 +672,18 @@ export default function RepMap() {
             >
               Calendar
             </button>
+          </div>
+
+          {/* Right Arrow - Calendar Nav */}
+          <div className="w-10 flex justify-end">
+            {activeView === 'calendar' && (
+              <button
+                onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
+                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 text-foreground" />
+              </button>
+            )}
           </div>
         </div>
 
@@ -692,26 +717,29 @@ export default function RepMap() {
 
         {/* List View */}
         <div
-          className={`absolute inset-0 pt-16 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`}
-          style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+          className={`absolute inset-0 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`}
+          style={{ 
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+            paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
+          }}
         >
           {/* Filter Bar */}
-          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 py-3 border-b border-border">
+          <div className="sticky top-0 z-10 bg-background px-4 py-3 border-b border-border">
             <div className="relative">
               <button
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2.5 bg-muted rounded-lg text-sm font-medium text-foreground"
               >
                 <Filter className="w-4 h-4" />
-                {statusFilter === 'all' ? 'All Pins' : statusConfig[statusFilter].label}
+                {statusFilter === 'all' ? 'All' : statusConfig[statusFilter].label}
                 <ChevronDown className="w-4 h-4" />
               </button>
               
               {showFilterDropdown && (
-                <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-20">
+                <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50 min-w-[160px]">
                   <button
                     onClick={() => { setStatusFilter('all'); setShowFilterDropdown(false); }}
-                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted transition-colors ${statusFilter === 'all' ? 'bg-muted' : ''}`}
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors text-foreground ${statusFilter === 'all' ? 'bg-muted' : ''}`}
                   >
                     All Pins
                   </button>
@@ -719,7 +747,7 @@ export default function RepMap() {
                     <button
                       key={status}
                       onClick={() => { setStatusFilter(status); setShowFilterDropdown(false); }}
-                      className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2 ${statusFilter === status ? 'bg-muted' : ''}`}
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2 text-foreground ${statusFilter === status ? 'bg-muted' : ''}`}
                     >
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusConfig[status].color }} />
                       {statusConfig[status].label}
@@ -772,30 +800,14 @@ export default function RepMap() {
 
         {/* Calendar View */}
         <div
-          className={`absolute inset-0 pt-16 flex flex-col ${activeView === 'calendar' ? 'flex' : 'hidden'}`}
-          style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+          className={`absolute inset-0 flex flex-col ${activeView === 'calendar' ? 'flex' : 'hidden'}`}
+          style={{ 
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+            paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
+          }}
         >
-          {/* Month Header */}
-          <div className="flex items-center justify-between px-4 py-3 bg-background">
-            <button
-              onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
-              className="p-2 rounded-full hover:bg-muted transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <h2 className="text-lg font-semibold text-foreground">
-              {format(calendarMonth, 'MMMM yyyy')}
-            </h2>
-            <button
-              onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
-              className="p-2 rounded-full hover:bg-muted transition-colors"
-            >
-              <ChevronRight className="w-5 h-5 text-muted-foreground" />
-            </button>
-          </div>
-
           {/* Day of Week Headers */}
-          <div className="grid grid-cols-7 border-b border-border">
+          <div className="grid grid-cols-7 border-b border-border bg-background">
             {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
               <div key={day} className="text-center py-2 text-xs font-medium text-muted-foreground">
                 {day}
