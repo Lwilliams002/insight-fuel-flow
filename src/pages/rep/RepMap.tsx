@@ -654,13 +654,6 @@ export default function RepMap() {
             <div className="w-12 h-1.5 bg-muted rounded-full mx-auto" />
           </div>
 
-          {/* Close Button */}
-          <button 
-            onClick={() => setIsSheetOpen(false)}
-            className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
-          >
-            <X className="w-4 h-4" />
-          </button>
 
           {/* Scrollable Content */}
           <div className="flex-1 overflow-y-auto px-5">
@@ -713,7 +706,6 @@ export default function RepMap() {
                     </button>
                   ))}
                 </div>
-                <ScrollBar orientation="horizontal" />
               </ScrollArea>
 
               {/* Form Fields */}
