@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -43,6 +43,7 @@ interface NewPinData {
 
 export default function RepMap() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -50,7 +51,9 @@ export default function RepMap() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressCoords = useRef<{ lng: number; lat: number } | null>(null);
 
-  const [activeView, setActiveView] = useState<'map' | 'list' | 'calendar'>('map');
+  // Read initial tab from URL
+  const initialTab = searchParams.get('tab') as 'map' | 'list' | 'calendar' | null;
+  const [activeView, setActiveView] = useState<'map' | 'list' | 'calendar'>(initialTab || 'map');
   const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
@@ -420,7 +423,7 @@ export default function RepMap() {
       toast.dismiss(loadingToast);
 
       // Navigate to new pin page with coordinates and address
-      navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}`);
+      navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}&from=${activeView}`);
     } catch (error) {
       toast.dismiss(loadingToast);
       console.error('Error during pin creation:', error);
@@ -429,7 +432,7 @@ export default function RepMap() {
   };
 
   const handlePinClick = (pin: Pin) => {
-    navigate(`/map/pin/${pin.id}`);
+    navigate(`/map/pin/${pin.id}?from=${activeView}`);
   };
 
   const handleLocate = () => {
