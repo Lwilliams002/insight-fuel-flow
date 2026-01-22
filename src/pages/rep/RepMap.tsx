@@ -14,10 +14,10 @@ import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
+import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval, getDay, addMonths, subMonths, isToday, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { 
   MapPin, Crosshair, X, User, Phone, Mail, Trash2, Briefcase, 
-  CalendarIcon, Clock, Filter, ChevronDown
+  CalendarIcon, Clock, Filter, ChevronDown, ChevronLeft, ChevronRight, Plus
 } from 'lucide-react';
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
@@ -290,15 +290,33 @@ export default function RepMap() {
 
   // Days with appointments for calendar highlighting
   const daysWithAppointments = useMemo(() => {
-    if (!appointmentPins) return new Set<string>();
-    const days = new Set<string>();
+    if (!appointmentPins) return new Map<string, Pin[]>();
+    const daysMap = new Map<string, Pin[]>();
     appointmentPins.forEach(pin => {
       if (pin.appointment_date) {
-        days.add(format(new Date(pin.appointment_date), 'yyyy-MM-dd'));
+        const key = format(new Date(pin.appointment_date), 'yyyy-MM-dd');
+        const existing = daysMap.get(key) || [];
+        daysMap.set(key, [...existing, pin]);
       }
     });
-    return days;
+    return daysMap;
   }, [appointmentPins]);
+
+  // Get calendar grid days (includes previous/next month padding)
+  const calendarDays = useMemo(() => {
+    const monthStart = startOfMonth(calendarMonth);
+    const monthEnd = endOfMonth(calendarMonth);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
+    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
+    
+    const days: Date[] = [];
+    let currentDay = calendarStart;
+    while (currentDay <= calendarEnd) {
+      days.push(currentDay);
+      currentDay = addDays(currentDay, 1);
+    }
+    return days;
+  }, [calendarMonth]);
 
   // Update user location marker
   useEffect(() => {
@@ -754,74 +772,166 @@ export default function RepMap() {
 
         {/* Calendar View */}
         <div
-          className={`absolute inset-0 pt-16 overflow-auto ${activeView === 'calendar' ? 'block' : 'hidden'}`}
+          className={`absolute inset-0 pt-16 flex flex-col ${activeView === 'calendar' ? 'flex' : 'hidden'}`}
           style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
         >
-          <div className="p-4">
-            {/* Calendar */}
-            <div className="bg-card rounded-xl border border-border p-4">
-              <Calendar
-                mode="single"
-                selected={selectedCalendarDate}
-                onSelect={setSelectedCalendarDate}
-                month={calendarMonth}
-                onMonthChange={setCalendarMonth}
-                className="pointer-events-auto"
-                modifiers={{
-                  hasAppointment: (date) => daysWithAppointments.has(format(date, 'yyyy-MM-dd'))
-                }}
-                modifiersStyles={{
-                  hasAppointment: {
-                    backgroundColor: 'hsl(var(--primary) / 0.2)',
-                    borderRadius: '50%',
-                  }
-                }}
-              />
-            </div>
+          {/* Month Header */}
+          <div className="flex items-center justify-between px-4 py-3 bg-background">
+            <button
+              onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
+              className="p-2 rounded-full hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <h2 className="text-lg font-semibold text-foreground">
+              {format(calendarMonth, 'MMMM yyyy')}
+            </h2>
+            <button
+              onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
+              className="p-2 rounded-full hover:bg-muted transition-colors"
+            >
+              <ChevronRight className="w-5 h-5 text-muted-foreground" />
+            </button>
+          </div>
 
-            {/* Selected Date Appointments */}
-            <div className="mt-4">
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">
-                {selectedCalendarDate 
-                  ? format(selectedCalendarDate, 'EEEE, MMMM d, yyyy')
-                  : 'Select a date to see appointments'}
-              </h3>
-              
-              {selectedCalendarDate && selectedDateAppointments.length > 0 ? (
-                <div className="space-y-3">
-                  {selectedDateAppointments.map((pin) => (
-                    <button
-                      key={pin.id}
-                      onClick={() => handlePinClick(pin)}
-                      className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
+          {/* Day of Week Headers */}
+          <div className="grid grid-cols-7 border-b border-border">
+            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
+              <div key={day} className="text-center py-2 text-xs font-medium text-muted-foreground">
+                {day}
+              </div>
+            ))}
+          </div>
+
+          {/* Calendar Grid */}
+          <div className="flex-1 overflow-auto">
+            <div className="grid grid-cols-7 auto-rows-fr min-h-full">
+              {calendarDays.map((day, index) => {
+                const dateKey = format(day, 'yyyy-MM-dd');
+                const dayAppointments = daysWithAppointments.get(dateKey) || [];
+                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
+                const isSelected = selectedCalendarDate && isSameDay(day, selectedCalendarDate);
+                const isTodayDate = isToday(day);
+
+                return (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedCalendarDate(day)}
+                    className={cn(
+                      "flex flex-col p-1 border-b border-r border-border min-h-[80px] text-left transition-colors",
+                      !isCurrentMonth && "opacity-40",
+                      isSelected && "bg-primary/10",
+                      !isSelected && "hover:bg-muted/50"
+                    )}
+                  >
+                    <span
+                      className={cn(
+                        "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1",
+                        isTodayDate && "bg-primary text-primary-foreground",
+                        !isTodayDate && isCurrentMonth && "text-foreground",
+                        !isTodayDate && !isCurrentMonth && "text-muted-foreground"
+                      )}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
-                          <Clock className="w-5 h-5 text-amber-500" />
+                      {format(day, 'd')}
+                    </span>
+                    {/* Event Pills */}
+                    <div className="flex-1 space-y-0.5 overflow-hidden">
+                      {dayAppointments.slice(0, 3).map((appt) => (
+                        <div
+                          key={appt.id}
+                          className="text-[10px] px-1 py-0.5 rounded bg-primary/80 text-primary-foreground truncate"
+                        >
+                          {appt.homeowner_name || 'Appt'}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-foreground truncate">
-                            {pin.homeowner_name || 'Unknown'}
-                          </p>
-                          <p className="text-sm text-muted-foreground truncate">
-                            {pin.address}
-                          </p>
-                          <p className="text-sm text-amber-500 mt-1">
-                            {pin.appointment_date && format(new Date(pin.appointment_date), 'h:mm a')}
-                          </p>
+                      ))}
+                      {dayAppointments.length > 3 && (
+                        <div className="text-[10px] text-muted-foreground px-1">
+                          +{dayAppointments.length - 3} more
                         </div>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              ) : selectedCalendarDate ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p>No appointments on this day</p>
-                </div>
-              ) : null}
+                      )}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           </div>
+
+          {/* Selected Day Detail Panel (Bottom Sheet Style) */}
+          {selectedCalendarDate && (
+            <div className="absolute inset-x-0 bottom-0 bg-card border-t border-border rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+              {/* Drag Handle */}
+              <div className="flex-shrink-0 pt-3 pb-1">
+                <div className="w-12 h-1 bg-muted rounded-full mx-auto" />
+              </div>
+              
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-3">
+                <h3 className="text-xl font-semibold text-foreground">
+                  {format(selectedCalendarDate, 'EEEE, MMMM d')}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setSelectedCalendarDate(undefined)}
+                    className="p-2 rounded-full hover:bg-muted transition-colors"
+                  >
+                    <X className="w-5 h-5 text-muted-foreground" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Appointments List */}
+              <div className="flex-1 overflow-auto px-5 pb-4">
+                {selectedDateAppointments.length > 0 ? (
+                  <div className="space-y-1">
+                    {selectedDateAppointments
+                      .sort((a, b) => new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime())
+                      .map((pin) => {
+                        const apptTime = new Date(pin.appointment_date!);
+                        const initial = (pin.homeowner_name?.[0] || 'A').toUpperCase();
+                        
+                        return (
+                          <button
+                            key={pin.id}
+                            onClick={() => handlePinClick(pin)}
+                            className="w-full flex items-center gap-3 py-3 hover:bg-muted/50 rounded-lg transition-colors -mx-2 px-2"
+                          >
+                            {/* Time */}
+                            <div className="w-16 text-left shrink-0">
+                              <div className="text-sm font-medium text-muted-foreground">
+                                {format(apptTime, 'h:mm a')}
+                              </div>
+                            </div>
+                            
+                            {/* Colored Bar */}
+                            <div className="w-1 h-12 rounded-full bg-primary shrink-0" />
+                            
+                            {/* Content */}
+                            <div className="flex-1 min-w-0 text-left">
+                              <p className="font-semibold text-foreground truncate">
+                                {pin.homeowner_name || 'Unknown'}
+                              </p>
+                              <p className="text-sm text-muted-foreground truncate">
+                                {pin.address || 'No address'}
+                              </p>
+                            </div>
+                            
+                            {/* Avatar */}
+                            <div className="w-10 h-10 rounded-full bg-primary flex items-center justify-center shrink-0">
+                              <span className="text-sm font-semibold text-primary-foreground">{initial}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                    <p>No appointments on this day</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Bottom Sheet */}
