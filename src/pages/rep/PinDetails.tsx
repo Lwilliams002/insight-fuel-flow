@@ -49,6 +49,9 @@ export default function PinDetails() {
   const lat = searchParams.get('lat');
   const lng = searchParams.get('lng');
   const initialAddress = searchParams.get('address');
+  const fromTab = searchParams.get('from') || 'map';
+  
+  const getBackUrl = () => `/map?tab=${fromTab}`;
 
   const [formData, setFormData] = useState({
     status: 'lead' as PinStatus,
@@ -128,7 +131,7 @@ export default function PinDetails() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
       toast.success('Pin added successfully');
-      navigate('/map');
+      navigate(getBackUrl());
     },
     onError: (error) => {
       toast.error('Failed to add pin: ' + error.message);
@@ -143,7 +146,7 @@ export default function PinDetails() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
       toast.success('Pin updated');
-      navigate('/map');
+      navigate(getBackUrl());
     },
     onError: (error) => {
       toast.error('Failed to update: ' + error.message);
@@ -158,7 +161,7 @@ export default function PinDetails() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
       toast.success('Pin deleted');
-      navigate('/map');
+      navigate(getBackUrl());
     },
     onError: (error) => {
       toast.error('Failed to delete: ' + error.message);
@@ -178,7 +181,7 @@ export default function PinDetails() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
       toast.success('Deal created successfully!');
-      navigate('/map');
+      navigate(getBackUrl());
     },
     onError: (error) => {
       toast.error('Failed to create deal: ' + error.message);
@@ -241,7 +244,7 @@ export default function PinDetails() {
         style={{ paddingTop: 'calc(env(safe-area-inset-top, 0px) + 12px)' }}
       >
         <button
-          onClick={() => navigate('/map')}
+          onClick={() => navigate(getBackUrl())}
           className="p-2 -ml-2 rounded-full hover:bg-muted transition-colors"
         >
           <ChevronLeft className="w-5 h-5 text-foreground" />
