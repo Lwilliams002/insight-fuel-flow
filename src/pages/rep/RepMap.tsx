@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -10,18 +10,19 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent } from '@/components/ui/sheet';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Calendar } from '@/components/ui/calendar';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
+import { format, isSameDay, startOfMonth, endOfMonth, eachDayOfInterval } from 'date-fns';
 import { 
-  Search, MapPin, SlidersHorizontal, Crosshair, Layers, 
-  X, User, Phone, Mail, Trash2, Briefcase
+  MapPin, Crosshair, X, User, Phone, Mail, Trash2, Briefcase, 
+  CalendarIcon, Clock, Filter, ChevronDown
 } from 'lucide-react';
 
-// Note: Mapbox access tokens are *publishable* (use a `pk.` token).
-// In Lovable, VITE_ env vars may not always be present immediately in preview,
-// so we can also fetch it from a backend function as a fallback.
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
-type PinStatus = 'lead' | 'followup' | 'installed';
+type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
 
 interface Pin {
   id: string;
@@ -33,12 +34,14 @@ interface Pin {
   notes: string | null;
   created_at: string;
   deal_id: string | null;
+  appointment_date: string | null;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
   lead: { color: '#a855f7', label: 'Not Home' },
   followup: { color: '#ec4899', label: 'Needs Follow-up' },
   installed: { color: '#14b8a6', label: 'Installed' },
+  appointment: { color: '#f59e0b', label: 'Appointment' },
 };
 
 interface NewPinData {
@@ -54,7 +57,7 @@ export default function RepMap() {
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressCoords = useRef<{ lng: number; lat: number } | null>(null);
 
-  const [activeView, setActiveView] = useState<'map' | 'list'>('map');
+  const [activeView, setActiveView] = useState<'map' | 'list' | 'calendar'>('map');
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [newPin, setNewPin] = useState<NewPinData | null>(null);
@@ -65,10 +68,21 @@ export default function RepMap() {
     phone: '',
     email: '',
     notes: '',
+    appointment_date: undefined as Date | undefined,
+    appointment_time: '',
   });
   const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
+  
+  // Filters
+  const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  
+  // Calendar
+  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
+  
   const queryClient = useQueryClient();
 
   // Fallback: fetch token from backend if env var isn't present
@@ -87,7 +101,6 @@ export default function RepMap() {
           cache: 'no-store',
           headers: {
             Authorization: `Bearer ${accessToken}`,
-            // Some environments require the apikey header for function calls.
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
         });
@@ -96,7 +109,6 @@ export default function RepMap() {
         if (!res.ok) throw new Error(json?.error || 'Failed to load token');
         if (!cancelled) setMapboxToken(json.token);
       } catch (e) {
-        // Keep UI in "token missing" state
         console.error('Failed to fetch Mapbox token:', e);
       }
     })();
@@ -113,7 +125,6 @@ export default function RepMap() {
     let watchId: number;
     let initialFlyDone = false;
 
-    // Initial position
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
@@ -126,7 +137,6 @@ export default function RepMap() {
       () => {}
     );
 
-    // Watch position for live updates
     watchId = navigator.geolocation.watchPosition(
       (position) => {
         const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
@@ -145,11 +155,8 @@ export default function RepMap() {
   useEffect(() => {
     if (!mapboxToken) return;
     if (!mapContainer.current) return;
-    
-    // If map already exists, don't recreate
     if (map.current) return;
 
-    // Mapbox requires the token to be set before creating the map instance.
     mapboxgl.accessToken = mapboxToken;
 
     map.current = new mapboxgl.Map({
@@ -165,7 +172,6 @@ export default function RepMap() {
       setMapLoaded(true);
     });
 
-    // Long press handling for touch
     const handleTouchStart = (e: mapboxgl.MapTouchEvent) => {
       if (e.originalEvent.touches.length !== 1) return;
       longPressCoords.current = e.lngLat;
@@ -190,7 +196,6 @@ export default function RepMap() {
       }
     };
 
-    // Long press handling for mouse
     const handleMouseDown = (e: mapboxgl.MapMouseEvent) => {
       longPressCoords.current = e.lngLat;
       longPressTimer.current = setTimeout(() => {
@@ -233,7 +238,6 @@ export default function RepMap() {
   // Force map resize when switching back to map view
   useEffect(() => {
     if (activeView === 'map' && map.current) {
-      // Small delay to allow DOM to settle
       setTimeout(() => {
         map.current?.resize();
       }, 100);
@@ -263,11 +267,43 @@ export default function RepMap() {
     },
   });
 
-  // Update user location marker (blue dot like Google Maps)
+  // Filtered pins for list view
+  const filteredPins = useMemo(() => {
+    if (!pins) return [];
+    if (statusFilter === 'all') return pins;
+    return pins.filter(pin => pin.status === statusFilter);
+  }, [pins, statusFilter]);
+
+  // Appointments for calendar
+  const appointmentPins = useMemo(() => {
+    if (!pins) return [];
+    return pins.filter(pin => pin.status === 'appointment' && pin.appointment_date);
+  }, [pins]);
+
+  // Appointments for selected calendar date
+  const selectedDateAppointments = useMemo(() => {
+    if (!selectedCalendarDate || !appointmentPins) return [];
+    return appointmentPins.filter(pin => 
+      pin.appointment_date && isSameDay(new Date(pin.appointment_date), selectedCalendarDate)
+    );
+  }, [selectedCalendarDate, appointmentPins]);
+
+  // Days with appointments for calendar highlighting
+  const daysWithAppointments = useMemo(() => {
+    if (!appointmentPins) return new Set<string>();
+    const days = new Set<string>();
+    appointmentPins.forEach(pin => {
+      if (pin.appointment_date) {
+        days.add(format(new Date(pin.appointment_date), 'yyyy-MM-dd'));
+      }
+    });
+    return days;
+  }, [appointmentPins]);
+
+  // Update user location marker
   useEffect(() => {
     if (!map.current || !mapLoaded) return;
 
-    // Create or update user location marker
     if (!userMarker.current) {
       const el = document.createElement('div');
       el.className = 'user-location-marker';
@@ -313,17 +349,15 @@ export default function RepMap() {
   useEffect(() => {
     if (!map.current || !mapLoaded || !pins) return;
 
-    // Remove old markers
     markers.current.forEach((marker) => marker.remove());
     markers.current.clear();
 
-    // Add new markers
     pins.forEach((pin) => {
       const el = document.createElement('div');
       el.className = 'custom-marker';
       el.innerHTML = `
         <div style="
-          background-color: ${statusConfig[pin.status].color};
+          background-color: ${statusConfig[pin.status]?.color || '#888'};
           width: 28px;
           height: 28px;
           border-radius: 50%;
@@ -355,7 +389,15 @@ export default function RepMap() {
   }, [pins, mapLoaded]);
 
   const createPinMutation = useMutation({
-    mutationFn: async (data: { lat: number; lng: number; status: PinStatus; address: string; homeowner_name: string; notes: string }) => {
+    mutationFn: async (data: { 
+      lat: number; 
+      lng: number; 
+      status: PinStatus; 
+      address: string; 
+      homeowner_name: string; 
+      notes: string;
+      appointment_date: string | null;
+    }) => {
       const { error } = await supabase.from('rep_pins').insert({
         rep_id: repData,
         latitude: data.lat,
@@ -364,6 +406,7 @@ export default function RepMap() {
         address: data.address || null,
         homeowner_name: data.homeowner_name || null,
         notes: data.notes || null,
+        appointment_date: data.appointment_date,
       });
       if (error) throw error;
     },
@@ -386,6 +429,8 @@ export default function RepMap() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      setIsSheetOpen(false);
+      setSelectedPin(null);
       toast.success('Pin updated');
     },
     onError: (error) => {
@@ -431,7 +476,16 @@ export default function RepMap() {
   });
 
   const resetForm = () => {
-    setFormData({ status: 'lead', address: '', homeowner_name: '', phone: '', email: '', notes: '' });
+    setFormData({ 
+      status: 'lead', 
+      address: '', 
+      homeowner_name: '', 
+      phone: '', 
+      email: '', 
+      notes: '',
+      appointment_date: undefined,
+      appointment_time: '',
+    });
   };
 
   const handleMapLongPress = async (lat: number, lng: number) => {
@@ -478,6 +532,8 @@ export default function RepMap() {
         phone: '',
         email: '',
         notes: '',
+        appointment_date: undefined,
+        appointment_time: '',
       });
       setIsSheetOpen(true);
     } catch (error) {
@@ -497,11 +553,28 @@ export default function RepMap() {
       phone: '',
       email: '',
       notes: pin.notes || '',
+      appointment_date: pin.appointment_date ? new Date(pin.appointment_date) : undefined,
+      appointment_time: pin.appointment_date ? format(new Date(pin.appointment_date), 'HH:mm') : '',
     });
     setIsSheetOpen(true);
   };
 
+  const getAppointmentDateTime = (): string | null => {
+    if (formData.status !== 'appointment' || !formData.appointment_date) return null;
+    
+    const date = formData.appointment_date;
+    const time = formData.appointment_time || '09:00';
+    const [hours, minutes] = time.split(':').map(Number);
+    
+    const dateTime = new Date(date);
+    dateTime.setHours(hours, minutes, 0, 0);
+    
+    return dateTime.toISOString();
+  };
+
   const handleSave = () => {
+    const appointmentDateTime = getAppointmentDateTime();
+    
     if (newPin) {
       createPinMutation.mutate({
         lat: newPin.lat,
@@ -510,6 +583,7 @@ export default function RepMap() {
         address: formData.address,
         homeowner_name: formData.homeowner_name,
         notes: formData.notes,
+        appointment_date: appointmentDateTime,
       });
     } else if (selectedPin) {
       updatePinMutation.mutate({
@@ -519,6 +593,7 @@ export default function RepMap() {
           address: formData.address || null,
           homeowner_name: formData.homeowner_name || null,
           notes: formData.notes || null,
+          appointment_date: appointmentDateTime,
         },
       });
     }
@@ -533,12 +608,12 @@ export default function RepMap() {
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <main className="relative flex-1 overflow-hidden">
-        {/* Top Toggle */}
+        {/* Top Toggle - 3 tabs */}
         <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
           <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
             <button
               onClick={() => setActiveView('map')}
-              className={`px-6 py-2 text-sm font-medium transition-colors ${
+              className={`px-5 py-2 text-sm font-medium transition-colors ${
                 activeView === 'map'
                   ? 'bg-card text-foreground'
                   : 'bg-muted text-muted-foreground'
@@ -548,7 +623,7 @@ export default function RepMap() {
             </button>
             <button
               onClick={() => setActiveView('list')}
-              className={`px-6 py-2 text-sm font-medium transition-colors ${
+              className={`px-5 py-2 text-sm font-medium transition-colors ${
                 activeView === 'list'
                   ? 'bg-card text-foreground'
                   : 'bg-muted text-muted-foreground'
@@ -556,38 +631,45 @@ export default function RepMap() {
             >
               List
             </button>
+            <button
+              onClick={() => setActiveView('calendar')}
+              className={`px-5 py-2 text-sm font-medium transition-colors ${
+                activeView === 'calendar'
+                  ? 'bg-card text-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              Calendar
+            </button>
           </div>
         </div>
 
-        {/* Map View - Always mounted, visibility controlled via CSS */}
+        {/* Map View */}
         <div className={`${activeView === 'map' ? 'block' : 'hidden'}`}>
-        {!mapboxToken ? (
-          <div className="absolute inset-0 flex items-center justify-center p-6" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
-            <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
-              <div className="font-semibold text-foreground">Mapbox token missing</div>
-              <div className="text-sm text-muted-foreground">
-                Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
-                as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
-              </div>
-              <div className="text-xs text-muted-foreground">
-                If you just added it, refresh the page.
+          {!mapboxToken ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+              <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
+                <div className="font-semibold text-foreground">Mapbox token missing</div>
+                <div className="text-sm text-muted-foreground">
+                  Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
+                  as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
+                </div>
               </div>
             </div>
+          ) : (
+            <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
+          )}
+          
+          {/* Location Follow Button */}
+          <div className="absolute right-3 z-[1000]" style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
+            <button
+              onClick={handleLocate}
+              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+              title="My Location"
+            >
+              <Crosshair className="w-5 h-5" />
+            </button>
           </div>
-        ) : (
-          <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
-        )}
-        
-        {/* Location Follow Button */}
-        <div className="absolute right-3 bottom-24 z-[1000]" style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
-          <button
-            onClick={handleLocate}
-            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-            title="My Location"
-          >
-            <Crosshair className="w-5 h-5" />
-          </button>
-        </div>
         </div>
 
         {/* List View */}
@@ -595,214 +677,375 @@ export default function RepMap() {
           className={`absolute inset-0 pt-16 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`}
           style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
         >
-          <div className="p-4 space-y-3">
-          {pins?.map((pin) => (
-            <button
-              key={pin.id}
-              onClick={() => {
-                handlePinClick(pin);
-                setActiveView('map');
-              }}
-              className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
-            >
-              <div className="flex items-start justify-between">
-                <div className="space-y-1">
-                  <p className="font-medium text-foreground">
-                    {pin.homeowner_name || 'Unknown'}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
-                  </p>
-                </div>
-                <div
-                  className="px-3 py-1 rounded-full text-xs font-medium text-white"
-                  style={{ backgroundColor: statusConfig[pin.status].color }}
-                >
-                  {statusConfig[pin.status].label}
-                </div>
-              </div>
-            </button>
-          ))}
-          {(!pins || pins.length === 0) && (
-            <div className="text-center py-12 text-muted-foreground">
-              <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-              <p>No pins yet. Hold the map to add one!</p>
-            </div>
-          )}
-          </div>
-        </div>
-
-      {/* Bottom Sheet */}
-      <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent 
-          side="bottom" 
-          className="h-[92vh] rounded-t-3xl px-0 flex flex-col"
-          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-        >
-          {/* Drag Handle */}
-          <div className="flex-shrink-0 pt-3 pb-2">
-            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto" />
-          </div>
-
-
-          {/* Scrollable Content */}
-          <div className="flex-1 overflow-y-auto px-5">
-            <div className="space-y-5 pb-6">
-              {/* Header */}
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted-foreground">Address</span>
-                <span className="text-sm text-primary flex items-center gap-1">
-                  <MapPin className="w-4 h-4" />
-                  Pin Linked
-                </span>
-              </div>
-
-              {/* Address Input */}
-              <div className="relative">
-                <Input
-                  value={formData.address}
-                  onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                  placeholder="Enter address..."
-                  className="pr-10 bg-muted border-0 h-12"
-                />
-                {formData.address && (
+          {/* Filter Bar */}
+          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm px-4 py-3 border-b border-border">
+            <div className="relative">
+              <button
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className="flex items-center gap-2 px-4 py-2 bg-muted rounded-lg text-sm font-medium"
+              >
+                <Filter className="w-4 h-4" />
+                {statusFilter === 'all' ? 'All Pins' : statusConfig[statusFilter].label}
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              
+              {showFilterDropdown && (
+                <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-20">
                   <button
-                    onClick={() => setFormData({ ...formData, address: '' })}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    onClick={() => { setStatusFilter('all'); setShowFilterDropdown(false); }}
+                    className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted transition-colors ${statusFilter === 'all' ? 'bg-muted' : ''}`}
                   >
-                    <X className="w-4 h-4" />
+                    All Pins
                   </button>
-                )}
-              </div>
-
-              {/* Status Tags */}
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex gap-2 pb-1">
                   {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
                     <button
                       key={status}
-                      onClick={() => setFormData({ ...formData, status })}
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shrink-0 ${
-                        formData.status === status
-                          ? 'bg-muted border-2 border-primary'
-                          : 'bg-muted border-2 border-transparent'
-                      }`}
+                      onClick={() => { setStatusFilter(status); setShowFilterDropdown(false); }}
+                      className={`w-full px-4 py-2.5 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2 ${statusFilter === status ? 'bg-muted' : ''}`}
                     >
-                      <div
-                        className="w-4 h-4 rounded-full"
-                        style={{ backgroundColor: statusConfig[status].color }}
-                      />
-                      <span className="text-sm font-medium">{statusConfig[status].label}</span>
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusConfig[status].color }} />
+                      {statusConfig[status].label}
                     </button>
                   ))}
-                </div>
-              </ScrollArea>
-
-              {/* Form Fields */}
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Full Name</Label>
-                  <div className="relative">
-                    <Input
-                      value={formData.homeowner_name}
-                      onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
-                      placeholder=""
-                      className="pr-10 bg-muted border-0 h-12"
-                    />
-                    <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Phone Number</Label>
-                  <div className="relative">
-                    <Input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder=""
-                      className="pr-10 bg-muted border-0 h-12"
-                    />
-                    <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Email</Label>
-                  <div className="relative">
-                    <Input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder=""
-                      className="pr-10 bg-muted border-0 h-12"
-                    />
-                    <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">Note</Label>
-                  <Textarea
-                    value={formData.notes}
-                    onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder=""
-                    className="bg-muted border-0 min-h-[100px] resize-none"
-                  />
-                </div>
-              </div>
-
-              {/* Action Buttons (only for existing pins) */}
-              {selectedPin && (
-                <div className="space-y-3">
-                  {!selectedPin.deal_id && (
-                    <Button
-                      variant="default"
-                      className="w-full h-12"
-                      onClick={() => convertToDealMutation.mutate(selectedPin)}
-                      disabled={convertToDealMutation.isPending}
-                    >
-                      <Briefcase className="w-4 h-4 mr-2" />
-                      {convertToDealMutation.isPending ? 'Creating Deal...' : 'Turn into Deal'}
-                    </Button>
-                  )}
-
-                  {selectedPin.deal_id && (
-                    <div className="flex items-center justify-center gap-2 py-3 px-4 bg-primary/10 rounded-lg text-primary">
-                      <Briefcase className="w-4 h-4" />
-                      <span className="font-medium">Already a Deal</span>
-                    </div>
-                  )}
-
-                  <Button
-                    variant="ghost"
-                    className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => deletePinMutation.mutate(selectedPin.id)}
-                  >
-                    <Trash2 className="w-4 h-4 mr-2" />
-                    Delete Pin
-                  </Button>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Save Button - Fixed at bottom */}
-          <div 
-            className="flex-shrink-0 p-4 bg-background border-t border-border"
-            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
-          >
-            <Button
-              onClick={handleSave}
-              disabled={createPinMutation.isPending || updatePinMutation.isPending}
-              className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-full"
-            >
-              {createPinMutation.isPending || updatePinMutation.isPending ? 'Saving...' : 'Save'}
-            </Button>
+          <div className="p-4 space-y-3">
+            {filteredPins?.map((pin) => (
+              <button
+                key={pin.id}
+                onClick={() => handlePinClick(pin)}
+                className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
+              >
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1 flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">
+                      {pin.homeowner_name || 'Unknown'}
+                    </p>
+                    <p className="text-sm text-muted-foreground truncate">
+                      {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
+                    </p>
+                    {pin.status === 'appointment' && pin.appointment_date && (
+                      <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+                        <CalendarIcon className="w-3 h-3" />
+                        {format(new Date(pin.appointment_date), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    )}
+                  </div>
+                  <div
+                    className="px-3 py-1 rounded-full text-xs font-medium text-white shrink-0 ml-2"
+                    style={{ backgroundColor: statusConfig[pin.status]?.color || '#888' }}
+                  >
+                    {statusConfig[pin.status]?.label || pin.status}
+                  </div>
+                </div>
+              </button>
+            ))}
+            {(!filteredPins || filteredPins.length === 0) && (
+              <div className="text-center py-12 text-muted-foreground">
+                <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                <p>{statusFilter === 'all' ? 'No pins yet. Hold the map to add one!' : 'No pins with this status.'}</p>
+              </div>
+            )}
           </div>
-        </SheetContent>
-      </Sheet>
+        </div>
 
+        {/* Calendar View */}
+        <div
+          className={`absolute inset-0 pt-16 overflow-auto ${activeView === 'calendar' ? 'block' : 'hidden'}`}
+          style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}
+        >
+          <div className="p-4">
+            {/* Calendar */}
+            <div className="bg-card rounded-xl border border-border p-4">
+              <Calendar
+                mode="single"
+                selected={selectedCalendarDate}
+                onSelect={setSelectedCalendarDate}
+                month={calendarMonth}
+                onMonthChange={setCalendarMonth}
+                className="pointer-events-auto"
+                modifiers={{
+                  hasAppointment: (date) => daysWithAppointments.has(format(date, 'yyyy-MM-dd'))
+                }}
+                modifiersStyles={{
+                  hasAppointment: {
+                    backgroundColor: 'hsl(var(--primary) / 0.2)',
+                    borderRadius: '50%',
+                  }
+                }}
+              />
+            </div>
+
+            {/* Selected Date Appointments */}
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">
+                {selectedCalendarDate 
+                  ? format(selectedCalendarDate, 'EEEE, MMMM d, yyyy')
+                  : 'Select a date to see appointments'}
+              </h3>
+              
+              {selectedCalendarDate && selectedDateAppointments.length > 0 ? (
+                <div className="space-y-3">
+                  {selectedDateAppointments.map((pin) => (
+                    <button
+                      key={pin.id}
+                      onClick={() => handlePinClick(pin)}
+                      className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center shrink-0">
+                          <Clock className="w-5 h-5 text-amber-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-foreground truncate">
+                            {pin.homeowner_name || 'Unknown'}
+                          </p>
+                          <p className="text-sm text-muted-foreground truncate">
+                            {pin.address}
+                          </p>
+                          <p className="text-sm text-amber-500 mt-1">
+                            {pin.appointment_date && format(new Date(pin.appointment_date), 'h:mm a')}
+                          </p>
+                        </div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              ) : selectedCalendarDate ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <CalendarIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p>No appointments on this day</p>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Sheet */}
+        <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
+          <SheetContent 
+            side="bottom" 
+            className="h-[92vh] rounded-t-3xl px-0 flex flex-col"
+            style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+          >
+            {/* Drag Handle */}
+            <div className="flex-shrink-0 pt-3 pb-2">
+              <div className="w-12 h-1.5 bg-muted rounded-full mx-auto" />
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="flex-1 overflow-y-auto px-5">
+              <div className="space-y-5 pb-6">
+                {/* Header */}
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Address</span>
+                  <span className="text-sm text-primary flex items-center gap-1">
+                    <MapPin className="w-4 h-4" />
+                    Pin Linked
+                  </span>
+                </div>
+
+                {/* Address Input */}
+                <div className="relative">
+                  <Input
+                    value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                    placeholder="Enter address..."
+                    className="pr-10 bg-muted border-0 h-12"
+                  />
+                  {formData.address && (
+                    <button
+                      onClick={() => setFormData({ ...formData, address: '' })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Status Tags */}
+                <ScrollArea className="w-full whitespace-nowrap">
+                  <div className="flex gap-2 pb-1">
+                    {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
+                      <button
+                        key={status}
+                        onClick={() => setFormData({ ...formData, status })}
+                        className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shrink-0 ${
+                          formData.status === status
+                            ? 'bg-muted border-2 border-primary'
+                            : 'bg-muted border-2 border-transparent'
+                        }`}
+                      >
+                        <div
+                          className="w-4 h-4 rounded-full"
+                          style={{ backgroundColor: statusConfig[status].color }}
+                        />
+                        <span className="text-sm font-medium">{statusConfig[status].label}</span>
+                      </button>
+                    ))}
+                  </div>
+                  <ScrollBar orientation="horizontal" />
+                </ScrollArea>
+
+                {/* Appointment Date/Time - Only show when appointment status is selected */}
+                {formData.status === 'appointment' && (
+                  <div className="space-y-4 p-4 bg-amber-500/10 rounded-lg border border-amber-500/20">
+                    <div className="flex items-center gap-2 text-amber-600">
+                      <CalendarIcon className="w-4 h-4" />
+                      <span className="text-sm font-medium">Schedule Appointment</span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground text-xs">Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              className={cn(
+                                "w-full justify-start text-left font-normal h-11 bg-muted border-0",
+                                !formData.appointment_date && "text-muted-foreground"
+                              )}
+                            >
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {formData.appointment_date ? format(formData.appointment_date, "MMM d") : "Pick date"}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0" align="start">
+                            <Calendar
+                              mode="single"
+                              selected={formData.appointment_date}
+                              onSelect={(date) => setFormData({ ...formData, appointment_date: date })}
+                              initialFocus
+                              className="p-3 pointer-events-auto"
+                            />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-muted-foreground text-xs">Time</Label>
+                        <div className="relative">
+                          <Input
+                            type="time"
+                            value={formData.appointment_time}
+                            onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                            className="bg-muted border-0 h-11"
+                          />
+                          <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Form Fields */}
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Full Name</Label>
+                    <div className="relative">
+                      <Input
+                        value={formData.homeowner_name}
+                        onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
+                        placeholder=""
+                        className="pr-10 bg-muted border-0 h-12"
+                      />
+                      <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Phone Number</Label>
+                    <div className="relative">
+                      <Input
+                        type="tel"
+                        value={formData.phone}
+                        onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                        placeholder=""
+                        className="pr-10 bg-muted border-0 h-12"
+                      />
+                      <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Email</Label>
+                    <div className="relative">
+                      <Input
+                        type="email"
+                        value={formData.email}
+                        onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                        placeholder=""
+                        className="pr-10 bg-muted border-0 h-12"
+                      />
+                      <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label className="text-muted-foreground">Note</Label>
+                    <Textarea
+                      value={formData.notes}
+                      onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                      placeholder=""
+                      className="bg-muted border-0 min-h-[100px] resize-none"
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons (only for existing pins) */}
+                {selectedPin && (
+                  <div className="space-y-3">
+                    {!selectedPin.deal_id && (
+                      <Button
+                        variant="default"
+                        className="w-full h-12"
+                        onClick={() => convertToDealMutation.mutate(selectedPin)}
+                        disabled={convertToDealMutation.isPending}
+                      >
+                        <Briefcase className="w-4 h-4 mr-2" />
+                        {convertToDealMutation.isPending ? 'Creating Deal...' : 'Turn into Deal'}
+                      </Button>
+                    )}
+
+                    {selectedPin.deal_id && (
+                      <div className="flex items-center justify-center gap-2 py-3 px-4 bg-primary/10 rounded-lg text-primary">
+                        <Briefcase className="w-4 h-4" />
+                        <span className="font-medium">Already a Deal</span>
+                      </div>
+                    )}
+
+                    <Button
+                      variant="ghost"
+                      className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                      onClick={() => deletePinMutation.mutate(selectedPin.id)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete Pin
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Save Button - Fixed at bottom */}
+            <div 
+              className="flex-shrink-0 p-4 bg-background border-t border-border"
+              style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+            >
+              <Button
+                onClick={handleSave}
+                disabled={createPinMutation.isPending || updatePinMutation.isPending}
+                className="w-full h-12 bg-primary text-primary-foreground font-semibold rounded-full"
+              >
+                {createPinMutation.isPending || updatePinMutation.isPending ? 'Saving...' : 'Save'}
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
       </main>
 
       {/* Bottom Navigation */}
