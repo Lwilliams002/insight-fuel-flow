@@ -144,7 +144,10 @@ export default function RepMap() {
   // Initialize Mapbox
   useEffect(() => {
     if (!mapboxToken) return;
-    if (!mapContainer.current || map.current) return;
+    if (!mapContainer.current) return;
+    
+    // If map already exists, don't recreate
+    if (map.current) return;
 
     // Mapbox requires the token to be set before creating the map instance.
     mapboxgl.accessToken = mapboxToken;
@@ -222,9 +225,20 @@ export default function RepMap() {
       if (map.current) {
         map.current.remove();
         map.current = null;
+        setMapLoaded(false);
       }
     };
   }, [mapboxToken]);
+
+  // Force map resize when switching back to map view
+  useEffect(() => {
+    if (activeView === 'map' && map.current) {
+      // Small delay to allow DOM to settle
+      setTimeout(() => {
+        map.current?.resize();
+      }, 100);
+    }
+  }, [activeView]);
 
   // Fetch rep's pins
   const { data: pins, isLoading } = useQuery({
@@ -517,7 +531,7 @@ export default function RepMap() {
   };
 
   return (
-    <div className="fixed inset-0 flex flex-col bg-background" style={{ paddingBottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+    <div className="fixed inset-0 flex flex-col bg-background pb-0">
       {/* Top Toggle */}
       <div className="absolute left-1/2 -translate-x-1/2 z-[1000]" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
         <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
@@ -560,7 +574,7 @@ export default function RepMap() {
               </div>
             </div>
           ) : (
-            <div ref={mapContainer} className="flex-1 w-full" />
+            <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
           )}
           
           {/* Map Controls */}
@@ -603,7 +617,7 @@ export default function RepMap() {
           </div>
         </>
       ) : (
-        <div className="flex-1 pt-16 pb-20 overflow-auto">
+        <div className="flex-1 pt-16 overflow-auto" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
           <div className="p-4 space-y-3">
             {pins?.map((pin) => (
               <button
