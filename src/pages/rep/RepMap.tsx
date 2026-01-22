@@ -445,20 +445,31 @@ export default function RepMap() {
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <main className="relative flex-1 overflow-hidden">
         {/* Top Header Bar */}
-        <div className="absolute inset-x-0 z-[1000] flex items-center justify-between px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
-          {/* Left Arrow - Calendar Nav or Filter */}
-          <div className="w-10 flex justify-start">
-            {activeView === 'calendar' && (
+        <div className="absolute inset-x-0 z-[1000] flex flex-col items-center gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+          {/* Month Name - Only in Calendar View */}
+          {activeView === 'calendar' && (
+            <div className="flex items-center gap-4">
               <button
                 onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
                 className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
               >
                 <ChevronLeft className="w-5 h-5 text-foreground" />
               </button>
-            )}
-          </div>
+              <div className="bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg px-5 py-2 min-w-[150px] text-center">
+                <span className="text-sm font-medium text-foreground">
+                  {format(calendarMonth, 'MMMM yyyy')}
+                </span>
+              </div>
+              <button
+                onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
+                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
+              >
+                <ChevronRight className="w-5 h-5 text-foreground" />
+              </button>
+            </div>
+          )}
 
-          {/* Center Tabs */}
+          {/* View Tabs */}
           <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
             <button
               onClick={() => setActiveView('map')}
@@ -490,18 +501,6 @@ export default function RepMap() {
             >
               Calendar
             </button>
-          </div>
-
-          {/* Right Arrow - Calendar Nav */}
-          <div className="w-10 flex justify-end">
-            {activeView === 'calendar' && (
-              <button
-                onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
-                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 text-foreground" />
-              </button>
-            )}
           </div>
         </div>
 
@@ -620,7 +619,7 @@ export default function RepMap() {
         <div
           className={`absolute inset-0 flex flex-col ${activeView === 'calendar' ? 'flex' : 'hidden'}`}
           style={{ 
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)',
+            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 120px)',
             paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
           }}
         >
