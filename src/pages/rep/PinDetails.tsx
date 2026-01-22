@@ -345,14 +345,14 @@ export default function PinDetails() {
                 
                 <div className="space-y-1">
                   <Label className="text-muted-foreground text-[10px]">Time</Label>
-                  <div className="relative">
+                  <div className="relative h-9 flex items-center bg-muted rounded-md px-3">
                     <Input
                       type="time"
                       value={formData.appointment_time}
                       onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                      className="bg-muted border-0 h-9 text-sm"
+                      className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                     />
-                    <Clock className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                    <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
                   </div>
                 </div>
               </div>
