@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -16,8 +16,9 @@ import {
   X, User, Phone, Mail, Trash2, Briefcase
 } from 'lucide-react';
 
-// Set Mapbox access token
-mapboxgl.accessToken = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN || '';
+// Note: Mapbox access tokens are *publishable* (use a `pk.` token).
+// We still guard at runtime so the app doesn't crash if it's missing.
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 type PinStatus = 'lead' | 'followup' | 'installed';
 
@@ -85,7 +86,11 @@ export default function RepMap() {
 
   // Initialize Mapbox
   useEffect(() => {
+    if (!MAPBOX_TOKEN) return;
     if (!mapContainer.current || map.current) return;
+
+    // Mapbox requires the token to be set before creating the map instance.
+    mapboxgl.accessToken = MAPBOX_TOKEN;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -313,11 +318,15 @@ export default function RepMap() {
   };
 
   const handleMapLongPress = async (lat: number, lng: number) => {
+    if (!MAPBOX_TOKEN) {
+      toast.error('Map token missing. Please set a public Mapbox token (pk.*).');
+      return;
+    }
     const loadingToast = toast.loading('Getting address...');
 
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxgl.accessToken}`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}`
       );
       const data = await response.json();
       const address = data.features?.[0]?.place_name || '';
@@ -434,7 +443,22 @@ export default function RepMap() {
 
       {activeView === 'map' ? (
         <>
-          <div ref={mapContainer} className="flex-1 w-full" />
+          {!MAPBOX_TOKEN ? (
+            <div className="flex-1 w-full flex items-center justify-center p-6">
+              <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
+                <div className="font-semibold text-foreground">Mapbox token missing</div>
+                <div className="text-sm text-muted-foreground">
+                  Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
+                  as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  If you just added it, refresh the page.
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div ref={mapContainer} className="flex-1 w-full" />
+          )}
           
           {/* Map Controls */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
