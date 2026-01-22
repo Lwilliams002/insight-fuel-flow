@@ -558,103 +558,103 @@ export default function RepMap() {
         </div>
       </div>
 
-      {activeView === 'map' ? (
-        <>
-          {!mapboxToken ? (
-            <div className="flex-1 w-full flex items-center justify-center p-6">
-              <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
-                <div className="font-semibold text-foreground">Mapbox token missing</div>
-                <div className="text-sm text-muted-foreground">
-                  Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
-                  as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  If you just added it, refresh the page.
-                </div>
+      {/* Map View - Always mounted, visibility controlled via CSS */}
+      <div className={`${activeView === 'map' ? 'block' : 'hidden'}`}>
+        {!mapboxToken ? (
+          <div className="absolute inset-0 flex items-center justify-center p-6" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+            <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
+              <div className="font-semibold text-foreground">Mapbox token missing</div>
+              <div className="text-sm text-muted-foreground">
+                Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
+                as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
+              </div>
+              <div className="text-xs text-muted-foreground">
+                If you just added it, refresh the page.
               </div>
             </div>
-          ) : (
-            <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
-          )}
-          
-          {/* Map Controls */}
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
-            <button
-              onClick={() => {}}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="Search"
-            >
-              <Search className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {}}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="Drop Pin"
-            >
-              <MapPin className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {}}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="Filter"
-            >
-              <SlidersHorizontal className="w-5 h-5" />
-            </button>
-            <button
-              onClick={handleLocate}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="My Location"
-            >
-              <Crosshair className="w-5 h-5" />
-            </button>
-            <button
-              onClick={() => {}}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="Layers"
-            >
-              <Layers className="w-5 h-5" />
-            </button>
           </div>
-        </>
-      ) : (
-        <div className="flex-1 pt-16 overflow-auto" style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
-          <div className="p-4 space-y-3">
-            {pins?.map((pin) => (
-              <button
-                key={pin.id}
-                onClick={() => {
-                  handlePinClick(pin);
-                  setActiveView('map');
-                }}
-                className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1">
-                    <p className="font-medium text-foreground">
-                      {pin.homeowner_name || 'Unknown'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
-                    </p>
-                  </div>
-                  <div
-                    className="px-3 py-1 rounded-full text-xs font-medium text-white"
-                    style={{ backgroundColor: statusConfig[pin.status].color }}
-                  >
-                    {statusConfig[pin.status].label}
-                  </div>
-                </div>
-              </button>
-            ))}
-            {(!pins || pins.length === 0) && (
-              <div className="text-center py-12 text-muted-foreground">
-                <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>No pins yet. Hold the map to add one!</p>
-              </div>
-            )}
-          </div>
+        ) : (
+          <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
+        )}
+        
+        {/* Map Controls */}
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 z-[1000] flex flex-col gap-2">
+          <button
+            onClick={() => {}}
+            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+            title="Search"
+          >
+            <Search className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {}}
+            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+            title="Drop Pin"
+          >
+            <MapPin className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {}}
+            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+            title="Filter"
+          >
+            <SlidersHorizontal className="w-5 h-5" />
+          </button>
+          <button
+            onClick={handleLocate}
+            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+            title="My Location"
+          >
+            <Crosshair className="w-5 h-5" />
+          </button>
+          <button
+            onClick={() => {}}
+            className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
+            title="Layers"
+          >
+            <Layers className="w-5 h-5" />
+          </button>
         </div>
-      )}
+      </div>
+
+      {/* List View */}
+      <div className={`flex-1 pt-16 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`} style={{ paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' }}>
+        <div className="p-4 space-y-3">
+          {pins?.map((pin) => (
+            <button
+              key={pin.id}
+              onClick={() => {
+                handlePinClick(pin);
+                setActiveView('map');
+              }}
+              className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
+            >
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="font-medium text-foreground">
+                    {pin.homeowner_name || 'Unknown'}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
+                  </p>
+                </div>
+                <div
+                  className="px-3 py-1 rounded-full text-xs font-medium text-white"
+                  style={{ backgroundColor: statusConfig[pin.status].color }}
+                >
+                  {statusConfig[pin.status].label}
+                </div>
+              </div>
+            </button>
+          ))}
+          {(!pins || pins.length === 0) && (
+            <div className="text-center py-12 text-muted-foreground">
+              <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No pins yet. Hold the map to add one!</p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {/* Bottom Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
