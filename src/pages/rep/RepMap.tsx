@@ -17,8 +17,9 @@ import {
 } from 'lucide-react';
 
 // Note: Mapbox access tokens are *publishable* (use a `pk.` token).
-// We still guard at runtime so the app doesn't crash if it's missing.
-const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
+// In Lovable, VITE_ env vars may not always be present immediately in preview,
+// so we can also fetch it from a backend function as a fallback.
+const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
 type PinStatus = 'lead' | 'followup' | 'installed';
 
@@ -66,7 +67,40 @@ export default function RepMap() {
   });
   const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
   const queryClient = useQueryClient();
+
+  // Fallback: fetch token from backend if env var isn't present
+  useEffect(() => {
+    if (mapboxToken) return;
+    let cancelled = false;
+
+    (async () => {
+      try {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const accessToken = sessionData.session?.access_token;
+        if (!accessToken) return;
+
+        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-token`, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        });
+
+        const json = await res.json();
+        if (!res.ok) throw new Error(json?.error || 'Failed to load token');
+        if (!cancelled) setMapboxToken(json.token);
+      } catch (e) {
+        // Keep UI in "token missing" state
+        console.error('Failed to fetch Mapbox token:', e);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [mapboxToken]);
 
   // Get user's location
   useEffect(() => {
@@ -86,11 +120,11 @@ export default function RepMap() {
 
   // Initialize Mapbox
   useEffect(() => {
-    if (!MAPBOX_TOKEN) return;
+    if (!mapboxToken) return;
     if (!mapContainer.current || map.current) return;
 
     // Mapbox requires the token to be set before creating the map instance.
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+    mapboxgl.accessToken = mapboxToken;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
@@ -167,7 +201,7 @@ export default function RepMap() {
         map.current = null;
       }
     };
-  }, []);
+  }, [mapboxToken]);
 
   // Fetch rep's pins
   const { data: pins, isLoading } = useQuery({
@@ -318,7 +352,7 @@ export default function RepMap() {
   };
 
   const handleMapLongPress = async (lat: number, lng: number) => {
-    if (!MAPBOX_TOKEN) {
+    if (!mapboxToken) {
       toast.error('Map token missing. Please set a public Mapbox token (pk.*).');
       return;
     }
@@ -326,7 +360,7 @@ export default function RepMap() {
 
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}`
       );
       const data = await response.json();
       const address = data.features?.[0]?.place_name || '';
@@ -443,7 +477,7 @@ export default function RepMap() {
 
       {activeView === 'map' ? (
         <>
-          {!MAPBOX_TOKEN ? (
+          {!mapboxToken ? (
             <div className="flex-1 w-full flex items-center justify-center p-6">
               <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
                 <div className="font-semibold text-foreground">Mapbox token missing</div>
