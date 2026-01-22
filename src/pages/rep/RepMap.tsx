@@ -50,6 +50,7 @@ export default function RepMap() {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<Map<string, mapboxgl.Marker>>(new Map());
+  const userMarker = useRef<mapboxgl.Marker | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressCoords = useRef<{ lng: number; lat: number } | null>(null);
 
@@ -105,20 +106,39 @@ export default function RepMap() {
     };
   }, [mapboxToken]);
 
-  // Get user's location
+  // Get user's location with live updates
   useEffect(() => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
-          setUserLocation(newLoc);
-          if (map.current) {
-            map.current.flyTo({ center: [newLoc[1], newLoc[0]], zoom: 17 });
-          }
-        },
-        () => {}
-      );
-    }
+    if (!navigator.geolocation) return;
+
+    let watchId: number;
+    let initialFlyDone = false;
+
+    // Initial position
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
+        setUserLocation(newLoc);
+        if (map.current && !initialFlyDone) {
+          map.current.flyTo({ center: [newLoc[1], newLoc[0]], zoom: 17 });
+          initialFlyDone = true;
+        }
+      },
+      () => {}
+    );
+
+    // Watch position for live updates
+    watchId = navigator.geolocation.watchPosition(
+      (position) => {
+        const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
+        setUserLocation(newLoc);
+      },
+      () => {},
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+
+    return () => {
+      if (watchId) navigator.geolocation.clearWatch(watchId);
+    };
   }, []);
 
   // Initialize Mapbox
@@ -228,6 +248,52 @@ export default function RepMap() {
       return data;
     },
   });
+
+  // Update user location marker (blue dot like Google Maps)
+  useEffect(() => {
+    if (!map.current || !mapLoaded) return;
+
+    // Create or update user location marker
+    if (!userMarker.current) {
+      const el = document.createElement('div');
+      el.className = 'user-location-marker';
+      el.innerHTML = `
+        <div style="position: relative; width: 24px; height: 24px;">
+          <div style="
+            position: absolute;
+            top: 0; left: 0;
+            width: 24px;
+            height: 24px;
+            background: rgba(59, 130, 246, 0.3);
+            border-radius: 50%;
+            animation: pulse 2s ease-out infinite;
+          "></div>
+          <div style="
+            position: absolute;
+            top: 6px; left: 6px;
+            width: 12px;
+            height: 12px;
+            background: #3b82f6;
+            border: 2px solid white;
+            border-radius: 50%;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+          "></div>
+        </div>
+        <style>
+          @keyframes pulse {
+            0% { transform: scale(1); opacity: 1; }
+            100% { transform: scale(2.5); opacity: 0; }
+          }
+        </style>
+      `;
+
+      userMarker.current = new mapboxgl.Marker({ element: el })
+        .setLngLat([userLocation[1], userLocation[0]])
+        .addTo(map.current);
+    } else {
+      userMarker.current.setLngLat([userLocation[1], userLocation[0]]);
+    }
+  }, [userLocation, mapLoaded]);
 
   // Update markers when pins change
   useEffect(() => {
