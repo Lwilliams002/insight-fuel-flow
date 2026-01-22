@@ -83,8 +83,11 @@ export default function RepMap() {
 
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-token`, {
           method: 'GET',
+          cache: 'no-store',
           headers: {
             Authorization: `Bearer ${accessToken}`,
+            // Some environments require the apikey header for function calls.
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           },
         });
 
