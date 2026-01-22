@@ -644,18 +644,34 @@ export default function RepMap() {
 
       {/* Bottom Sheet */}
       <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-        <SheetContent side="bottom" className="h-[85vh] rounded-t-3xl px-0">
-          <div className="w-12 h-1.5 bg-muted rounded-full mx-auto mb-4" />
+        <SheetContent 
+          side="bottom" 
+          className="h-[92vh] rounded-t-3xl px-0 flex flex-col"
+          style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        >
+          {/* Drag Handle */}
+          <div className="flex-shrink-0 pt-3 pb-2">
+            <div className="w-12 h-1.5 bg-muted rounded-full mx-auto" />
+          </div>
 
-          <ScrollArea className="h-full px-5 pb-20">
-            <div className="space-y-6">
+          {/* Close Button */}
+          <button 
+            onClick={() => setIsSheetOpen(false)}
+            className="absolute right-4 top-4 w-8 h-8 flex items-center justify-center rounded-full bg-muted text-muted-foreground hover:bg-muted/80"
+          >
+            <X className="w-4 h-4" />
+          </button>
+
+          {/* Scrollable Content */}
+          <div className="flex-1 overflow-y-auto px-5">
+            <div className="space-y-5 pb-6">
               {/* Header */}
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Address</span>
-                <button className="text-sm text-primary flex items-center gap-1">
+                <span className="text-sm text-primary flex items-center gap-1">
                   <MapPin className="w-4 h-4" />
                   Pin Linked
-                </button>
+                </span>
               </div>
 
               {/* Address Input */}
@@ -678,7 +694,7 @@ export default function RepMap() {
 
               {/* Status Tags */}
               <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex gap-2">
+                <div className="flex gap-2 pb-1">
                   {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
                     <button
                       key={status}
@@ -708,7 +724,7 @@ export default function RepMap() {
                     <Input
                       value={formData.homeowner_name}
                       onChange={(e) => setFormData({ ...formData, homeowner_name: e.target.value })}
-                      placeholder="Enter name..."
+                      placeholder=""
                       className="pr-10 bg-muted border-0 h-12"
                     />
                     <User className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -722,7 +738,7 @@ export default function RepMap() {
                       type="tel"
                       value={formData.phone}
                       onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="Enter phone..."
+                      placeholder=""
                       className="pr-10 bg-muted border-0 h-12"
                     />
                     <Phone className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -736,7 +752,7 @@ export default function RepMap() {
                       type="email"
                       value={formData.email}
                       onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="Enter email..."
+                      placeholder=""
                       className="pr-10 bg-muted border-0 h-12"
                     />
                     <Mail className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
@@ -748,7 +764,7 @@ export default function RepMap() {
                   <Textarea
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
-                    placeholder="Add notes..."
+                    placeholder=""
                     className="bg-muted border-0 min-h-[100px] resize-none"
                   />
                 </div>
@@ -787,10 +803,13 @@ export default function RepMap() {
                 </div>
               )}
             </div>
-          </ScrollArea>
+          </div>
 
           {/* Save Button - Fixed at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-background border-t border-border">
+          <div 
+            className="flex-shrink-0 p-4 bg-background border-t border-border"
+            style={{ paddingBottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)' }}
+          >
             <Button
               onClick={handleSave}
               disabled={createPinMutation.isPending || updatePinMutation.isPending}
