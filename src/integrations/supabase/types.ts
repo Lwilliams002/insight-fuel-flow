@@ -535,6 +535,7 @@ export type Database = {
       rep_pins: {
         Row: {
           address: string | null
+          appointment_date: string | null
           created_at: string
           deal_id: string | null
           homeowner_name: string | null
@@ -548,6 +549,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          appointment_date?: string | null
           created_at?: string
           deal_id?: string | null
           homeowner_name?: string | null
@@ -561,6 +563,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          appointment_date?: string | null
           created_at?: string
           deal_id?: string | null
           homeowner_name?: string | null
@@ -680,7 +683,7 @@ export type Database = {
         | "complete"
         | "paid"
         | "cancelled"
-      pin_status: "lead" | "followup" | "installed"
+      pin_status: "lead" | "followup" | "installed" | "appointment"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -821,7 +824,7 @@ export const Constants = {
         "paid",
         "cancelled",
       ],
-      pin_status: ["lead", "followup", "installed"],
+      pin_status: ["lead", "followup", "installed", "appointment"],
     },
   },
 } as const
