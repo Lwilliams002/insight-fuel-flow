@@ -1,21 +1,41 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import mapboxgl from 'mapbox-gl';
-import 'mapbox-gl/dist/mapbox-gl.css';
-import { supabase } from '@/integrations/supabase/client';
-import { BottomNav } from '@/components/BottomNav';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { format, isSameDay, startOfMonth, endOfMonth, addMonths, subMonths, isToday, startOfWeek, endOfWeek, addDays } from 'date-fns';
-import { 
-  MapPin, Crosshair, X, CalendarIcon, Filter, ChevronDown, ChevronLeft, ChevronRight, Search, Navigation
-} from 'lucide-react';
-import { Input } from '@/components/ui/input';
+import { useState, useEffect, useRef, useMemo } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import mapboxgl from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
+import { supabase } from "@/integrations/supabase/client";
+import { BottomNav } from "@/components/BottomNav";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  format,
+  isSameDay,
+  startOfMonth,
+  endOfMonth,
+  addMonths,
+  subMonths,
+  isToday,
+  startOfWeek,
+  endOfWeek,
+  addDays,
+} from "date-fns";
+import {
+  MapPin,
+  Crosshair,
+  X,
+  CalendarIcon,
+  Filter,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Search,
+  Navigation,
+} from "lucide-react";
+import { Input } from "@/components/ui/input";
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
-type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
+type PinStatus = "lead" | "followup" | "installed" | "appointment";
 
 interface Pin {
   id: string;
@@ -31,10 +51,10 @@ interface Pin {
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: '#a855f7', label: 'Not Home' },
-  followup: { color: '#ec4899', label: 'Needs Follow-up' },
-  installed: { color: '#14b8a6', label: 'Installed' },
-  appointment: { color: '#f59e0b', label: 'Appointment' },
+  lead: { color: "#a855f7", label: "Not Home" },
+  followup: { color: "#ec4899", label: "Needs Follow-up" },
+  installed: { color: "#14b8a6", label: "Installed" },
+  appointment: { color: "#f59e0b", label: "Appointment" },
 };
 
 interface NewPinData {
@@ -53,20 +73,20 @@ export default function RepMap() {
   const longPressCoords = useRef<{ lng: number; lat: number } | null>(null);
 
   // Read initial tab from URL
-  const initialTab = searchParams.get('tab') as 'map' | 'list' | 'calendar' | null;
-  const [activeView, setActiveView] = useState<'map' | 'list' | 'calendar'>(initialTab || 'map');
+  const initialTab = searchParams.get("tab") as "map" | "list" | "calendar" | null;
+  const [activeView, setActiveView] = useState<"map" | "list" | "calendar">(initialTab || "map");
   const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
-  
+
   // Filters
-  const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<PinStatus | "all">("all");
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  
+
   // Follow mode - automatically center map on user location
   const [isFollowing, setIsFollowing] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-  
+  const [searchQuery, setSearchQuery] = useState("");
+
   // Calendar
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
@@ -83,8 +103,8 @@ export default function RepMap() {
         if (!accessToken) return;
 
         const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-token`, {
-          method: 'GET',
-          cache: 'no-store',
+          method: "GET",
+          cache: "no-store",
           headers: {
             Authorization: `Bearer ${accessToken}`,
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
@@ -92,10 +112,10 @@ export default function RepMap() {
         });
 
         const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || 'Failed to load token');
+        if (!res.ok) throw new Error(json?.error || "Failed to load token");
         if (!cancelled) setMapboxToken(json.token);
       } catch (e) {
-        console.error('Failed to fetch Mapbox token:', e);
+        console.error("Failed to fetch Mapbox token:", e);
       }
     })();
 
@@ -120,7 +140,7 @@ export default function RepMap() {
           initialFlyDone = true;
         }
       },
-      () => {}
+      () => {},
     );
 
     watchId = navigator.geolocation.watchPosition(
@@ -129,7 +149,7 @@ export default function RepMap() {
         setUserLocation(newLoc);
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
     );
 
     return () => {
@@ -147,15 +167,19 @@ export default function RepMap() {
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: 'mapbox://styles/mapbox/satellite-streets-v12',
+      style: "mapbox://styles/mapbox/streets-v12",
       center: [userLocation[1], userLocation[0]],
       zoom: 17,
     });
 
-    map.current.addControl(new mapboxgl.NavigationControl(), 'bottom-right');
+    map.current.addControl(new mapboxgl.NavigationControl(), "bottom-right");
 
-    map.current.on('load', () => {
+    map.current.on("load", () => {
       setMapLoaded(true);
+
+      setTimeout(() => {
+        map.current?.setStyle("mapbox://styles/mapbox/satellite-streets-v12");
+      }, 300);
     });
 
     const handleTouchStart = (e: mapboxgl.MapTouchEvent) => {
@@ -205,12 +229,12 @@ export default function RepMap() {
       }
     };
 
-    map.current.on('touchstart', handleTouchStart);
-    map.current.on('touchend', handleTouchEnd);
-    map.current.on('touchmove', handleTouchMove);
-    map.current.on('mousedown', handleMouseDown);
-    map.current.on('mouseup', handleMouseUp);
-    map.current.on('mousemove', handleMouseMove);
+    map.current.on("touchstart", handleTouchStart);
+    map.current.on("touchend", handleTouchEnd);
+    map.current.on("touchmove", handleTouchMove);
+    map.current.on("mousedown", handleMouseDown);
+    map.current.on("mouseup", handleMouseUp);
+    map.current.on("mousemove", handleMouseMove);
 
     return () => {
       if (map.current) {
@@ -223,7 +247,7 @@ export default function RepMap() {
 
   // Force map resize when switching back to map view
   useEffect(() => {
-    if (activeView === 'map' && map.current) {
+    if (activeView === "map" && map.current) {
       setTimeout(() => {
         map.current?.resize();
       }, 100);
@@ -232,12 +256,9 @@ export default function RepMap() {
 
   // Fetch rep's pins
   const { data: pins, isLoading } = useQuery({
-    queryKey: ['rep-pins'],
+    queryKey: ["rep-pins"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rep_pins')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data, error } = await supabase.from("rep_pins").select("*").order("created_at", { ascending: false });
       if (error) throw error;
       return data as Pin[];
     },
@@ -245,9 +266,9 @@ export default function RepMap() {
 
   // Get rep_id for creating pins
   const { data: repData } = useQuery({
-    queryKey: ['current-rep'],
+    queryKey: ["current-rep"],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_rep_id');
+      const { data, error } = await supabase.rpc("get_rep_id");
       if (error) throw error;
       return data;
     },
@@ -256,21 +277,21 @@ export default function RepMap() {
   // Filtered pins for list view
   const filteredPins = useMemo(() => {
     if (!pins) return [];
-    if (statusFilter === 'all') return pins;
-    return pins.filter(pin => pin.status === statusFilter);
+    if (statusFilter === "all") return pins;
+    return pins.filter((pin) => pin.status === statusFilter);
   }, [pins, statusFilter]);
 
   // Appointments for calendar
   const appointmentPins = useMemo(() => {
     if (!pins) return [];
-    return pins.filter(pin => pin.status === 'appointment' && pin.appointment_date);
+    return pins.filter((pin) => pin.status === "appointment" && pin.appointment_date);
   }, [pins]);
 
   // Appointments for selected calendar date
   const selectedDateAppointments = useMemo(() => {
     if (!selectedCalendarDate || !appointmentPins) return [];
-    return appointmentPins.filter(pin => 
-      pin.appointment_date && isSameDay(new Date(pin.appointment_date), selectedCalendarDate)
+    return appointmentPins.filter(
+      (pin) => pin.appointment_date && isSameDay(new Date(pin.appointment_date), selectedCalendarDate),
     );
   }, [selectedCalendarDate, appointmentPins]);
 
@@ -278,9 +299,9 @@ export default function RepMap() {
   const daysWithAppointments = useMemo(() => {
     if (!appointmentPins) return new Map<string, Pin[]>();
     const daysMap = new Map<string, Pin[]>();
-    appointmentPins.forEach(pin => {
+    appointmentPins.forEach((pin) => {
       if (pin.appointment_date) {
-        const key = format(new Date(pin.appointment_date), 'yyyy-MM-dd');
+        const key = format(new Date(pin.appointment_date), "yyyy-MM-dd");
         const existing = daysMap.get(key) || [];
         daysMap.set(key, [...existing, pin]);
       }
@@ -294,7 +315,7 @@ export default function RepMap() {
     const monthEnd = endOfMonth(calendarMonth);
     const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
     const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-    
+
     const days: Date[] = [];
     let currentDay = calendarStart;
     while (currentDay <= calendarEnd) {
@@ -309,8 +330,8 @@ export default function RepMap() {
     if (!map.current || !mapLoaded) return;
 
     if (!userMarker.current) {
-      const el = document.createElement('div');
-      el.className = 'user-location-marker';
+      const el = document.createElement("div");
+      el.className = "user-location-marker";
       el.innerHTML = `
         <div style="position: relative; width: 24px; height: 24px;">
           <div style="
@@ -357,11 +378,11 @@ export default function RepMap() {
     markers.current.clear();
 
     pins.forEach((pin) => {
-      const el = document.createElement('div');
-      el.className = 'custom-marker';
+      const el = document.createElement("div");
+      el.className = "custom-marker";
       el.innerHTML = `
         <div style="
-          background-color: ${statusConfig[pin.status]?.color || '#888'};
+          background-color: ${statusConfig[pin.status]?.color || "#888"};
           width: 28px;
           height: 28px;
           border-radius: 50%;
@@ -382,11 +403,9 @@ export default function RepMap() {
         </div>
       `;
 
-      el.addEventListener('click', () => handlePinClick(pin));
+      el.addEventListener("click", () => handlePinClick(pin));
 
-      const marker = new mapboxgl.Marker({ element: el })
-        .setLngLat([pin.longitude, pin.latitude])
-        .addTo(map.current!);
+      const marker = new mapboxgl.Marker({ element: el }).setLngLat([pin.longitude, pin.latitude]).addTo(map.current!);
 
       markers.current.set(pin.id, marker);
     });
@@ -394,34 +413,35 @@ export default function RepMap() {
 
   const handleMapLongPress = async (lat: number, lng: number) => {
     if (!mapboxToken) {
-      toast.error('Map token missing. Please set a public Mapbox token (pk.*).');
+      toast.error("Map token missing. Please set a public Mapbox token (pk.*).");
       return;
     }
-    const loadingToast = toast.loading('Getting address...');
+    const loadingToast = toast.loading("Getting address...");
 
     try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}`
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}`,
       );
       const data = await response.json();
-      const address = data.features?.[0]?.place_name || '';
+      const address = data.features?.[0]?.place_name || "";
 
       if (!address) {
         toast.dismiss(loadingToast);
-        toast.error('Could not determine address for this location.');
+        toast.error("Could not determine address for this location.");
         return;
       }
 
-      const { data: existingPin, error: checkError } = await supabase
-        .rpc('check_address_exists', { check_address: address });
+      const { data: existingPin, error: checkError } = await supabase.rpc("check_address_exists", {
+        check_address: address,
+      });
 
       if (checkError) {
-        console.error('Error checking address:', checkError);
+        console.error("Error checking address:", checkError);
       }
 
       if (existingPin && existingPin.length > 0 && existingPin[0].exists_already) {
         toast.dismiss(loadingToast);
-        toast.error('This address already has a pin. Please contact management.', { duration: 5000 });
+        toast.error("This address already has a pin. Please contact management.", { duration: 5000 });
         return;
       }
 
@@ -431,8 +451,8 @@ export default function RepMap() {
       navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}&from=${activeView}`);
     } catch (error) {
       toast.dismiss(loadingToast);
-      console.error('Error during pin creation:', error);
-      toast.error('Failed to get address. Please try again.');
+      console.error("Error during pin creation:", error);
+      toast.error("Failed to get address. Please try again.");
     }
   };
 
@@ -441,33 +461,33 @@ export default function RepMap() {
   };
 
   const handleLocate = () => {
-    setIsFollowing(prev => !prev);
+    setIsFollowing((prev) => !prev);
     if (map.current) {
       map.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17 });
     }
   };
-  
+
   // When in follow mode, center map on location updates
   useEffect(() => {
     if (isFollowing && map.current) {
       map.current.easeTo({ center: [userLocation[1], userLocation[0]], duration: 500 });
     }
   }, [userLocation, isFollowing]);
-  
+
   // Disable follow mode when user manually pans the map
   useEffect(() => {
     if (!map.current) return;
-    
+
     const handleDragStart = () => {
       if (isFollowing) {
         setIsFollowing(false);
       }
     };
-    
-    map.current.on('dragstart', handleDragStart);
-    
+
+    map.current.on("dragstart", handleDragStart);
+
     return () => {
-      map.current?.off('dragstart', handleDragStart);
+      map.current?.off("dragstart", handleDragStart);
     };
   }, [isFollowing]);
 
@@ -475,9 +495,12 @@ export default function RepMap() {
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <main className="relative flex-1 overflow-hidden">
         {/* Top Header Bar */}
-        <div className="absolute inset-x-0 z-[1000] flex flex-col items-center gap-2 px-4" style={{ top: 'calc(env(safe-area-inset-top, 0px) + 16px)' }}>
+        <div
+          className="absolute inset-x-0 z-[1000] flex flex-col items-center gap-2 px-4"
+          style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
+        >
           {/* Month Name - Only in Calendar View */}
-          {activeView === 'calendar' && (
+          {activeView === "calendar" && (
             <div className="flex items-center gap-4">
               <button
                 onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
@@ -486,9 +509,7 @@ export default function RepMap() {
                 <ChevronLeft className="w-5 h-5 text-foreground" />
               </button>
               <div className="bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg px-5 py-2 min-w-[150px] text-center">
-                <span className="text-sm font-medium text-foreground">
-                  {format(calendarMonth, 'MMMM yyyy')}
-                </span>
+                <span className="text-sm font-medium text-foreground">{format(calendarMonth, "MMMM yyyy")}</span>
               </div>
               <button
                 onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
@@ -502,31 +523,25 @@ export default function RepMap() {
           {/* View Tabs */}
           <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
             <button
-              onClick={() => setActiveView('map')}
+              onClick={() => setActiveView("map")}
               className={`px-5 py-2 text-sm font-medium transition-colors ${
-                activeView === 'map'
-                  ? 'bg-card text-foreground'
-                  : 'bg-muted text-muted-foreground'
+                activeView === "map" ? "bg-card text-foreground" : "bg-muted text-muted-foreground"
               }`}
             >
               Map
             </button>
             <button
-              onClick={() => setActiveView('list')}
+              onClick={() => setActiveView("list")}
               className={`px-5 py-2 text-sm font-medium transition-colors ${
-                activeView === 'list'
-                  ? 'bg-card text-foreground'
-                  : 'bg-muted text-muted-foreground'
+                activeView === "list" ? "bg-card text-foreground" : "bg-muted text-muted-foreground"
               }`}
             >
               List
             </button>
             <button
-              onClick={() => setActiveView('calendar')}
+              onClick={() => setActiveView("calendar")}
               className={`px-5 py-2 text-sm font-medium transition-colors ${
-                activeView === 'calendar'
-                  ? 'bg-card text-foreground'
-                  : 'bg-muted text-muted-foreground'
+                activeView === "calendar" ? "bg-card text-foreground" : "bg-muted text-muted-foreground"
               }`}
             >
               Calendar
@@ -535,47 +550,54 @@ export default function RepMap() {
         </div>
 
         {/* Map View */}
-        <div className={`${activeView === 'map' ? 'block' : 'hidden'}`}>
+        <div className={`${activeView === "map" ? "block" : "hidden"}`}>
           {!mapboxToken ? (
-            <div className="absolute inset-0 flex items-center justify-center p-6" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+            <div
+              className="absolute inset-0 flex items-center justify-center p-6"
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+            >
               <div className="max-w-md w-full bg-card border border-border rounded-xl p-5 space-y-3">
                 <div className="font-semibold text-foreground">Mapbox token missing</div>
                 <div className="text-sm text-muted-foreground">
-                  Add a <span className="font-medium">public</span> Mapbox token (starts with <span className="font-mono">pk.</span>)
-                  as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>.
+                  Add a <span className="font-medium">public</span> Mapbox token (starts with{" "}
+                  <span className="font-mono">pk.</span>) as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>
+                  .
                 </div>
               </div>
             </div>
           ) : (
-            <div ref={mapContainer} className="absolute inset-0" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }} />
+            <div
+              ref={mapContainer}
+              className="absolute inset-0"
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+            />
           )}
-          
+
           {/* Location Follow Button */}
-          <div className="absolute right-3 z-[1000]" style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
+          <div
+            className="absolute right-3 z-[1000]"
+            style={{ bottom: "calc(96px + env(safe-area-inset-bottom, 0px))" }}
+          >
             <button
               onClick={handleLocate}
               className={`w-11 h-11 rounded-full backdrop-blur-sm border shadow-lg flex items-center justify-center transition-colors ${
-                isFollowing 
-                  ? 'bg-primary text-primary-foreground border-primary' 
-                  : 'bg-card/95 text-foreground border-border hover:bg-muted'
+                isFollowing
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card/95 text-foreground border-border hover:bg-muted"
               }`}
               title={isFollowing ? "Following location" : "Follow my location"}
             >
-              {isFollowing ? (
-                <Navigation className="w-5 h-5" />
-              ) : (
-                <Crosshair className="w-5 h-5" />
-              )}
+              {isFollowing ? <Navigation className="w-5 h-5" /> : <Crosshair className="w-5 h-5" />}
             </button>
           </div>
         </div>
 
         {/* List View */}
         <div
-          className={`absolute inset-0 overflow-auto ${activeView === 'list' ? 'block' : 'hidden'}`}
-          style={{ 
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 64px)',
-            paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
+          className={`absolute inset-0 overflow-auto ${activeView === "list" ? "block" : "hidden"}`}
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 64px)",
+            paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
           }}
         >
           {/* Search and Filter Bar */}
@@ -592,14 +614,14 @@ export default function RepMap() {
               />
               {searchQuery && (
                 <button
-                  onClick={() => setSearchQuery('')}
+                  onClick={() => setSearchQuery("")}
                   className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full"
                 >
                   <X className="w-3.5 h-3.5 text-muted-foreground" />
                 </button>
               )}
             </div>
-            
+
             {/* Filter Dropdown */}
             <div className="relative">
               <button
@@ -607,23 +629,29 @@ export default function RepMap() {
                 className="flex items-center gap-2 px-4 py-2.5 bg-muted rounded-lg text-sm font-medium text-foreground"
               >
                 <Filter className="w-4 h-4" />
-                {statusFilter === 'all' ? 'All' : statusConfig[statusFilter].label}
+                {statusFilter === "all" ? "All" : statusConfig[statusFilter].label}
                 <ChevronDown className="w-4 h-4" />
               </button>
-              
+
               {showFilterDropdown && (
                 <div className="absolute top-full left-0 mt-2 bg-card border border-border rounded-lg shadow-lg overflow-hidden z-50 min-w-[160px]">
                   <button
-                    onClick={() => { setStatusFilter('all'); setShowFilterDropdown(false); }}
-                    className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors text-foreground ${statusFilter === 'all' ? 'bg-muted' : ''}`}
+                    onClick={() => {
+                      setStatusFilter("all");
+                      setShowFilterDropdown(false);
+                    }}
+                    className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors text-foreground ${statusFilter === "all" ? "bg-muted" : ""}`}
                   >
                     All Pins
                   </button>
                   {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
                     <button
                       key={status}
-                      onClick={() => { setStatusFilter(status); setShowFilterDropdown(false); }}
-                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2 text-foreground ${statusFilter === status ? 'bg-muted' : ''}`}
+                      onClick={() => {
+                        setStatusFilter(status);
+                        setShowFilterDropdown(false);
+                      }}
+                      className={`w-full px-4 py-3 text-left text-sm hover:bg-muted transition-colors flex items-center gap-2 text-foreground ${statusFilter === status ? "bg-muted" : ""}`}
                     >
                       <div className="w-3 h-3 rounded-full" style={{ backgroundColor: statusConfig[status].color }} />
                       {statusConfig[status].label}
@@ -636,44 +664,48 @@ export default function RepMap() {
 
           <div className="p-4 space-y-3">
             {filteredPins
-              ?.filter((pin) => 
-                !searchQuery || 
-                (pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase()))
-              )
+              ?.filter((pin) => !searchQuery || pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase()))
               .map((pin) => (
-              <button
-                key={pin.id}
-                onClick={() => handlePinClick(pin)}
-                className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
-              >
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1 flex-1 min-w-0">
-                    <p className="font-medium text-foreground truncate">
-                      {pin.homeowner_name || 'Unknown'}
-                    </p>
-                    <p className="text-sm text-muted-foreground truncate">
-                      {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
-                    </p>
-                    {pin.status === 'appointment' && pin.appointment_date && (
-                      <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
-                        <CalendarIcon className="w-3 h-3" />
-                        {format(new Date(pin.appointment_date), 'MMM d, yyyy h:mm a')}
+                <button
+                  key={pin.id}
+                  onClick={() => handlePinClick(pin)}
+                  className="w-full p-4 bg-card rounded-lg border border-border text-left hover:bg-muted/50 transition-colors"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <p className="font-medium text-foreground truncate">{pin.homeowner_name || "Unknown"}</p>
+                      <p className="text-sm text-muted-foreground truncate">
+                        {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
                       </p>
-                    )}
+                      {pin.status === "appointment" && pin.appointment_date && (
+                        <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
+                          <CalendarIcon className="w-3 h-3" />
+                          {format(new Date(pin.appointment_date), "MMM d, yyyy h:mm a")}
+                        </p>
+                      )}
+                    </div>
+                    <div
+                      className="px-3 py-1 rounded-full text-xs font-medium text-white shrink-0 ml-2"
+                      style={{ backgroundColor: statusConfig[pin.status]?.color || "#888" }}
+                    >
+                      {statusConfig[pin.status]?.label || pin.status}
+                    </div>
                   </div>
-                  <div
-                    className="px-3 py-1 rounded-full text-xs font-medium text-white shrink-0 ml-2"
-                    style={{ backgroundColor: statusConfig[pin.status]?.color || '#888' }}
-                  >
-                    {statusConfig[pin.status]?.label || pin.status}
-                  </div>
-                </div>
-              </button>
-            ))}
-            {(!filteredPins || filteredPins.filter((pin) => !searchQuery || pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0) && (
+                </button>
+              ))}
+            {(!filteredPins ||
+              filteredPins.filter(
+                (pin) => !searchQuery || pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase()),
+              ).length === 0) && (
               <div className="text-center py-12 text-muted-foreground">
                 <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>{searchQuery ? 'No pins match your search.' : (statusFilter === 'all' ? 'No pins yet. Hold the map to add one!' : 'No pins with this status.')}</p>
+                <p>
+                  {searchQuery
+                    ? "No pins match your search."
+                    : statusFilter === "all"
+                      ? "No pins yet. Hold the map to add one!"
+                      : "No pins with this status."}
+                </p>
               </div>
             )}
           </div>
@@ -681,15 +713,15 @@ export default function RepMap() {
 
         {/* Calendar View */}
         <div
-          className={`absolute inset-0 flex flex-col ${activeView === 'calendar' ? 'flex' : 'hidden'}`}
-          style={{ 
-            paddingTop: 'calc(env(safe-area-inset-top, 0px) + 120px)',
-            paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
+          className={`absolute inset-0 flex flex-col ${activeView === "calendar" ? "flex" : "hidden"}`}
+          style={{
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 120px)",
+            paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
           }}
         >
           {/* Day of Week Headers */}
           <div className="grid grid-cols-7 border-b border-border bg-background">
-            {['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'].map((day) => (
+            {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
               <div key={day} className="text-center py-2 text-xs font-medium text-muted-foreground">
                 {day}
               </div>
@@ -700,7 +732,7 @@ export default function RepMap() {
           <div className="flex-1 overflow-auto">
             <div className="grid grid-cols-7 auto-rows-fr min-h-full">
               {calendarDays.map((day, index) => {
-                const dateKey = format(day, 'yyyy-MM-dd');
+                const dateKey = format(day, "yyyy-MM-dd");
                 const dayAppointments = daysWithAppointments.get(dateKey) || [];
                 const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
                 const isSelected = selectedCalendarDate && isSameDay(day, selectedCalendarDate);
@@ -709,12 +741,12 @@ export default function RepMap() {
                 return (
                   <button
                     key={index}
-                    onClick={() => navigate(`/map/date/${format(day, 'yyyy-MM-dd')}?from=calendar`)}
+                    onClick={() => navigate(`/map/date/${format(day, "yyyy-MM-dd")}?from=calendar`)}
                     className={cn(
                       "flex flex-col p-1 border-b border-r border-border min-h-[80px] text-left transition-colors",
                       !isCurrentMonth && "opacity-40",
                       isSelected && "bg-primary/10",
-                      !isSelected && "hover:bg-muted/50"
+                      !isSelected && "hover:bg-muted/50",
                     )}
                   >
                     <span
@@ -722,10 +754,10 @@ export default function RepMap() {
                         "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1",
                         isTodayDate && "bg-primary text-primary-foreground",
                         !isTodayDate && isCurrentMonth && "text-foreground",
-                        !isTodayDate && !isCurrentMonth && "text-muted-foreground"
+                        !isTodayDate && !isCurrentMonth && "text-muted-foreground",
                       )}
                     >
-                      {format(day, 'd')}
+                      {format(day, "d")}
                     </span>
                     {/* Event Pills */}
                     <div className="flex-1 space-y-0.5 overflow-hidden">
@@ -734,13 +766,11 @@ export default function RepMap() {
                           key={appt.id}
                           className="text-[10px] px-1 py-0.5 rounded bg-primary/80 text-primary-foreground truncate"
                         >
-                          {appt.homeowner_name || 'Appt'}
+                          {appt.homeowner_name || "Appt"}
                         </div>
                       ))}
                       {dayAppointments.length > 3 && (
-                        <div className="text-[10px] text-muted-foreground px-1">
-                          +{dayAppointments.length - 3} more
-                        </div>
+                        <div className="text-[10px] text-muted-foreground px-1">+{dayAppointments.length - 3} more</div>
                       )}
                     </div>
                   </button>
@@ -751,16 +781,19 @@ export default function RepMap() {
 
           {/* Selected Day Detail Panel (Bottom Sheet Style) */}
           {selectedCalendarDate && (
-            <div className="absolute inset-x-0 bottom-0 bg-card border-t border-border rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col" style={{ bottom: 'calc(64px + env(safe-area-inset-bottom, 0px))' }}>
+            <div
+              className="absolute inset-x-0 bottom-0 bg-card border-t border-border rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col"
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+            >
               {/* Drag Handle */}
               <div className="flex-shrink-0 pt-3 pb-1">
                 <div className="w-12 h-1 bg-muted rounded-full mx-auto" />
               </div>
-              
+
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-2">
                 <h3 className="text-base font-semibold text-foreground">
-                  {format(selectedCalendarDate, 'EEE, MMM d')}
+                  {format(selectedCalendarDate, "EEE, MMM d")}
                 </h3>
                 <button
                   onClick={() => setSelectedCalendarDate(undefined)}
@@ -778,8 +811,8 @@ export default function RepMap() {
                       .sort((a, b) => new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime())
                       .map((pin) => {
                         const apptTime = new Date(pin.appointment_date!);
-                        const initial = (pin.homeowner_name?.[0] || 'A').toUpperCase();
-                        
+                        const initial = (pin.homeowner_name?.[0] || "A").toUpperCase();
+
                         return (
                           <button
                             key={pin.id}
@@ -789,23 +822,21 @@ export default function RepMap() {
                             {/* Time */}
                             <div className="w-14 text-left shrink-0">
                               <div className="text-xs font-medium text-muted-foreground">
-                                {format(apptTime, 'h:mm a')}
+                                {format(apptTime, "h:mm a")}
                               </div>
                             </div>
-                            
+
                             {/* Colored Bar */}
                             <div className="w-0.5 h-8 rounded-full bg-primary shrink-0" />
-                            
+
                             {/* Content */}
                             <div className="flex-1 min-w-0 text-left">
                               <p className="text-sm font-medium text-foreground truncate">
-                                {pin.homeowner_name || 'Unknown'}
+                                {pin.homeowner_name || "Unknown"}
                               </p>
-                              <p className="text-xs text-muted-foreground truncate">
-                                {pin.address || 'No address'}
-                              </p>
+                              <p className="text-xs text-muted-foreground truncate">{pin.address || "No address"}</p>
                             </div>
-                            
+
                             {/* Avatar */}
                             <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
                               <span className="text-xs font-semibold text-primary-foreground">{initial}</span>
@@ -824,7 +855,6 @@ export default function RepMap() {
             </div>
           )}
         </div>
-
       </main>
 
       {/* Bottom Navigation */}
