@@ -17,6 +17,7 @@ import {
   LogOut,
   LayoutDashboard,
   Menu,
+  MapPin,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -24,6 +25,7 @@ import { useState } from 'react';
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/admin/deals', icon: Home, label: 'Deals' },
+  { href: '/admin/map', icon: MapPin, label: 'Map' },
   { href: '/admin/reps', icon: Users, label: 'Reps' },
   { href: '/admin/commissions', icon: DollarSign, label: 'Commissions' },
   { href: '/admin/jotform', icon: ClipboardList, label: 'New Deal' },
