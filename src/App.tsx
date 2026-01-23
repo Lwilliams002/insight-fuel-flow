@@ -15,6 +15,7 @@ import RepJotForm from "./pages/rep/RepJotForm";
 import AdminDashboard from "./pages/AdminDashboard";
 import RepsManagement from "./pages/admin/RepsManagement";
 import AdminDeals from "./pages/admin/AdminDeals";
+import AdminMap from "./pages/admin/AdminMap";
 import AdminCommissions from "./pages/admin/AdminCommissions";
 import AdminJotForm from "./pages/admin/AdminJotForm";
 import AdminSettings from "./pages/admin/AdminSettings";
@@ -105,6 +106,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['admin']}>
                   <AdminDeals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin/map"
+              element={
+                <ProtectedRoute allowedRoles={['admin']}>
+                  <AdminMap />
                 </ProtectedRoute>
               }
             />
