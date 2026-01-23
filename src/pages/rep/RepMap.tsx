@@ -709,7 +709,7 @@ export default function RepMap() {
                 return (
                   <button
                     key={index}
-                    onClick={() => setSelectedCalendarDate(day)}
+                    onClick={() => navigate(`/map/date/${format(day, 'yyyy-MM-dd')}?from=calendar`)}
                     className={cn(
                       "flex flex-col p-1 border-b border-r border-border min-h-[80px] text-left transition-colors",
                       !isCurrentMonth && "opacity-40",
