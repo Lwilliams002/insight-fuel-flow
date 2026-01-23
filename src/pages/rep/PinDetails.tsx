@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -14,8 +14,9 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
   ChevronLeft, MapPin, User, Phone, Mail, Trash2, Briefcase, 
-  CalendarIcon, Clock, X
+  CalendarIcon, Clock, X, Upload, FileText, Loader2
 } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 
 type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
 
@@ -44,6 +45,9 @@ export default function PinDetails() {
   const { pinId } = useParams();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
   
   const isNew = pinId === 'new';
   const lat = searchParams.get('lat');
@@ -89,6 +93,89 @@ export default function PinDetails() {
       return data;
     },
   });
+
+  // Fetch documents for this pin
+  const { data: documents, refetch: refetchDocuments } = useQuery({
+    queryKey: ['pin-documents', pinId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('pin_documents')
+        .select('*')
+        .eq('pin_id', pinId)
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      return data;
+    },
+    enabled: !isNew && !!pinId,
+  });
+
+  // Upload document handler
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pinId || isNew) return;
+
+    setIsUploading(true);
+    try {
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${pinId}/${Date.now()}.${fileExt}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('pin-documents')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('pin-documents')
+        .getPublicUrl(fileName);
+
+      const { error: insertError } = await supabase
+        .from('pin_documents')
+        .insert({
+          pin_id: pinId,
+          file_name: file.name,
+          file_url: publicUrl,
+          file_type: file.type,
+          file_size: file.size,
+          uploaded_by: user?.id,
+        });
+
+      if (insertError) throw insertError;
+
+      toast.success('Document uploaded');
+      refetchDocuments();
+    } catch (error: any) {
+      toast.error('Upload failed: ' + error.message);
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  // Delete document handler
+  const handleDeleteDocument = async (docId: string, fileUrl: string) => {
+    try {
+      // Extract path from URL
+      const urlParts = fileUrl.split('/pin-documents/');
+      if (urlParts[1]) {
+        await supabase.storage.from('pin-documents').remove([urlParts[1]]);
+      }
+
+      const { error } = await supabase
+        .from('pin_documents')
+        .delete()
+        .eq('id', docId);
+
+      if (error) throw error;
+
+      toast.success('Document deleted');
+      refetchDocuments();
+    } catch (error: any) {
+      toast.error('Delete failed: ' + error.message);
+    }
+  };
 
   // Populate form when pin data loads
   useEffect(() => {
@@ -412,6 +499,81 @@ export default function PinDetails() {
               />
             </div>
           </div>
+
+          {/* Documents Section (only for existing pins) */}
+          {!isNew && pinId && (
+            <div className="space-y-3 pt-4 border-t border-border">
+              <div className="flex items-center justify-between">
+                <Label className="text-muted-foreground text-xs">Documents</Label>
+                <span className="text-xs text-muted-foreground">
+                  {documents?.length || 0} file{documents?.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Upload Button */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileUpload}
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full h-10 border-dashed"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="w-4 h-4 mr-2" />
+                    Upload Document
+                  </>
+                )}
+              </Button>
+
+              {/* Document List */}
+              {documents && documents.length > 0 && (
+                <div className="space-y-2">
+                  {documents.map((doc) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center gap-3 p-3 bg-muted rounded-lg"
+                    >
+                      <FileText className="w-5 h-5 text-primary shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <a
+                          href={doc.file_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm font-medium text-foreground hover:text-primary truncate block"
+                        >
+                          {doc.file_name}
+                        </a>
+                        <p className="text-xs text-muted-foreground">
+                          {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : 'Unknown size'}
+                          {' • '}
+                          {format(new Date(doc.created_at), 'MMM d, yyyy')}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
+                        className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Action Buttons (only for existing pins) */}
           {!isNew && pin && (
