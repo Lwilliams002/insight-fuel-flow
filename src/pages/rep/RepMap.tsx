@@ -178,7 +178,7 @@ export default function RepMap() {
       setMapLoaded(true);
 
       setTimeout(() => {
-        map.current?.setStyle("mapbox://styles/mapbox/satellite-streets-v12");
+        map.current?.setStyle("mapbox://styles/mapbox/streets-v12");
       }, 300);
     });
 
