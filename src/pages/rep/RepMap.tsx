@@ -412,10 +412,10 @@ export default function RepMap() {
   }, [pins, mapLoaded]);
 
   const handleMapLongPress = async (lat: number, lng: number) => {
-    // if (!mapboxToken) {
-    //   toast.error("Map token missing. Please set a public Mapbox token (pk.*).");
-    //   return;
-    // }
+    if (!mapboxToken) {
+      toast.error("Map token missing. Please set a public Mapbox token (pk.*).");
+      return;
+    }
     const loadingToast = toast.loading("Getting address...");
 
     try {
