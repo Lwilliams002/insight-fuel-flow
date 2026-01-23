@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format, isSameDay, startOfMonth, endOfMonth, addMonths, subMonths, isToday, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { 
-  MapPin, Crosshair, X, CalendarIcon, Filter, ChevronDown, ChevronLeft, ChevronRight, Search
+  MapPin, Crosshair, X, CalendarIcon, Filter, ChevronDown, ChevronLeft, ChevronRight, Search, Navigation
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 
@@ -62,6 +62,9 @@ export default function RepMap() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  
+  // Follow mode - automatically center map on user location
+  const [isFollowing, setIsFollowing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   
   // Calendar
@@ -126,7 +129,7 @@ export default function RepMap() {
         setUserLocation(newLoc);
       },
       () => {},
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+      { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 }
     );
 
     return () => {
@@ -438,10 +441,35 @@ export default function RepMap() {
   };
 
   const handleLocate = () => {
+    setIsFollowing(prev => !prev);
     if (map.current) {
       map.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17 });
     }
   };
+  
+  // When in follow mode, center map on location updates
+  useEffect(() => {
+    if (isFollowing && map.current) {
+      map.current.easeTo({ center: [userLocation[1], userLocation[0]], duration: 500 });
+    }
+  }, [userLocation, isFollowing]);
+  
+  // Disable follow mode when user manually pans the map
+  useEffect(() => {
+    if (!map.current) return;
+    
+    const handleDragStart = () => {
+      if (isFollowing) {
+        setIsFollowing(false);
+      }
+    };
+    
+    map.current.on('dragstart', handleDragStart);
+    
+    return () => {
+      map.current?.off('dragstart', handleDragStart);
+    };
+  }, [isFollowing]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
@@ -526,10 +554,18 @@ export default function RepMap() {
           <div className="absolute right-3 z-[1000]" style={{ bottom: 'calc(96px + env(safe-area-inset-bottom, 0px))' }}>
             <button
               onClick={handleLocate}
-              className="w-11 h-11 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg flex items-center justify-center text-foreground hover:bg-muted transition-colors"
-              title="My Location"
+              className={`w-11 h-11 rounded-full backdrop-blur-sm border shadow-lg flex items-center justify-center transition-colors ${
+                isFollowing 
+                  ? 'bg-primary text-primary-foreground border-primary' 
+                  : 'bg-card/95 text-foreground border-border hover:bg-muted'
+              }`}
+              title={isFollowing ? "Following location" : "Follow my location"}
             >
-              <Crosshair className="w-5 h-5" />
+              {isFollowing ? (
+                <Navigation className="w-5 h-5" />
+              ) : (
+                <Crosshair className="w-5 h-5" />
+              )}
             </button>
           </div>
         </div>
