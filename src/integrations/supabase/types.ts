@@ -200,6 +200,7 @@ export type Database = {
           address: string
           city: string | null
           completion_date: string | null
+          completion_images: string[] | null
           contract_signed: boolean | null
           created_at: string
           homeowner_email: string | null
@@ -207,7 +208,11 @@ export type Database = {
           homeowner_phone: string | null
           id: string
           install_date: string | null
+          install_images: string[] | null
           notes: string | null
+          payment_requested: boolean | null
+          payment_requested_at: string | null
+          permit_file_url: string | null
           signature_date: string | null
           signature_url: string | null
           signed_date: string | null
@@ -221,6 +226,7 @@ export type Database = {
           address: string
           city?: string | null
           completion_date?: string | null
+          completion_images?: string[] | null
           contract_signed?: boolean | null
           created_at?: string
           homeowner_email?: string | null
@@ -228,7 +234,11 @@ export type Database = {
           homeowner_phone?: string | null
           id?: string
           install_date?: string | null
+          install_images?: string[] | null
           notes?: string | null
+          payment_requested?: boolean | null
+          payment_requested_at?: string | null
+          permit_file_url?: string | null
           signature_date?: string | null
           signature_url?: string | null
           signed_date?: string | null
@@ -242,6 +252,7 @@ export type Database = {
           address?: string
           city?: string | null
           completion_date?: string | null
+          completion_images?: string[] | null
           contract_signed?: boolean | null
           created_at?: string
           homeowner_email?: string | null
@@ -249,7 +260,11 @@ export type Database = {
           homeowner_phone?: string | null
           id?: string
           install_date?: string | null
+          install_images?: string[] | null
           notes?: string | null
+          payment_requested?: boolean | null
+          payment_requested_at?: string | null
+          permit_file_url?: string | null
           signature_date?: string | null
           signature_url?: string | null
           signed_date?: string | null

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
@@ -10,7 +10,19 @@ import { Badge } from '@/components/ui/badge';
 import { SignaturePad } from './SignaturePad';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
-import { FileSignature, Check, AlertCircle, Loader2 } from 'lucide-react';
+import { 
+  FileSignature, 
+  Check, 
+  AlertCircle, 
+  Loader2, 
+  Upload, 
+  Calendar, 
+  FileText, 
+  Camera,
+  DollarSign,
+  X,
+  Image
+} from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 
 type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
@@ -34,6 +46,11 @@ interface Deal {
   signature_url: string | null;
   signature_date: string | null;
   notes: string | null;
+  permit_file_url?: string | null;
+  install_images?: string[] | null;
+  completion_images?: string[] | null;
+  payment_requested?: boolean | null;
+  payment_requested_at?: string | null;
   deal_commissions?: Array<{
     id: string;
     commission_type: string;
@@ -64,6 +81,14 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
+  const [uploadingPermit, setUploadingPermit] = useState(false);
+  const [uploadingInstall, setUploadingInstall] = useState(false);
+  const [uploadingCompletion, setUploadingCompletion] = useState(false);
+  
+  const permitInputRef = useRef<HTMLInputElement>(null);
+  const installInputRef = useRef<HTMLInputElement>(null);
+  const completionInputRef = useRef<HTMLInputElement>(null);
+
   const [formData, setFormData] = useState({
     homeowner_name: '',
     homeowner_phone: '',
@@ -74,6 +99,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
     zip_code: '',
     total_price: 0,
     notes: '',
+    install_date: '',
   });
 
   // Reset form when deal changes
@@ -89,6 +115,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
         zip_code: deal.zip_code || '',
         total_price: deal.total_price || 0,
         notes: deal.notes || '',
+        install_date: deal.install_date || '',
       });
       setIsEditing(false);
       setSignatureDataUrl(null);
@@ -155,9 +182,114 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
     updateDealMutation.mutate({ signatureDataUrl });
   };
 
+  const handlePermitUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !deal) return;
+
+    setUploadingPermit(true);
+    try {
+      const fileName = `${deal.id}/permit-${Date.now()}-${file.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from('deal-documents')
+        .upload(fileName, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage
+        .from('deal-documents')
+        .getPublicUrl(fileName);
+
+      await supabase.from('deals').update({ permit_file_url: publicUrlData.publicUrl }).eq('id', deal.id);
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Permit uploaded successfully');
+    } catch (error: any) {
+      toast.error('Failed to upload permit: ' + error.message);
+    } finally {
+      setUploadingPermit(false);
+    }
+  };
+
+  const handleImagesUpload = async (
+    e: React.ChangeEvent<HTMLInputElement>,
+    type: 'install' | 'completion'
+  ) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !deal) return;
+
+    const setUploading = type === 'install' ? setUploadingInstall : setUploadingCompletion;
+    const columnName = type === 'install' ? 'install_images' : 'completion_images';
+    const existingImages = (type === 'install' ? deal.install_images : deal.completion_images) || [];
+
+    setUploading(true);
+    try {
+      const uploadedUrls: string[] = [];
+      
+      for (const file of Array.from(files)) {
+        const fileName = `${deal.id}/${type}-${Date.now()}-${file.name}`;
+        const { error: uploadError } = await supabase.storage
+          .from('deal-documents')
+          .upload(fileName, file);
+
+        if (uploadError) throw uploadError;
+
+        const { data: publicUrlData } = supabase.storage
+          .from('deal-documents')
+          .getPublicUrl(fileName);
+        
+        uploadedUrls.push(publicUrlData.publicUrl);
+      }
+
+      const allImages = [...existingImages, ...uploadedUrls];
+      await supabase.from('deals').update({ [columnName]: allImages }).eq('id', deal.id);
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success(`${type === 'install' ? 'Installation' : 'Completion'} images uploaded`);
+    } catch (error: any) {
+      toast.error('Failed to upload images: ' + error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRequestPayment = async () => {
+    if (!deal) return;
+    
+    try {
+      await supabase.from('deals').update({
+        payment_requested: true,
+        payment_requested_at: new Date().toISOString(),
+      }).eq('id', deal.id);
+      
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Payment request sent to admin');
+    } catch (error: any) {
+      toast.error('Failed to request payment: ' + error.message);
+    }
+  };
+
+  const removeImage = async (type: 'install' | 'completion', urlToRemove: string) => {
+    if (!deal) return;
+    
+    const columnName = type === 'install' ? 'install_images' : 'completion_images';
+    const existingImages = (type === 'install' ? deal.install_images : deal.completion_images) || [];
+    const updatedImages = existingImages.filter(url => url !== urlToRemove);
+
+    try {
+      await supabase.from('deals').update({ [columnName]: updatedImages }).eq('id', deal.id);
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Image removed');
+    } catch (error: any) {
+      toast.error('Failed to remove image');
+    }
+  };
+
   if (!deal) return null;
 
   const needsSignature = !deal.contract_signed;
+  const needsInstallDate = !deal.install_date;
+  const needsPermit = !deal.permit_file_url;
+  const needsInstallImages = !deal.install_images || deal.install_images.length === 0;
+  const needsCompletionImages = !deal.completion_images || deal.completion_images.length === 0;
+  const canRequestPayment = deal.status === 'complete' && !deal.payment_requested;
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -179,10 +311,10 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
           <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
             <div className={`w-3 h-3 rounded-full ${statusConfig[deal.status]?.color}`} />
             <span className="font-medium">{statusConfig[deal.status]?.label}</span>
-            {needsSignature && deal.status === 'lead' && (
+            {deal.payment_requested && deal.status !== 'paid' && (
               <Badge variant="outline" className="ml-auto gap-1 text-amber-600 border-amber-600">
-                <AlertCircle className="w-3 h-3" />
-                Needs Signature
+                <DollarSign className="w-3 h-3" />
+                Pay Requested
               </Badge>
             )}
           </div>
@@ -192,9 +324,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
             <div className="space-y-3 p-4 border border-warning bg-warning/10 rounded-lg">
               <div className="flex items-center gap-2">
                 <FileSignature className="w-5 h-5 text-warning" />
-                <h3 className="font-semibold">
-                  Contract Signature Required
-                </h3>
+                <h3 className="font-semibold">Contract Signature Required</h3>
               </div>
               <p className="text-sm text-muted-foreground">
                 Have the homeowner sign below to proceed with the deal.
@@ -220,9 +350,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
             <div className="space-y-2 p-4 border border-primary/30 bg-primary/10 rounded-lg">
               <div className="flex items-center gap-2">
                 <Check className="w-5 h-5 text-primary" />
-                <h3 className="font-semibold">
-                  Contract Signed
-                </h3>
+                <h3 className="font-semibold">Contract Signed</h3>
               </div>
               {deal.signature_date && (
                 <p className="text-sm text-muted-foreground">
@@ -234,6 +362,218 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
                 alt="Signature"
                 className="mt-2 max-h-20 border bg-background rounded"
               />
+            </div>
+          )}
+
+          <Separator />
+
+          {/* Install Date Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Install Date
+              </h3>
+              {needsInstallDate && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Required for Scheduled
+                </Badge>
+              )}
+            </div>
+            <Input
+              type="date"
+              value={formData.install_date}
+              onChange={(e) => {
+                setFormData({ ...formData, install_date: e.target.value });
+                updateDealMutation.mutate({ install_date: e.target.value });
+              }}
+            />
+          </div>
+
+          {/* Permit Upload Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Permit Document
+              </h3>
+              {needsPermit && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Required for Permit
+                </Badge>
+              )}
+            </div>
+            {deal.permit_file_url ? (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <FileText className="w-5 h-5 text-primary" />
+                <a 
+                  href={deal.permit_file_url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-sm text-primary hover:underline flex-1 truncate"
+                >
+                  View Permit
+                </a>
+                <Check className="w-4 h-4 text-primary" />
+              </div>
+            ) : (
+              <>
+                <input
+                  ref={permitInputRef}
+                  type="file"
+                  accept=".pdf,.jpg,.jpeg,.png"
+                  className="hidden"
+                  onChange={handlePermitUpload}
+                />
+                <Button
+                  variant="outline"
+                  className="w-full gap-2"
+                  onClick={() => permitInputRef.current?.click()}
+                  disabled={uploadingPermit}
+                >
+                  {uploadingPermit ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Upload className="w-4 h-4" />
+                  )}
+                  Upload Permit
+                </Button>
+              </>
+            )}
+          </div>
+
+          {/* Install Images Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Installation Photos
+              </h3>
+              {needsInstallImages && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Required for Installed
+                </Badge>
+              )}
+            </div>
+            {deal.install_images && deal.install_images.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {deal.install_images.map((url, idx) => (
+                  <div key={idx} className="relative group">
+                    <img src={url} alt={`Install ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
+                    <button
+                      onClick={() => removeImage('install', url)}
+                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              ref={installInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleImagesUpload(e, 'install')}
+            />
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => installInputRef.current?.click()}
+              disabled={uploadingInstall}
+            >
+              {uploadingInstall ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+              Add Installation Photos
+            </Button>
+          </div>
+
+          {/* Completion Images Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Image className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Completion Photos
+              </h3>
+              {needsCompletionImages && (
+                <Badge variant="outline" className="text-xs gap-1">
+                  <AlertCircle className="w-3 h-3" />
+                  Required for Complete
+                </Badge>
+              )}
+            </div>
+            {deal.completion_images && deal.completion_images.length > 0 && (
+              <div className="grid grid-cols-3 gap-2">
+                {deal.completion_images.map((url, idx) => (
+                  <div key={idx} className="relative group">
+                    <img src={url} alt={`Completion ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
+                    <button
+                      onClick={() => removeImage('completion', url)}
+                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <input
+              ref={completionInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleImagesUpload(e, 'completion')}
+            />
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => completionInputRef.current?.click()}
+              disabled={uploadingCompletion}
+            >
+              {uploadingCompletion ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Camera className="w-4 h-4" />
+              )}
+              Add Completion Photos
+            </Button>
+          </div>
+
+          {/* Request Payment Button */}
+          {canRequestPayment && (
+            <div className="space-y-3 p-4 border border-primary bg-primary/10 rounded-lg">
+              <div className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5 text-primary" />
+                <h3 className="font-semibold">Ready for Payment</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Submit a payment request for admin approval.
+              </p>
+              <Button onClick={handleRequestPayment} className="w-full gap-2">
+                <DollarSign className="w-4 h-4" />
+                Request Payment
+              </Button>
+            </div>
+          )}
+
+          {deal.payment_requested && deal.status !== 'paid' && (
+            <div className="p-4 border border-amber-500 bg-amber-500/10 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Loader2 className="w-5 h-5 text-amber-600 animate-spin" />
+                <h3 className="font-semibold text-amber-700">Payment Pending</h3>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Your payment request is awaiting admin approval.
+              </p>
             </div>
           )}
 
