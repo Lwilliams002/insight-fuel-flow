@@ -551,7 +551,6 @@ export default function RepMap() {
 
         {/* Map View */}
         <div className={`${activeView === "map" ? "block" : "hidden"}`}>
-          /*{" "}
           {!mapboxToken ? (
             <div
               className="absolute inset-0 flex items-center justify-center p-6"
@@ -572,8 +571,8 @@ export default function RepMap() {
               className="absolute inset-0"
               style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
             />
-          )}{" "}
-          */
+          )}
+
           {/* Location Follow Button */}
           <div
             className="absolute right-3 z-[1000]"
