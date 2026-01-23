@@ -4,6 +4,7 @@ import { AdminShell } from '@/components/AdminShell';
 import { StatCard } from '@/components/StatCard';
 import { QuickAction } from '@/components/QuickAction';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PaymentRequests } from '@/components/admin/PaymentRequests';
 import { 
   DollarSign, 
   TrendingUp, 
@@ -87,6 +88,9 @@ export default function AdminDashboard() {
             </>
           )}
         </div>
+
+        {/* Payment Requests Section */}
+        <PaymentRequests />
 
         {/* Quick Actions */}
         <div>

@@ -14,6 +14,11 @@ interface Deal {
   status: DealStatus;
   total_price: number;
   contract_signed: boolean | null;
+  install_date: string | null;
+  permit_file_url: string | null;
+  install_images: string[] | null;
+  completion_images: string[] | null;
+  payment_requested: boolean | null;
 }
 
 interface DealsKanbanProps {
@@ -39,24 +44,24 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => bo
     message: 'Contract must be signed before marking as Signed',
   },
   permit: {
-    check: (deal) => deal.status === 'signed' || ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
-    message: 'Deal must be Signed before moving to Permit',
+    check: (deal) => !!deal.permit_file_url,
+    message: 'Permit document must be uploaded before moving to Permit',
   },
   install_scheduled: {
-    check: (deal) => ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
-    message: 'Deal must have Permit before scheduling install',
+    check: (deal) => !!deal.install_date,
+    message: 'Install date must be set before scheduling',
   },
   installed: {
-    check: (deal) => ['install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
-    message: 'Install must be scheduled before marking as Installed',
+    check: (deal) => deal.install_images && deal.install_images.length > 0,
+    message: 'Installation photos must be uploaded before marking as Installed',
   },
   complete: {
-    check: (deal) => ['installed', 'complete', 'paid'].includes(deal.status),
-    message: 'Deal must be Installed before marking as Complete',
+    check: (deal) => deal.completion_images && deal.completion_images.length > 0,
+    message: 'Completion photos must be uploaded before marking as Complete',
   },
   paid: {
-    check: (deal) => ['complete', 'paid'].includes(deal.status),
-    message: 'Deal must be Complete before marking as Paid',
+    check: (deal) => deal.payment_requested === true,
+    message: 'Payment must be requested and approved by admin. Click on the deal to request payment.',
   },
 };
 
