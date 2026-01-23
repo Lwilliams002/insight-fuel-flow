@@ -170,6 +170,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
   const handleSave = () => {
     updateDealMutation.mutate({
       ...formData,
+      install_date: formData.install_date || null,
       signatureDataUrl: signatureDataUrl || undefined,
     });
   };
@@ -385,8 +386,9 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
               type="date"
               value={formData.install_date}
               onChange={(e) => {
-                setFormData({ ...formData, install_date: e.target.value });
-                updateDealMutation.mutate({ install_date: e.target.value });
+                const value = e.target.value;
+                setFormData({ ...formData, install_date: value });
+                updateDealMutation.mutate({ install_date: value || null });
               }}
             />
           </div>
