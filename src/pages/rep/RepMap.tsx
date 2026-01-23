@@ -9,8 +9,9 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format, isSameDay, startOfMonth, endOfMonth, addMonths, subMonths, isToday, startOfWeek, endOfWeek, addDays } from 'date-fns';
 import { 
-  MapPin, Crosshair, X, CalendarIcon, Filter, ChevronDown, ChevronLeft, ChevronRight
+  MapPin, Crosshair, X, CalendarIcon, Filter, ChevronDown, ChevronLeft, ChevronRight, Search
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
@@ -61,6 +62,7 @@ export default function RepMap() {
   // Filters
   const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Calendar
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
@@ -540,8 +542,29 @@ export default function RepMap() {
             paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))' 
           }}
         >
-          {/* Filter Bar */}
-          <div className="sticky top-0 z-10 bg-background px-4 py-3 border-b border-border">
+          {/* Search and Filter Bar */}
+          <div className="sticky top-0 z-10 bg-background px-4 py-3 border-b border-border space-y-3">
+            {/* Search Input */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                type="text"
+                placeholder="Search by name..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-10"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 hover:bg-muted rounded-full"
+                >
+                  <X className="w-3.5 h-3.5 text-muted-foreground" />
+                </button>
+              )}
+            </div>
+            
+            {/* Filter Dropdown */}
             <div className="relative">
               <button
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
@@ -576,7 +599,12 @@ export default function RepMap() {
           </div>
 
           <div className="p-4 space-y-3">
-            {filteredPins?.map((pin) => (
+            {filteredPins
+              ?.filter((pin) => 
+                !searchQuery || 
+                (pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase()))
+              )
+              .map((pin) => (
               <button
                 key={pin.id}
                 onClick={() => handlePinClick(pin)}
@@ -606,10 +634,10 @@ export default function RepMap() {
                 </div>
               </button>
             ))}
-            {(!filteredPins || filteredPins.length === 0) && (
+            {(!filteredPins || filteredPins.filter((pin) => !searchQuery || pin.homeowner_name?.toLowerCase().includes(searchQuery.toLowerCase())).length === 0) && (
               <div className="text-center py-12 text-muted-foreground">
                 <MapPin className="w-12 h-12 mx-auto mb-3 opacity-50" />
-                <p>{statusFilter === 'all' ? 'No pins yet. Hold the map to add one!' : 'No pins with this status.'}</p>
+                <p>{searchQuery ? 'No pins match your search.' : (statusFilter === 'all' ? 'No pins yet. Hold the map to add one!' : 'No pins with this status.')}</p>
               </div>
             )}
           </div>
