@@ -1,0 +1,222 @@
+import { useState } from 'react';
+import { format } from 'date-fns';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Search, ChevronUp, ChevronDown, Eye, FileSignature } from 'lucide-react';
+
+type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
+
+interface Deal {
+  id: string;
+  homeowner_name: string;
+  homeowner_phone: string | null;
+  homeowner_email: string | null;
+  address: string;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  status: DealStatus;
+  total_price: number;
+  signed_date: string | null;
+  install_date: string | null;
+  completion_date: string | null;
+  created_at: string;
+  contract_signed: boolean | null;
+  notes: string | null;
+  reps?: { rep_name: string; commission_type: string }[];
+}
+
+interface DealsTableProps {
+  deals: Deal[];
+  onViewDeal: (deal: Deal) => void;
+  isAdmin?: boolean;
+}
+
+const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
+  lead: { label: 'Lead', variant: 'secondary' },
+  signed: { label: 'Signed', variant: 'default' },
+  permit: { label: 'Permit', variant: 'outline' },
+  install_scheduled: { label: 'Scheduled', variant: 'outline' },
+  installed: { label: 'Installed', variant: 'default' },
+  complete: { label: 'Complete', variant: 'default' },
+  paid: { label: 'Paid', variant: 'default' },
+  cancelled: { label: 'Cancelled', variant: 'destructive' },
+};
+
+type SortField = 'homeowner_name' | 'address' | 'status' | 'total_price' | 'created_at';
+type SortDirection = 'asc' | 'desc';
+
+export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTableProps) {
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState<DealStatus | 'all'>('all');
+  const [sortField, setSortField] = useState<SortField>('created_at');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const SortIcon = ({ field }: { field: SortField }) => {
+    if (sortField !== field) return null;
+    return sortDirection === 'asc' ? (
+      <ChevronUp className="w-4 h-4 inline ml-1" />
+    ) : (
+      <ChevronDown className="w-4 h-4 inline ml-1" />
+    );
+  };
+
+  const filteredDeals = deals
+    .filter((deal) => {
+      const matchesSearch =
+        deal.homeowner_name.toLowerCase().includes(search.toLowerCase()) ||
+        deal.address.toLowerCase().includes(search.toLowerCase()) ||
+        (deal.homeowner_email?.toLowerCase().includes(search.toLowerCase()) ?? false);
+      const matchesStatus = statusFilter === 'all' || deal.status === statusFilter;
+      return matchesSearch && matchesStatus;
+    })
+    .sort((a, b) => {
+      let aVal: any = a[sortField];
+      let bVal: any = b[sortField];
+
+      if (sortField === 'total_price') {
+        aVal = Number(aVal);
+        bVal = Number(bVal);
+      }
+
+      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+  return (
+    <div className="space-y-4">
+      {/* Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input
+            placeholder="Search deals..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as DealStatus | 'all')}>
+          <SelectTrigger className="w-full sm:w-[180px]">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Statuses</SelectItem>
+            {Object.entries(statusConfig).map(([key, config]) => (
+              <SelectItem key={key} value={key}>
+                {config.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      {/* Table */}
+      <div className="border rounded-lg overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleSort('homeowner_name')}
+              >
+                Homeowner <SortIcon field="homeowner_name" />
+              </TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleSort('address')}
+              >
+                Address <SortIcon field="address" />
+              </TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleSort('status')}
+              >
+                Status <SortIcon field="status" />
+              </TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50 text-right"
+                onClick={() => handleSort('total_price')}
+              >
+                Price <SortIcon field="total_price" />
+              </TableHead>
+              <TableHead className="text-center">Contract</TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted/50"
+                onClick={() => handleSort('created_at')}
+              >
+                Created <SortIcon field="created_at" />
+              </TableHead>
+              <TableHead className="w-[80px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredDeals.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  No deals found
+                </TableCell>
+              </TableRow>
+            ) : (
+              filteredDeals.map((deal) => (
+                <TableRow key={deal.id} className="cursor-pointer hover:bg-muted/50">
+                  <TableCell className="font-medium">{deal.homeowner_name}</TableCell>
+                  <TableCell>
+                    <div className="truncate max-w-[200px]">
+                      {deal.address}
+                      {deal.city && `, ${deal.city}`}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
+                      {statusConfig[deal.status]?.label || deal.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    ${deal.total_price.toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {deal.contract_signed ? (
+                      <FileSignature className="w-4 h-4 text-primary mx-auto" />
+                    ) : (
+                      <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {format(new Date(deal.created_at), 'MMM d, yyyy')}
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => onViewDeal(deal)}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="text-sm text-muted-foreground">
+        Showing {filteredDeals.length} of {deals.length} deals
+      </div>
+    </div>
+  );
+}

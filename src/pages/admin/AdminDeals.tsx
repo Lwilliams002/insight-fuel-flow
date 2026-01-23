@@ -1,207 +1,320 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { AdminLayout } from '@/components/AdminLayout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Home, MapPin, Plus, ChevronRight } from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { toast } from 'sonner';
+import { AdminShell } from '@/components/AdminShell';
+import { DealsTable } from '@/components/crm/DealsTable';
+import { DealsKanban } from '@/components/crm/DealsKanban';
+import { DealWizard } from '@/components/crm/DealWizard';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, LayoutList, Columns3, Users } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-const statusColors: Record<string, string> = {
-  lead: 'bg-yellow-500/20 text-yellow-700',
-  signed: 'bg-blue-500/20 text-blue-700',
-  permit: 'bg-purple-500/20 text-purple-700',
-  install_scheduled: 'bg-orange-500/20 text-orange-700',
-  installed: 'bg-green-500/20 text-green-700',
-  complete: 'bg-emerald-500/20 text-emerald-700',
-  paid: 'bg-primary/20 text-primary',
-  cancelled: 'bg-destructive/20 text-destructive',
-};
-
-const statusLabels: Record<string, string> = {
-  lead: 'Lead',
-  signed: 'Signed',
-  permit: 'Permit',
-  install_scheduled: 'Scheduled',
-  installed: 'Installed',
-  complete: 'Complete',
-  paid: 'Paid',
-  cancelled: 'Cancelled',
-};
-
-const statusOptions = ['lead', 'signed', 'permit', 'install_scheduled', 'installed', 'complete', 'paid', 'cancelled'];
+type ViewMode = 'table' | 'kanban';
 
 export default function AdminDeals() {
-  const queryClient = useQueryClient();
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<any | null>(null);
+  const [repFilter, setRepFilter] = useState<string>('all');
 
+  // Fetch all deals with commission info
   const { data: deals, isLoading } = useQuery({
-    queryKey: ['admin-deals'],
+    queryKey: ['deals', 'admin'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('deals')
         .select(`
           *,
-          deal_commissions(
+          deal_commissions (
             id,
-            rep_id,
             commission_type,
+            commission_percent,
             commission_amount,
             paid,
-            rep:reps(id, user_id)
+            rep_id,
+            reps:rep_id (
+              id,
+              user_id,
+              profiles:user_id (full_name, email)
+            )
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      
-      // Fetch profiles separately for rep names
-      const repUserIds = [...new Set(
-        data?.flatMap(d => d.deal_commissions?.map((c: any) => c.rep?.user_id)).filter(Boolean)
-      )] as string[];
-      
-      if (repUserIds.length > 0) {
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id, full_name')
-          .in('id', repUserIds);
-        
-        const profileMap = new Map(profiles?.map(p => [p.id, p.full_name]) || []);
-        
-        return data?.map(d => ({
-          ...d,
-          deal_commissions: d.deal_commissions?.map((c: any) => ({
-            ...c,
-            repName: c.rep?.user_id ? profileMap.get(c.rep.user_id) : null
-          }))
-        })) || [];
-      }
-      
-      return data || [];
+      return data;
     },
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ dealId, status }: { dealId: string; status: string }) => {
-      const { error } = await supabase
-        .from('deals')
-        .update({ status: status as any })
-        .eq('id', dealId);
+  // Fetch all reps for filter
+  const { data: allReps } = useQuery({
+    queryKey: ['all-reps'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reps')
+        .select(`
+          id,
+          user_id,
+          profiles:user_id (full_name, email)
+        `);
       if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-deals'] });
-      toast.success('Deal status updated');
-    },
-    onError: () => {
-      toast.error('Failed to update status');
+      return data;
     },
   });
 
-  const filteredDeals = deals?.filter(d => filterStatus === 'all' || d.status === filterStatus) || [];
+  const handleViewDeal = (deal: any) => {
+    setSelectedDeal(deal);
+  };
+
+  // Filter deals by rep
+  const filteredDeals = deals?.filter((deal) => {
+    if (repFilter === 'all') return true;
+    return deal.deal_commissions?.some((c: any) => c.rep_id === repFilter);
+  }) || [];
+
+  // Calculate stats
+  const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.total_price || 0), 0);
+  const signedDeals = filteredDeals.filter((d) => d.status !== 'lead' && d.status !== 'cancelled').length;
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    lead: { label: 'Lead', color: 'bg-slate-500' },
+    signed: { label: 'Signed', color: 'bg-blue-500' },
+    permit: { label: 'Permit', color: 'bg-yellow-500' },
+    install_scheduled: { label: 'Scheduled', color: 'bg-orange-500' },
+    installed: { label: 'Installed', color: 'bg-teal-500' },
+    complete: { label: 'Complete', color: 'bg-green-500' },
+    paid: { label: 'Paid', color: 'bg-emerald-600' },
+    cancelled: { label: 'Cancelled', color: 'bg-destructive' },
+  };
 
   return (
-    <AdminLayout title="All Deals">
-      <div className="p-4 space-y-4">
-        <div className="flex items-center gap-2">
-          <Select value={filterStatus} onValueChange={setFilterStatus}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {statusOptions.map(s => (
-                <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Link to="/admin/jotform">
-            <Button size="icon">
-              <Plus className="h-4 w-4" />
+    <AdminShell>
+      <div className="flex flex-col h-full p-6">
+        {/* Header */}
+        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">CRM - All Deals</h1>
+            <p className="text-muted-foreground text-sm">
+              Manage all deals across your team
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            {/* Rep Filter */}
+            <Select value={repFilter} onValueChange={setRepFilter}>
+              <SelectTrigger className="w-[200px]">
+                <Users className="w-4 h-4 mr-2" />
+                <SelectValue placeholder="Filter by rep" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Reps</SelectItem>
+                {allReps?.map((rep) => (
+                  <SelectItem key={rep.id} value={rep.id}>
+                    {(rep.profiles as any)?.full_name || (rep.profiles as any)?.email || 'Unknown'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* View Toggle */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList>
+                <TabsTrigger value="table" className="gap-1.5">
+                  <LayoutList className="w-4 h-4" />
+                  Table
+                </TabsTrigger>
+                <TabsTrigger value="kanban" className="gap-1.5">
+                  <Columns3 className="w-4 h-4" />
+                  Kanban
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Button onClick={() => setWizardOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Deal
             </Button>
-          </Link>
+          </div>
         </div>
 
-        <p className="text-sm text-muted-foreground">
-          {filteredDeals.length} deal{filteredDeals.length !== 1 ? 's' : ''}
-        </p>
+        {/* Stats */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="bg-card border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">Total Deals</p>
+            <p className="text-2xl font-bold">{filteredDeals.length}</p>
+          </div>
+          <div className="bg-card border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">Signed Deals</p>
+            <p className="text-2xl font-bold">{signedDeals}</p>
+          </div>
+          <div className="bg-card border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">Pipeline Value</p>
+            <p className="text-2xl font-bold text-primary">${totalValue.toLocaleString()}</p>
+          </div>
+          <div className="bg-card border rounded-lg p-4">
+            <p className="text-sm text-muted-foreground">Active Reps</p>
+            <p className="text-2xl font-bold">{allReps?.length || 0}</p>
+          </div>
+        </div>
 
-        {isLoading ? (
-          <>
-            <Skeleton className="h-40 rounded-lg" />
-            <Skeleton className="h-40 rounded-lg" />
-          </>
-        ) : filteredDeals.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              <Home className="mx-auto h-12 w-12 mb-2 opacity-50" />
-              <p>No deals found</p>
-            </CardContent>
-          </Card>
-        ) : (
-          filteredDeals.map((deal) => (
-            <Card key={deal.id} className="shadow-sm">
-              <CardContent className="p-4 space-y-3">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-1 flex-1">
-                    <p className="font-semibold text-foreground">{deal.homeowner_name}</p>
-                    <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                      <MapPin className="h-3 w-3" />
-                      <span>{deal.address}{deal.city ? `, ${deal.city}` : ''}</span>
-                    </div>
-                  </div>
-                  <Select
-                    value={deal.status}
-                    onValueChange={(value) => updateStatusMutation.mutate({ dealId: deal.id, status: value })}
-                  >
-                    <SelectTrigger className="w-32">
-                      <Badge className={statusColors[deal.status] || 'bg-muted'}>
-                        {statusLabels[deal.status]}
-                      </Badge>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statusOptions.map(s => (
-                        <SelectItem key={s} value={s}>{statusLabels[s]}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+        {/* Content */}
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : viewMode === 'table' ? (
+            <DealsTable deals={filteredDeals} onViewDeal={handleViewDeal} isAdmin />
+          ) : (
+            <DealsKanban deals={filteredDeals} onViewDeal={handleViewDeal} isAdmin />
+          )}
+        </div>
+      </div>
+
+      {/* Deal Wizard */}
+      <DealWizard open={wizardOpen} onOpenChange={setWizardOpen} isAdmin />
+
+      {/* Deal Detail Sheet */}
+      <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && setSelectedDeal(null)}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Deal Details</SheetTitle>
+          </SheetHeader>
+
+          {selectedDeal && (
+            <div className="mt-6 space-y-6">
+              {/* Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${statusConfig[selectedDeal.status]?.color}`} />
+                <Badge variant="outline">{statusConfig[selectedDeal.status]?.label}</Badge>
+                {selectedDeal.contract_signed && (
+                  <Badge variant="secondary">Contract Signed</Badge>
+                )}
+              </div>
+
+              {/* Homeowner Info */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Homeowner</h3>
+                <div className="space-y-2">
+                  <p className="font-medium">{selectedDeal.homeowner_name}</p>
+                  {selectedDeal.homeowner_phone && (
+                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_phone}</p>
+                  )}
+                  {selectedDeal.homeowner_email && (
+                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_email}</p>
+                  )}
                 </div>
+              </div>
 
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div>
-                    <p className="text-muted-foreground">Job Total</p>
-                    <p className="font-medium">${Number(deal.total_price).toLocaleString()}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Assigned Reps</p>
-                    <p className="font-medium">{deal.deal_commissions?.length || 0}</p>
-                  </div>
+              {/* Property */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Property</h3>
+                <div>
+                  <p className="font-medium">{selectedDeal.address}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {[selectedDeal.city, selectedDeal.state, selectedDeal.zip_code].filter(Boolean).join(', ')}
+                  </p>
                 </div>
+              </div>
 
-                {deal.deal_commissions && deal.deal_commissions.length > 0 && (
-                  <div className="text-xs space-y-1 border-t pt-2">
-                    {deal.deal_commissions.map((comm: any) => (
-                      <div key={comm.id} className="flex justify-between items-center">
-                        <span className="capitalize">
-                          {comm.commission_type.replace('_', ' ')}: {comm.repName || 'Unknown'}
-                        </span>
-                        <span className="text-primary font-medium">
-                          ${Number(comm.commission_amount).toLocaleString()}
-                          {comm.paid && <Badge variant="outline" className="ml-1 text-primary text-[10px]">Paid</Badge>}
-                        </span>
+              {/* Deal Value */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Value</h3>
+                <p className="text-2xl font-bold text-primary">
+                  ${selectedDeal.total_price?.toLocaleString() || '0'}
+                </p>
+              </div>
+
+              {/* Assigned Reps */}
+              {selectedDeal.deal_commissions?.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Team & Commissions</h3>
+                  <div className="space-y-2">
+                    {selectedDeal.deal_commissions.map((comm: any) => (
+                      <div key={comm.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium">
+                            {(comm.reps?.profiles as any)?.full_name || 'Unknown Rep'}
+                          </p>
+                          <p className="text-xs text-muted-foreground capitalize">
+                            {comm.commission_type.replace('_', ' ')} • {comm.commission_percent}%
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${comm.commission_amount.toLocaleString()}</p>
+                          <Badge variant={comm.paid ? 'default' : 'secondary'} className="text-xs">
+                            {comm.paid ? 'Paid' : 'Unpaid'}
+                          </Badge>
+                        </div>
                       </div>
                     ))}
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          ))
-        )}
-      </div>
-    </AdminLayout>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedDeal.notes && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Notes</h3>
+                  <p className="text-sm">{selectedDeal.notes}</p>
+                </div>
+              )}
+
+              {/* Signature */}
+              {selectedDeal.signature_url && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Contract Signature</h3>
+                  <div className="bg-muted p-3 rounded-lg">
+                    <img 
+                      src={selectedDeal.signature_url} 
+                      alt="Signature" 
+                      className="max-h-24 mx-auto"
+                    />
+                    {selectedDeal.signature_date && (
+                      <p className="text-xs text-center text-muted-foreground mt-2">
+                        Signed on {format(new Date(selectedDeal.signature_date), 'MMM d, yyyy h:mm a')}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Timeline</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created</span>
+                    <span>{format(new Date(selectedDeal.created_at), 'MMM d, yyyy')}</span>
+                  </div>
+                  {selectedDeal.signed_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Signed</span>
+                      <span>{format(new Date(selectedDeal.signed_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                  {selectedDeal.install_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Install</span>
+                      <span>{format(new Date(selectedDeal.install_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                  {selectedDeal.completion_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Completed</span>
+                      <span>{format(new Date(selectedDeal.completion_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+    </AdminShell>
   );
 }

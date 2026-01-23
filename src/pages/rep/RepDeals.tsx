@@ -1,142 +1,228 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { RepLayout } from '@/components/RepLayout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Skeleton } from '@/components/ui/skeleton';
 import { supabase } from '@/integrations/supabase/client';
-import { Home, MapPin, DollarSign, Calendar } from 'lucide-react';
+import { RepLayout } from '@/components/RepLayout';
+import { DealsTable } from '@/components/crm/DealsTable';
+import { DealsKanban } from '@/components/crm/DealsKanban';
+import { DealWizard } from '@/components/crm/DealWizard';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Plus, LayoutList, Columns3 } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { format } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
-const statusColors: Record<string, string> = {
-  lead: 'bg-yellow-500/20 text-yellow-700',
-  signed: 'bg-blue-500/20 text-blue-700',
-  permit: 'bg-purple-500/20 text-purple-700',
-  install_scheduled: 'bg-orange-500/20 text-orange-700',
-  installed: 'bg-green-500/20 text-green-700',
-  complete: 'bg-emerald-500/20 text-emerald-700',
-  paid: 'bg-primary/20 text-primary',
-  cancelled: 'bg-destructive/20 text-destructive',
-};
-
-const statusLabels: Record<string, string> = {
-  lead: 'Lead',
-  signed: 'Signed',
-  permit: 'Permit',
-  install_scheduled: 'Scheduled',
-  installed: 'Installed',
-  complete: 'Complete',
-  paid: 'Paid',
-  cancelled: 'Cancelled',
-};
+type ViewMode = 'table' | 'kanban';
 
 export default function RepDeals() {
+  const [viewMode, setViewMode] = useState<ViewMode>('table');
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [selectedDeal, setSelectedDeal] = useState<any | null>(null);
+
+  // Fetch deals for this rep (via deal_commissions)
   const { data: deals, isLoading } = useQuery({
-    queryKey: ['rep-deals'],
+    queryKey: ['deals', 'rep'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('deal_commissions')
+        .from('deals')
         .select(`
-          id,
-          commission_type,
-          commission_percent,
-          commission_amount,
-          paid,
-          deal:deals(
+          *,
+          deal_commissions (
             id,
-            address,
-            city,
-            state,
-            homeowner_name,
-            total_price,
-            status,
-            signed_date,
-            install_date
+            commission_type,
+            commission_percent,
+            commission_amount,
+            paid,
+            rep_id
           )
         `)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      return data || [];
+      return data;
     },
   });
 
+  const handleViewDeal = (deal: any) => {
+    setSelectedDeal(deal);
+  };
+
+  const statusConfig: Record<string, { label: string; color: string }> = {
+    lead: { label: 'Lead', color: 'bg-slate-500' },
+    signed: { label: 'Signed', color: 'bg-blue-500' },
+    permit: { label: 'Permit', color: 'bg-yellow-500' },
+    install_scheduled: { label: 'Scheduled', color: 'bg-orange-500' },
+    installed: { label: 'Installed', color: 'bg-teal-500' },
+    complete: { label: 'Complete', color: 'bg-green-500' },
+    paid: { label: 'Paid', color: 'bg-emerald-600' },
+    cancelled: { label: 'Cancelled', color: 'bg-destructive' },
+  };
+
   return (
     <RepLayout title="My Deals">
-      <div className="space-y-4 p-4">
-        <h2 className="text-sm font-medium text-muted-foreground">
-          {deals?.length || 0} deals assigned to you
-        </h2>
+      <div className="flex flex-col h-full p-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-2xl font-bold">My Deals</h1>
+            <p className="text-muted-foreground text-sm">
+              {deals?.length || 0} total deals
+            </p>
+          </div>
 
-        {isLoading ? (
-          <>
-            <Skeleton className="h-32 rounded-lg" />
-            <Skeleton className="h-32 rounded-lg" />
-            <Skeleton className="h-32 rounded-lg" />
-          </>
-        ) : deals?.length === 0 ? (
-          <Card>
-            <CardContent className="p-6 text-center text-muted-foreground">
-              <Home className="mx-auto h-12 w-12 mb-2 opacity-50" />
-              <p>No deals assigned yet</p>
-            </CardContent>
-          </Card>
-        ) : (
-          deals?.map((commission) => {
-            const deal = commission.deal;
-            if (!deal) return null;
-            
-            return (
-              <Card key={commission.id} className="shadow-sm">
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className="space-y-1">
-                      <p className="font-semibold text-foreground">{deal.homeowner_name}</p>
-                      <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                        <MapPin className="h-3 w-3" />
-                        <span>{deal.address}{deal.city ? `, ${deal.city}` : ''}</span>
-                      </div>
-                    </div>
-                    <Badge className={statusColors[deal.status] || 'bg-muted'}>
-                      {statusLabels[deal.status] || deal.status}
-                    </Badge>
-                  </div>
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            {/* View Toggle */}
+            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
+              <TabsList>
+                <TabsTrigger value="table" className="gap-1.5">
+                  <LayoutList className="w-4 h-4" />
+                  <span className="hidden sm:inline">Table</span>
+                </TabsTrigger>
+                <TabsTrigger value="kanban" className="gap-1.5">
+                  <Columns3 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Kanban</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
 
-                  <div className="grid grid-cols-3 gap-2 text-sm">
-                    <div>
-                      <p className="text-muted-foreground">Job Total</p>
-                      <p className="font-medium">${Number(deal.total_price).toLocaleString()}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Your Role</p>
-                      <p className="font-medium capitalize">{commission.commission_type.replace('_', ' ')}</p>
-                    </div>
-                    <div>
-                      <p className="text-muted-foreground">Commission</p>
-                      <p className="font-medium text-primary">
-                        ${Number(commission.commission_amount).toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
+            <Button onClick={() => setWizardOpen(true)} className="gap-2">
+              <Plus className="w-4 h-4" />
+              New Deal
+            </Button>
+          </div>
+        </div>
 
-                  {deal.install_date && (
-                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span>Install: {format(new Date(deal.install_date), 'MMM d, yyyy')}</span>
-                    </div>
-                  )}
-
-                  {commission.paid && (
-                    <Badge variant="outline" className="text-primary border-primary">
-                      Commission Paid
-                    </Badge>
-                  )}
-                </CardContent>
-              </Card>
-            );
-          })
-        )}
+        {/* Content */}
+        <div className="flex-1 overflow-auto">
+          {isLoading ? (
+            <div className="flex items-center justify-center py-12">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : viewMode === 'table' ? (
+            <DealsTable deals={deals || []} onViewDeal={handleViewDeal} />
+          ) : (
+            <DealsKanban deals={deals || []} onViewDeal={handleViewDeal} />
+          )}
+        </div>
       </div>
+
+      {/* Deal Wizard */}
+      <DealWizard open={wizardOpen} onOpenChange={setWizardOpen} />
+
+      {/* Deal Detail Sheet */}
+      <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && setSelectedDeal(null)}>
+        <SheetContent className="overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Deal Details</SheetTitle>
+          </SheetHeader>
+
+          {selectedDeal && (
+            <div className="mt-6 space-y-6">
+              {/* Status */}
+              <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${statusConfig[selectedDeal.status]?.color}`} />
+                <Badge variant="outline">{statusConfig[selectedDeal.status]?.label}</Badge>
+                {selectedDeal.contract_signed && (
+                  <Badge variant="secondary">Contract Signed</Badge>
+                )}
+              </div>
+
+              {/* Homeowner Info */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Homeowner</h3>
+                <div className="space-y-2">
+                  <p className="font-medium">{selectedDeal.homeowner_name}</p>
+                  {selectedDeal.homeowner_phone && (
+                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_phone}</p>
+                  )}
+                  {selectedDeal.homeowner_email && (
+                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_email}</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Property */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Property</h3>
+                <div>
+                  <p className="font-medium">{selectedDeal.address}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {[selectedDeal.city, selectedDeal.state, selectedDeal.zip_code].filter(Boolean).join(', ')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Deal Value */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Value</h3>
+                <p className="text-2xl font-bold text-primary">
+                  ${selectedDeal.total_price?.toLocaleString() || '0'}
+                </p>
+              </div>
+
+              {/* Commissions */}
+              {selectedDeal.deal_commissions?.length > 0 && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Commissions</h3>
+                  <div className="space-y-2">
+                    {selectedDeal.deal_commissions.map((comm: any) => (
+                      <div key={comm.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                        <div>
+                          <p className="text-sm font-medium capitalize">{comm.commission_type.replace('_', ' ')}</p>
+                          <p className="text-xs text-muted-foreground">{comm.commission_percent}%</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-medium">${comm.commission_amount.toLocaleString()}</p>
+                          <Badge variant={comm.paid ? 'default' : 'secondary'} className="text-xs">
+                            {comm.paid ? 'Paid' : 'Unpaid'}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Notes */}
+              {selectedDeal.notes && (
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Notes</h3>
+                  <p className="text-sm">{selectedDeal.notes}</p>
+                </div>
+              )}
+
+              {/* Dates */}
+              <div className="space-y-3">
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Timeline</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Created</span>
+                    <span>{format(new Date(selectedDeal.created_at), 'MMM d, yyyy')}</span>
+                  </div>
+                  {selectedDeal.signed_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Signed</span>
+                      <span>{format(new Date(selectedDeal.signed_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                  {selectedDeal.install_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Install</span>
+                      <span>{format(new Date(selectedDeal.install_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                  {selectedDeal.completion_date && (
+                    <div className="flex justify-between">
+                      <span className="text-muted-foreground">Completed</span>
+                      <span>{format(new Date(selectedDeal.completion_date), 'MMM d, yyyy')}</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </RepLayout>
   );
 }

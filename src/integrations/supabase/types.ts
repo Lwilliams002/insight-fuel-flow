@@ -200,6 +200,7 @@ export type Database = {
           address: string
           city: string | null
           completion_date: string | null
+          contract_signed: boolean | null
           created_at: string
           homeowner_email: string | null
           homeowner_name: string
@@ -207,6 +208,8 @@ export type Database = {
           id: string
           install_date: string | null
           notes: string | null
+          signature_date: string | null
+          signature_url: string | null
           signed_date: string | null
           state: string | null
           status: Database["public"]["Enums"]["deal_status"]
@@ -218,6 +221,7 @@ export type Database = {
           address: string
           city?: string | null
           completion_date?: string | null
+          contract_signed?: boolean | null
           created_at?: string
           homeowner_email?: string | null
           homeowner_name: string
@@ -225,6 +229,8 @@ export type Database = {
           id?: string
           install_date?: string | null
           notes?: string | null
+          signature_date?: string | null
+          signature_url?: string | null
           signed_date?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
@@ -236,6 +242,7 @@ export type Database = {
           address?: string
           city?: string | null
           completion_date?: string | null
+          contract_signed?: boolean | null
           created_at?: string
           homeowner_email?: string | null
           homeowner_name?: string
@@ -243,6 +250,8 @@ export type Database = {
           id?: string
           install_date?: string | null
           notes?: string | null
+          signature_date?: string | null
+          signature_url?: string | null
           signed_date?: string | null
           state?: string | null
           status?: Database["public"]["Enums"]["deal_status"]
