@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Search, ChevronUp, ChevronDown, Eye, FileSignature } from 'lucide-react';
+import { toast } from 'sonner';
 
 type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
 
@@ -50,10 +53,28 @@ type SortField = 'homeowner_name' | 'address' | 'status' | 'total_price' | 'crea
 type SortDirection = 'asc' | 'desc';
 
 export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTableProps) {
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DealStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ dealId, status }: { dealId: string; status: DealStatus }) => {
+      const { error } = await supabase
+        .from('deals')
+        .update({ status })
+        .eq('id', dealId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      toast.success('Status updated');
+    },
+    onError: (error) => {
+      toast.error('Failed to update: ' + error.message);
+    },
+  });
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -180,10 +201,24 @@ export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTablePro
                       {deal.city && `, ${deal.city}`}
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
-                      {statusConfig[deal.status]?.label || deal.status}
-                    </Badge>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    <Select
+                      value={deal.status}
+                      onValueChange={(value) => updateStatusMutation.mutate({ dealId: deal.id, status: value as DealStatus })}
+                    >
+                      <SelectTrigger className="w-[130px] h-8">
+                        <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
+                          {statusConfig[deal.status]?.label || deal.status}
+                        </Badge>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(statusConfig) as DealStatus[]).map((status) => (
+                          <SelectItem key={status} value={status}>
+                            {statusConfig[status].label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     ${deal.total_price.toLocaleString()}
