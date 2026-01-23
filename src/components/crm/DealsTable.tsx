@@ -52,12 +52,52 @@ const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'se
 type SortField = 'homeowner_name' | 'address' | 'status' | 'total_price' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
+// Status requirements - what's needed to move to each status
+const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => boolean; message: string }>> = {
+  signed: {
+    check: (deal) => deal.contract_signed === true,
+    message: 'Contract must be signed before marking as Signed',
+  },
+  permit: {
+    check: (deal) => deal.status === 'signed' || ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Signed before moving to Permit',
+  },
+  install_scheduled: {
+    check: (deal) => ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must have Permit before scheduling install',
+  },
+  installed: {
+    check: (deal) => ['install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Install must be scheduled before marking as Installed',
+  },
+  complete: {
+    check: (deal) => ['installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Installed before marking as Complete',
+  },
+  paid: {
+    check: (deal) => ['complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Complete before marking as Paid',
+  },
+};
+
 export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTableProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DealStatus | 'all'>('all');
   const [sortField, setSortField] = useState<SortField>('created_at');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
+
+  const validateStatusChange = (deal: Deal, newStatus: DealStatus): boolean => {
+    // Allow moving backwards or to cancelled
+    if (newStatus === 'cancelled' || newStatus === 'lead') return true;
+    
+    const requirement = statusRequirements[newStatus];
+    if (requirement && !requirement.check(deal)) {
+      toast.error(requirement.message);
+      return false;
+    }
+    return true;
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dealId, status }: { dealId: string; status: DealStatus }) => {
@@ -75,6 +115,12 @@ export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTablePro
       toast.error('Failed to update: ' + error.message);
     },
   });
+
+  const handleStatusChange = (deal: Deal, newStatus: DealStatus) => {
+    if (deal.status === newStatus) return;
+    if (!validateStatusChange(deal, newStatus)) return;
+    updateStatusMutation.mutate({ dealId: deal.id, status: newStatus });
+  };
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -204,7 +250,7 @@ export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTablePro
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Select
                       value={deal.status}
-                      onValueChange={(value) => updateStatusMutation.mutate({ dealId: deal.id, status: value as DealStatus })}
+                      onValueChange={(value) => handleStatusChange(deal, value as DealStatus)}
                     >
                       <SelectTrigger className="w-[130px] h-8">
                         <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>

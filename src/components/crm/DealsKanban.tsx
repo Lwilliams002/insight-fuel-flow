@@ -32,8 +32,48 @@ const columns: { id: DealStatus; title: string; color: string }[] = [
   { id: 'paid', title: 'Paid', color: 'bg-emerald-600' },
 ];
 
+// Status requirements - what's needed to move to each status
+const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => boolean; message: string }>> = {
+  signed: {
+    check: (deal) => deal.contract_signed === true,
+    message: 'Contract must be signed before marking as Signed',
+  },
+  permit: {
+    check: (deal) => deal.status === 'signed' || ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Signed before moving to Permit',
+  },
+  install_scheduled: {
+    check: (deal) => ['permit', 'install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must have Permit before scheduling install',
+  },
+  installed: {
+    check: (deal) => ['install_scheduled', 'installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Install must be scheduled before marking as Installed',
+  },
+  complete: {
+    check: (deal) => ['installed', 'complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Installed before marking as Complete',
+  },
+  paid: {
+    check: (deal) => ['complete', 'paid'].includes(deal.status),
+    message: 'Deal must be Complete before marking as Paid',
+  },
+};
+
 export function DealsKanban({ deals, onViewDeal, isAdmin = false }: DealsKanbanProps) {
   const queryClient = useQueryClient();
+
+  const validateStatusChange = (deal: Deal, newStatus: DealStatus): boolean => {
+    // Allow moving backwards or to cancelled
+    if (newStatus === 'cancelled' || newStatus === 'lead') return true;
+    
+    const requirement = statusRequirements[newStatus];
+    if (requirement && !requirement.check(deal)) {
+      toast.error(requirement.message);
+      return false;
+    }
+    return true;
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dealId, newStatus }: { dealId: string; newStatus: DealStatus }) => {
@@ -63,7 +103,10 @@ export function DealsKanban({ deals, onViewDeal, isAdmin = false }: DealsKanbanP
   const handleDrop = (e: React.DragEvent, newStatus: DealStatus) => {
     e.preventDefault();
     const dealId = e.dataTransfer.getData('dealId');
-    if (dealId) {
+    const deal = deals.find(d => d.id === dealId);
+    
+    if (dealId && deal) {
+      if (!validateStatusChange(deal, newStatus)) return;
       updateStatusMutation.mutate({ dealId, newStatus });
     }
   };
