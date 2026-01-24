@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,9 +8,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, MapPin, Search, Users } from 'lucide-react';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
+import { Loader2, MapPin, Search, Users, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
@@ -47,6 +51,7 @@ const statusConfig: Record<PinStatus, { color: string; label: string }> = {
 };
 
 export default function AdminMap() {
+  const queryClient = useQueryClient();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -57,6 +62,8 @@ export default function AdminMap() {
   const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
+  const [reassignSheetOpen, setReassignSheetOpen] = useState(false);
+  const [newRepId, setNewRepId] = useState<string>('');
 
   // Fallback: fetch token from backend if env var isn't present
   useEffect(() => {
@@ -125,6 +132,32 @@ export default function AdminMap() {
     });
     return lookup;
   }, [reps]);
+
+  // Reassign pin mutation
+  const reassignPinMutation = useMutation({
+    mutationFn: async ({ pinId, repId }: { pinId: string; repId: string }) => {
+      const { error } = await supabase
+        .from('rep_pins')
+        .update({ rep_id: repId })
+        .eq('id', pinId);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-all-pins'] });
+      toast.success('Pin reassigned successfully');
+      setReassignSheetOpen(false);
+      setSelectedPin(null);
+      setNewRepId('');
+    },
+    onError: (error) => {
+      toast.error('Failed to reassign pin: ' + error.message);
+    },
+  });
+
+  const handleReassign = () => {
+    if (!selectedPin || !newRepId) return;
+    reassignPinMutation.mutate({ pinId: selectedPin.id, repId: newRepId });
+  };
 
   // Filter pins
   const filteredPins = useMemo(() => {
@@ -442,9 +475,83 @@ export default function AdminMap() {
                 <span className="text-xs">{selectedPin.notes}</span>
               </div>
             )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full mt-3"
+              onClick={() => {
+                setNewRepId(selectedPin.rep_id);
+                setReassignSheetOpen(true);
+              }}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
+              Reassign to Another Rep
+            </Button>
           </CardContent>
         </Card>
       )}
+
+      {/* Reassign Sheet */}
+      <Sheet open={reassignSheetOpen} onOpenChange={setReassignSheetOpen}>
+        <SheetContent>
+          <SheetHeader>
+            <SheetTitle>Reassign Pin</SheetTitle>
+            <SheetDescription>
+              Transfer this pin to a different sales representative.
+            </SheetDescription>
+          </SheetHeader>
+          <div className="py-6 space-y-4">
+            <div className="space-y-2">
+              <Label>Current Rep</Label>
+              <div className="p-3 bg-muted rounded-lg text-sm">
+                {selectedPin ? repLookup[selectedPin.rep_id] || 'Unknown' : '-'}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>New Rep</Label>
+              <Select value={newRepId} onValueChange={setNewRepId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a rep..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {reps?.filter(rep => rep.id !== selectedPin?.rep_id).map(rep => (
+                    <SelectItem key={rep.id} value={rep.id}>
+                      {rep.profile?.full_name || rep.profile?.email || 'Unknown'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {selectedPin && (
+              <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                <div className="font-medium">{selectedPin.homeowner_name || 'Unknown'}</div>
+                <div className="text-muted-foreground">{selectedPin.address || 'No address'}</div>
+              </div>
+            )}
+          </div>
+          <SheetFooter>
+            <Button
+              variant="outline"
+              onClick={() => setReassignSheetOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleReassign}
+              disabled={!newRepId || newRepId === selectedPin?.rep_id || reassignPinMutation.isPending}
+            >
+              {reassignPinMutation.isPending ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Reassigning...
+                </>
+              ) : (
+                'Reassign Pin'
+              )}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </AdminLayout>
   );
 }

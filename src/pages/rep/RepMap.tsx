@@ -48,6 +48,10 @@ interface Pin {
   created_at: string;
   deal_id: string | null;
   appointment_date: string | null;
+  appointment_end_date: string | null;
+  appointment_all_day: boolean | null;
+  assigned_closer_id: string | null;
+  rep_id: string;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
@@ -272,6 +276,27 @@ export default function RepMap() {
       if (error) throw error;
       return data;
     },
+  });
+
+  // Fetch appointments where current rep is assigned as closer (separate from own pins)
+  const { data: closerAppointments } = useQuery({
+    queryKey: ["closer-appointments", repData],
+    queryFn: async () => {
+      if (!repData) return [];
+      // Admin RLS allows this query since closers need to see their assigned appointments
+      const { data, error } = await supabase
+        .from("rep_pins")
+        .select("*")
+        .eq("assigned_closer_id", repData)
+        .eq("status", "appointment")
+        .order("appointment_date", { ascending: true });
+      if (error) {
+        console.log("Closer appointments query error (may be RLS):", error);
+        return [];
+      }
+      return data as Pin[];
+    },
+    enabled: !!repData,
   });
 
   // Filtered pins for list view
