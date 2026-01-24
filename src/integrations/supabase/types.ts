@@ -600,7 +600,10 @@ export type Database = {
       rep_pins: {
         Row: {
           address: string | null
+          appointment_all_day: boolean | null
           appointment_date: string | null
+          appointment_end_date: string | null
+          assigned_closer_id: string | null
           created_at: string
           deal_id: string | null
           homeowner_name: string | null
@@ -614,7 +617,10 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          appointment_all_day?: boolean | null
           appointment_date?: string | null
+          appointment_end_date?: string | null
+          assigned_closer_id?: string | null
           created_at?: string
           deal_id?: string | null
           homeowner_name?: string | null
@@ -628,7 +634,10 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          appointment_all_day?: boolean | null
           appointment_date?: string | null
+          appointment_end_date?: string | null
+          assigned_closer_id?: string | null
           created_at?: string
           deal_id?: string | null
           homeowner_name?: string | null
@@ -641,6 +650,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "rep_pins_assigned_closer_id_fkey"
+            columns: ["assigned_closer_id"]
+            isOneToOne: false
+            referencedRelation: "reps"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rep_pins_deal_id_fkey"
             columns: ["deal_id"]

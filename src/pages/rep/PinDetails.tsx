@@ -9,12 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
   ChevronLeft, MapPin, User, Phone, Mail, Trash2, Briefcase, 
-  CalendarIcon, Clock, X, Upload, FileText, Loader2
+  CalendarIcon, Clock, X, Upload, FileText, Loader2, Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -31,6 +33,18 @@ interface Pin {
   created_at: string;
   deal_id: string | null;
   appointment_date: string | null;
+  appointment_end_date: string | null;
+  appointment_all_day: boolean | null;
+  assigned_closer_id: string | null;
+}
+
+interface RepProfile {
+  id: string;
+  user_id: string;
+  profile: {
+    full_name: string | null;
+    email: string;
+  } | null;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
@@ -66,6 +80,9 @@ export default function PinDetails() {
     notes: '',
     appointment_date: undefined as Date | undefined,
     appointment_time: '',
+    appointment_end_time: '',
+    appointment_all_day: false,
+    assigned_closer_id: '',
   });
 
   // Fetch existing pin data
@@ -107,6 +124,18 @@ export default function PinDetails() {
       return data;
     },
     enabled: !isNew && !!pinId,
+  });
+
+  // Fetch all reps for closer assignment
+  const { data: reps } = useQuery({
+    queryKey: ['all-reps-for-assignment'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('reps')
+        .select('id, user_id, profiles!reps_user_id_fkey(full_name, email)');
+      if (error) throw error;
+      return data as unknown as RepProfile[];
+    },
   });
 
   // Upload document handler
@@ -189,6 +218,9 @@ export default function PinDetails() {
         notes: pin.notes || '',
         appointment_date: pin.appointment_date ? new Date(pin.appointment_date) : undefined,
         appointment_time: pin.appointment_date ? format(new Date(pin.appointment_date), 'HH:mm') : '',
+        appointment_end_time: pin.appointment_end_date ? format(new Date(pin.appointment_end_date), 'HH:mm') : '',
+        appointment_all_day: pin.appointment_all_day || false,
+        assigned_closer_id: pin.assigned_closer_id || '',
       });
     }
   }, [pin]);
@@ -202,6 +234,9 @@ export default function PinDetails() {
       homeowner_name: string; 
       notes: string;
       appointment_date: string | null;
+      appointment_end_date: string | null;
+      appointment_all_day: boolean;
+      assigned_closer_id: string | null;
     }) => {
       const { error } = await supabase.from('rep_pins').insert({
         rep_id: repData,
@@ -212,6 +247,9 @@ export default function PinDetails() {
         homeowner_name: data.homeowner_name || null,
         notes: data.notes || null,
         appointment_date: data.appointment_date,
+        appointment_end_date: data.appointment_end_date,
+        appointment_all_day: data.appointment_all_day,
+        assigned_closer_id: data.assigned_closer_id,
       });
       if (error) throw error;
     },
@@ -232,6 +270,7 @@ export default function PinDetails() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      queryClient.invalidateQueries({ queryKey: ['calendar-date-appointments'] });
       toast.success('Pin updated');
       navigate(getBackUrl());
     },
@@ -277,6 +316,12 @@ export default function PinDetails() {
 
   const getAppointmentDateTime = (): string | null => {
     if (formData.status !== 'appointment' || !formData.appointment_date) return null;
+    if (formData.appointment_all_day) {
+      // For all day, set to midnight
+      const dateTime = new Date(formData.appointment_date);
+      dateTime.setHours(0, 0, 0, 0);
+      return dateTime.toISOString();
+    }
     
     const date = formData.appointment_date;
     const time = formData.appointment_time || '09:00';
@@ -288,8 +333,24 @@ export default function PinDetails() {
     return dateTime.toISOString();
   };
 
+  const getAppointmentEndDateTime = (): string | null => {
+    if (formData.status !== 'appointment' || !formData.appointment_date) return null;
+    if (formData.appointment_all_day) return null;
+    if (!formData.appointment_end_time) return null;
+    
+    const date = formData.appointment_date;
+    const time = formData.appointment_end_time;
+    const [hours, minutes] = time.split(':').map(Number);
+    
+    const dateTime = new Date(date);
+    dateTime.setHours(hours, minutes, 0, 0);
+    
+    return dateTime.toISOString();
+  };
+
   const handleSave = () => {
     const appointmentDateTime = getAppointmentDateTime();
+    const appointmentEndDateTime = getAppointmentEndDateTime();
     
     if (isNew && lat && lng) {
       createPinMutation.mutate({
@@ -300,6 +361,9 @@ export default function PinDetails() {
         homeowner_name: formData.homeowner_name,
         notes: formData.notes,
         appointment_date: appointmentDateTime,
+        appointment_end_date: appointmentEndDateTime,
+        appointment_all_day: formData.appointment_all_day,
+        assigned_closer_id: formData.assigned_closer_id || null,
       });
     } else if (pin) {
       updatePinMutation.mutate({
@@ -310,6 +374,9 @@ export default function PinDetails() {
           homeowner_name: formData.homeowner_name || null,
           notes: formData.notes || null,
           appointment_date: appointmentDateTime,
+          appointment_end_date: appointmentEndDateTime,
+          appointment_all_day: formData.appointment_all_day,
+          assigned_closer_id: formData.assigned_closer_id || null,
         },
       });
     }
@@ -397,51 +464,103 @@ export default function PinDetails() {
           {/* Appointment Date/Time */}
           {formData.status === 'appointment' && (
             <div className="space-y-3 p-3 bg-primary/10 rounded-lg border border-primary/20">
-              <div className="flex items-center gap-2 text-primary">
-                <CalendarIcon className="w-3.5 h-3.5" />
-                <span className="text-xs font-medium">Schedule Appointment</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 text-primary">
+                  <CalendarIcon className="w-3.5 h-3.5" />
+                  <span className="text-xs font-medium">Schedule Appointment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="all-day" className="text-[10px] text-muted-foreground">All Day</Label>
+                  <Switch
+                    id="all-day"
+                    checked={formData.appointment_all_day}
+                    onCheckedChange={(checked) => setFormData({ ...formData, appointment_all_day: checked })}
+                  />
+                </div>
               </div>
               
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[10px]">Date</Label>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        className={cn(
-                          "w-full justify-start text-left font-normal h-9 text-sm bg-muted border-0",
-                          !formData.appointment_date && "text-muted-foreground"
-                        )}
-                      >
-                        <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
-                        {formData.appointment_date ? format(formData.appointment_date, "MMM d") : "Pick date"}
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-auto p-0" align="start">
-                      <Calendar
-                        mode="single"
-                        selected={formData.appointment_date}
-                        onSelect={(date) => setFormData({ ...formData, appointment_date: date })}
-                        initialFocus
-                        className="p-3 pointer-events-auto"
-                      />
-                    </PopoverContent>
-                  </Popover>
-                </div>
-                
-                <div className="space-y-1">
-                  <Label className="text-muted-foreground text-[10px]">Time</Label>
-                  <div className="relative h-9 flex items-center bg-muted rounded-md px-3">
-                    <Input
-                      type="time"
-                      value={formData.appointment_time}
-                      onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
-                      className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+              <div className="space-y-1">
+                <Label className="text-muted-foreground text-[10px]">Date</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      className={cn(
+                        "w-full justify-start text-left font-normal h-9 text-sm bg-muted border-0",
+                        !formData.appointment_date && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-1.5 h-3.5 w-3.5" />
+                      {formData.appointment_date ? format(formData.appointment_date, "MMM d, yyyy") : "Pick date"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={formData.appointment_date}
+                      onSelect={(date) => setFormData({ ...formData, appointment_date: date })}
+                      initialFocus
+                      className="p-3 pointer-events-auto"
                     />
-                    <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              
+              {!formData.appointment_all_day && (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-[10px]">From</Label>
+                    <div className="relative h-9 flex items-center bg-muted rounded-md px-3">
+                      <Input
+                        type="time"
+                        value={formData.appointment_time}
+                        onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    <Label className="text-muted-foreground text-[10px]">To</Label>
+                    <div className="relative h-9 flex items-center bg-muted rounded-md px-3">
+                      <Input
+                        type="time"
+                        value={formData.appointment_end_time}
+                        onChange={(e) => setFormData({ ...formData, appointment_end_time: e.target.value })}
+                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                      />
+                      <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
+                    </div>
                   </div>
                 </div>
+              )}
+
+              {/* Assign Closer */}
+              <div className="space-y-1 pt-2 border-t border-primary/20">
+                <Label className="text-muted-foreground text-[10px] flex items-center gap-1.5">
+                  <Users className="w-3 h-3" />
+                  Assign Closer (optional)
+                </Label>
+                <Select 
+                  value={formData.assigned_closer_id} 
+                  onValueChange={(value) => setFormData({ ...formData, assigned_closer_id: value === 'none' ? '' : value })}
+                >
+                  <SelectTrigger className="bg-muted border-0 h-9 text-sm">
+                    <SelectValue placeholder="Select a closer..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No closer assigned</SelectItem>
+                    {reps?.map((rep) => (
+                      <SelectItem key={rep.id} value={rep.id}>
+                        {rep.profile?.full_name || rep.profile?.email || 'Unknown'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-[10px] text-muted-foreground">
+                  The assigned closer will see this appointment on their calendar.
+                </p>
               </div>
             </div>
           )}
