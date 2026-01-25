@@ -5,12 +5,10 @@ import { AdminShell } from '@/components/AdminShell';
 import { DealsTable } from '@/components/crm/DealsTable';
 import { DealsKanban } from '@/components/crm/DealsKanban';
 import { DealWizard } from '@/components/crm/DealWizard';
+import { DealDetailSheet } from '@/components/crm/DealDetailSheet';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Plus, LayoutList, Columns3, Users } from 'lucide-react';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { format } from 'date-fns';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 type ViewMode = 'table' | 'kanban';
@@ -79,17 +77,6 @@ export default function AdminDeals() {
   // Calculate stats
   const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.total_price || 0), 0);
   const signedDeals = filteredDeals.filter((d) => d.status !== 'lead' && d.status !== 'cancelled').length;
-
-  const statusConfig: Record<string, { label: string; color: string }> = {
-    lead: { label: 'Lead', color: 'bg-slate-500' },
-    signed: { label: 'Signed', color: 'bg-blue-500' },
-    permit: { label: 'Permit', color: 'bg-yellow-500' },
-    install_scheduled: { label: 'Scheduled', color: 'bg-orange-500' },
-    installed: { label: 'Installed', color: 'bg-teal-500' },
-    complete: { label: 'Complete', color: 'bg-green-500' },
-    paid: { label: 'Paid', color: 'bg-emerald-600' },
-    cancelled: { label: 'Cancelled', color: 'bg-destructive' },
-  };
 
   return (
     <AdminShell>
@@ -178,143 +165,12 @@ export default function AdminDeals() {
       {/* Deal Wizard */}
       <DealWizard open={wizardOpen} onOpenChange={setWizardOpen} isAdmin />
 
-      {/* Deal Detail Sheet */}
-      <Sheet open={!!selectedDeal} onOpenChange={(open) => !open && setSelectedDeal(null)}>
-        <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>Deal Details</SheetTitle>
-          </SheetHeader>
-
-          {selectedDeal && (
-            <div className="mt-6 space-y-6">
-              {/* Status */}
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${statusConfig[selectedDeal.status]?.color}`} />
-                <Badge variant="outline">{statusConfig[selectedDeal.status]?.label}</Badge>
-                {selectedDeal.contract_signed && (
-                  <Badge variant="secondary">Contract Signed</Badge>
-                )}
-              </div>
-
-              {/* Homeowner Info */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Homeowner</h3>
-                <div className="space-y-2">
-                  <p className="font-medium">{selectedDeal.homeowner_name}</p>
-                  {selectedDeal.homeowner_phone && (
-                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_phone}</p>
-                  )}
-                  {selectedDeal.homeowner_email && (
-                    <p className="text-sm text-muted-foreground">{selectedDeal.homeowner_email}</p>
-                  )}
-                </div>
-              </div>
-
-              {/* Property */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Property</h3>
-                <div>
-                  <p className="font-medium">{selectedDeal.address}</p>
-                  <p className="text-sm text-muted-foreground">
-                    {[selectedDeal.city, selectedDeal.state, selectedDeal.zip_code].filter(Boolean).join(', ')}
-                  </p>
-                </div>
-              </div>
-
-              {/* Deal Value */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Value</h3>
-                <p className="text-2xl font-bold text-primary">
-                  ${selectedDeal.total_price?.toLocaleString() || '0'}
-                </p>
-              </div>
-
-              {/* Assigned Reps */}
-              {selectedDeal.deal_commissions?.length > 0 && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Team & Commissions</h3>
-                  <div className="space-y-2">
-                    {selectedDeal.deal_commissions.map((comm: any) => (
-                      <div key={comm.id} className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">
-                            {(comm.reps?.profiles as any)?.full_name || 'Unknown Rep'}
-                          </p>
-                          <p className="text-xs text-muted-foreground capitalize">
-                            {comm.commission_type.replace('_', ' ')} • {comm.commission_percent}%
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">${comm.commission_amount.toLocaleString()}</p>
-                          <Badge variant={comm.paid ? 'default' : 'secondary'} className="text-xs">
-                            {comm.paid ? 'Paid' : 'Unpaid'}
-                          </Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Notes */}
-              {selectedDeal.notes && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Notes</h3>
-                  <p className="text-sm">{selectedDeal.notes}</p>
-                </div>
-              )}
-
-              {/* Signature */}
-              {selectedDeal.signature_url && (
-                <div className="space-y-3">
-                  <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Contract Signature</h3>
-                  <div className="bg-muted p-3 rounded-lg">
-                    <img 
-                      src={selectedDeal.signature_url} 
-                      alt="Signature" 
-                      className="max-h-24 mx-auto"
-                    />
-                    {selectedDeal.signature_date && (
-                      <p className="text-xs text-center text-muted-foreground mt-2">
-                        Signed on {format(new Date(selectedDeal.signature_date), 'MMM d, yyyy h:mm a')}
-                      </p>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Dates */}
-              <div className="space-y-3">
-                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">Timeline</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Created</span>
-                    <span>{format(new Date(selectedDeal.created_at), 'MMM d, yyyy')}</span>
-                  </div>
-                  {selectedDeal.signed_date && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Signed</span>
-                      <span>{format(new Date(selectedDeal.signed_date), 'MMM d, yyyy')}</span>
-                    </div>
-                  )}
-                  {selectedDeal.install_date && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Install</span>
-                      <span>{format(new Date(selectedDeal.install_date), 'MMM d, yyyy')}</span>
-                    </div>
-                  )}
-                  {selectedDeal.completion_date && (
-                    <div className="flex justify-between">
-                      <span className="text-muted-foreground">Completed</span>
-                      <span>{format(new Date(selectedDeal.completion_date), 'MMM d, yyyy')}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-        </SheetContent>
-      </Sheet>
+      {/* Deal Detail Sheet - Using shared component for full functionality */}
+      <DealDetailSheet
+        deal={selectedDeal}
+        isOpen={!!selectedDeal}
+        onClose={() => setSelectedDeal(null)}
+      />
     </AdminShell>
   );
 }
