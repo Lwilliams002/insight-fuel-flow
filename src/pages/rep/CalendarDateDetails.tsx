@@ -1,8 +1,9 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { ChevronLeft, MapPin, CalendarIcon, Clock } from 'lucide-react';
+import { ChevronLeft, MapPin, CalendarIcon, Clock, Users } from 'lucide-react';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
+import { Badge } from '@/components/ui/badge';
 
 type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
 
@@ -20,9 +21,19 @@ export default function CalendarDateDetails() {
   const fromTab = searchParams.get('from') || 'calendar';
   
   const selectedDate = date ? parseISO(date) : new Date();
+
+  // Get current rep ID
+  const { data: repId } = useQuery({
+    queryKey: ['current-rep'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('get_rep_id');
+      if (error) throw error;
+      return data as string;
+    },
+  });
   
-  // Fetch pins with appointments on this date
-  const { data: appointments, isLoading } = useQuery({
+  // Fetch pins with appointments on this date (own pins)
+  const { data: ownAppointments, isLoading: loadingOwn } = useQuery({
     queryKey: ['calendar-date-appointments', date],
     queryFn: async () => {
       const dayStart = startOfDay(selectedDate).toISOString();
@@ -41,6 +52,42 @@ export default function CalendarDateDetails() {
     },
     enabled: !!date,
   });
+
+  // Fetch appointments where user is assigned as closer
+  const { data: closerAppointments, isLoading: loadingCloser } = useQuery({
+    queryKey: ['closer-date-appointments', date, repId],
+    queryFn: async () => {
+      if (!repId) return [];
+      const dayStart = startOfDay(selectedDate).toISOString();
+      const dayEnd = endOfDay(selectedDate).toISOString();
+      
+      const { data, error } = await supabase
+        .from('rep_pins')
+        .select('*')
+        .eq('status', 'appointment')
+        .eq('assigned_closer_id', repId)
+        .gte('appointment_date', dayStart)
+        .lte('appointment_date', dayEnd)
+        .order('appointment_date', { ascending: true });
+      
+      if (error) {
+        console.log('Closer appointments query error:', error);
+        return [];
+      }
+      return data;
+    },
+    enabled: !!date && !!repId,
+  });
+
+  // Combine and deduplicate appointments
+  const appointments = [
+    ...(ownAppointments || []).map(apt => ({ ...apt, isCloserAssignment: false })),
+    ...(closerAppointments || [])
+      .filter(apt => !(ownAppointments || []).some(own => own.id === apt.id))
+      .map(apt => ({ ...apt, isCloserAssignment: true })),
+  ];
+
+  const isLoading = loadingOwn || loadingCloser;
 
   const handleBack = () => {
     navigate(`/map?tab=${fromTab}`);
@@ -90,13 +137,24 @@ export default function CalendarDateDetails() {
               >
                 <div className="flex items-start justify-between">
                   <div className="space-y-2 flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-wrap">
                       <div
                         className="px-2.5 py-1 rounded-full text-xs font-medium text-white"
                         style={{ backgroundColor: statusConfig[pin.status as PinStatus]?.color || '#888' }}
                       >
                         {statusConfig[pin.status as PinStatus]?.label || pin.status}
                       </div>
+                      {pin.isCloserAssignment && (
+                        <Badge variant="outline" className="text-xs flex items-center gap-1">
+                          <Users className="w-3 h-3" />
+                          Assigned to you
+                        </Badge>
+                      )}
+                      {pin.appointment_all_day && (
+                        <Badge variant="secondary" className="text-xs">
+                          All Day
+                        </Badge>
+                      )}
                     </div>
                     <p className="font-medium text-foreground">
                       {pin.homeowner_name || 'Unknown'}
@@ -107,10 +165,13 @@ export default function CalendarDateDetails() {
                         <span className="truncate">{pin.address}</span>
                       </p>
                     )}
-                    {pin.appointment_date && (
+                    {pin.appointment_date && !pin.appointment_all_day && (
                       <p className="text-sm text-primary flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 shrink-0" />
                         {format(new Date(pin.appointment_date), 'h:mm a')}
+                        {pin.appointment_end_date && (
+                          <> - {format(new Date(pin.appointment_end_date), 'h:mm a')}</>
+                        )}
                       </p>
                     )}
                     {pin.notes && (
