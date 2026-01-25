@@ -87,17 +87,25 @@ export function PaymentRequests() {
 
   const approveMutation = useMutation({
     mutationFn: async (dealId: string) => {
-      const { error } = await supabase
+      // Update deal status to paid
+      const { error: dealError } = await supabase
         .from('deals')
         .update({ status: 'paid', payment_requested: false })
         .eq('id', dealId);
-      if (error) throw error;
+      if (dealError) throw dealError;
+
+      // Mark all commissions for this deal as paid
+      const { error: commissionError } = await supabase
+        .from('deal_commissions')
+        .update({ paid: true, paid_date: new Date().toISOString().split('T')[0] })
+        .eq('deal_id', dealId);
+      if (commissionError) throw commissionError;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
-      toast.success('Payment approved - deal marked as paid');
+      toast.success('Payment approved - deal marked as paid and commissions updated');
     },
     onError: (error) => {
       toast.error('Failed to approve: ' + error.message);

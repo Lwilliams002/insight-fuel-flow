@@ -73,6 +73,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   install_scheduled: { label: 'Scheduled', color: 'bg-orange-500' },
   installed: { label: 'Installed', color: 'bg-teal-500' },
   complete: { label: 'Complete', color: 'bg-green-500' },
+  pending: { label: 'Payment Pending', color: 'bg-amber-500' },
   paid: { label: 'Paid', color: 'bg-emerald-600' },
   cancelled: { label: 'Cancelled', color: 'bg-destructive' },
 };
@@ -256,6 +257,7 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
     
     try {
       await supabase.from('deals').update({
+        status: 'pending',
         payment_requested: true,
         payment_requested_at: new Date().toISOString(),
       }).eq('id', deal.id);

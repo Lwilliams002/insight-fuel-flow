@@ -24,7 +24,6 @@ interface Deal {
 interface DealsKanbanProps {
   deals: Deal[];
   onViewDeal: (deal: Deal) => void;
-  isAdmin?: boolean;
 }
 
 const columns: { id: DealStatus; title: string; color: string }[] = [
@@ -34,6 +33,7 @@ const columns: { id: DealStatus; title: string; color: string }[] = [
   { id: 'install_scheduled', title: 'Scheduled', color: 'bg-orange-500' },
   { id: 'installed', title: 'Installed', color: 'bg-teal-500' },
   { id: 'complete', title: 'Complete', color: 'bg-green-500' },
+  { id: 'pending', title: 'Payment Pending', color: 'bg-amber-500' },
   { id: 'paid', title: 'Paid', color: 'bg-emerald-600' },
 ];
 
@@ -59,13 +59,17 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => bo
     check: (deal) => deal.completion_images && deal.completion_images.length > 0,
     message: 'Completion photos must be uploaded before marking as Complete',
   },
+  pending: {
+    check: () => false, // Can't drag to pending - must use request payment button
+    message: 'Use the Request Payment button in the deal details to mark as Pending',
+  },
   paid: {
-    check: (deal) => deal.payment_requested === true,
-    message: 'Payment must be requested and approved by admin. Click on the deal to request payment.',
+    check: (deal) => deal.status === 'pending', // Can only move to paid from pending
+    message: 'Deal must be in Pending status (payment requested by rep). Admin approval moves it to Paid.',
   },
 };
 
-export function DealsKanban({ deals, onViewDeal, isAdmin = false }: DealsKanbanProps) {
+export function DealsKanban({ deals, onViewDeal }: DealsKanbanProps) {
   const queryClient = useQueryClient();
 
   const validateStatusChange = (deal: Deal, newStatus: DealStatus): boolean => {

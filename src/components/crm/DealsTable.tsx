@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, ChevronUp, ChevronDown, Eye, FileSignature } from 'lucide-react';
 import { toast } from 'sonner';
 
-type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
+type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'pending' | 'paid' | 'cancelled';
 
 interface Deal {
   id: string;
@@ -49,6 +49,7 @@ const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'se
   install_scheduled: { label: 'Scheduled', variant: 'outline' },
   installed: { label: 'Installed', variant: 'default' },
   complete: { label: 'Complete', variant: 'default' },
+  pending: { label: 'Payment Pending', variant: 'outline' },
   paid: { label: 'Paid', variant: 'default' },
   cancelled: { label: 'Cancelled', variant: 'destructive' },
 };
@@ -78,13 +79,17 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => bo
     check: (deal) => deal.completion_images && deal.completion_images.length > 0,
     message: 'Completion photos must be uploaded before marking as Complete',
   },
+  pending: {
+    check: () => false, // Can't drag to pending - must use request payment button
+    message: 'Use the Request Payment button in the deal details to mark as Pending',
+  },
   paid: {
-    check: (deal) => deal.payment_requested === true,
-    message: 'Payment must be requested and approved by admin. Click on the deal to request payment.',
+    check: (deal) => deal.status === 'pending', // Can only move to paid from pending
+    message: 'Deal must be in Pending status (payment requested by rep). Admin approval moves it to Paid.',
   },
 };
 
-export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTableProps) {
+export function DealsTable({ deals, onViewDeal }: DealsTableProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DealStatus | 'all'>('all');
@@ -154,16 +159,19 @@ export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTablePro
       return matchesSearch && matchesStatus;
     })
     .sort((a, b) => {
-      let aVal: any = a[sortField];
-      let bVal: any = b[sortField];
+      const aVal = a[sortField] as string | number;
+      const bVal = b[sortField] as string | number;
+
+      let aCompare: string | number = aVal;
+      let bCompare: string | number = bVal;
 
       if (sortField === 'total_price') {
-        aVal = Number(aVal);
-        bVal = Number(bVal);
+        aCompare = Number(aVal);
+        bCompare = Number(bVal);
       }
 
-      if (aVal < bVal) return sortDirection === 'asc' ? -1 : 1;
-      if (aVal > bVal) return sortDirection === 'asc' ? 1 : -1;
+      if (aCompare < bCompare) return sortDirection === 'asc' ? -1 : 1;
+      if (aCompare > bCompare) return sortDirection === 'asc' ? 1 : -1;
       return 0;
     });
 
