@@ -306,11 +306,14 @@ export default function RepMap() {
     return pins.filter((pin) => pin.status === statusFilter);
   }, [pins, statusFilter]);
 
-  // Appointments for calendar
+  // Appointments for calendar (own pins + assigned as closer)
   const appointmentPins = useMemo(() => {
-    if (!pins) return [];
-    return pins.filter((pin) => pin.status === "appointment" && pin.appointment_date);
-  }, [pins]);
+    const ownAppointments = (pins || []).filter((pin) => pin.status === "appointment" && pin.appointment_date);
+    const closerAppts = (closerAppointments || []).filter((pin) => 
+      !ownAppointments.some(p => p.id === pin.id) // Avoid duplicates
+    );
+    return [...ownAppointments, ...closerAppts];
+  }, [pins, closerAppointments]);
 
   // Appointments for selected calendar date
   const selectedDateAppointments = useMemo(() => {
