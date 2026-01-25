@@ -172,6 +172,198 @@ No `LICENSE` file was detected in the repository. Add a LICENSE file (for exampl
 
 ---
 
+## AWS Migration Guide
+
+The project includes infrastructure for migrating from Supabase to AWS. This provides more control over infrastructure, better scalability, and enterprise-grade security.
+
+### AWS Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                          Amazon CloudFront                          │
+│                    (CDN for React Frontend)                         │
+└─────────────────────────────────────────────────────────────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────────┐
+        ▼                           ▼                               ▼
+┌───────────────┐          ┌───────────────┐              ┌───────────────┐
+│   S3 Bucket   │          │  API Gateway  │              │   Cognito     │
+│  (Frontend)   │          │   (REST API)  │              │  User Pool    │
+└───────────────┘          └───────┬───────┘              │  (Auth)       │
+                                   │                      └───────────────┘
+                                   ▼
+                           ┌───────────────┐
+                           │    Lambda     │
+                           │  Functions    │
+                           └───────┬───────┘
+                                   │
+        ┌──────────────────────────┼──────────────────────────┐
+        ▼                          ▼                          ▼
+┌───────────────┐          ┌───────────────┐          ┌───────────────┐
+│      RDS      │          │      S3       │          │   Secrets     │
+│  PostgreSQL   │          │   (Storage)   │          │   Manager     │
+└───────────────┘          └───────────────┘          └───────────────┘
+```
+
+### AWS Services Mapping
+
+| Supabase Feature | AWS Replacement |
+|-----------------|-----------------|
+| Authentication | Amazon Cognito |
+| PostgreSQL Database | Amazon RDS PostgreSQL |
+| Edge Functions | AWS Lambda + API Gateway |
+| Storage | Amazon S3 |
+| Row Level Security | Lambda middleware + Cognito groups |
+
+### Prerequisites for AWS Migration
+
+1. **AWS CLI**: Install and configure
+   ```bash
+   brew install awscli
+   aws configure
+   ```
+
+2. **AWS CDK**: Install globally
+   ```bash
+   npm install -g aws-cdk
+   ```
+
+3. **Bootstrap CDK** (first time only):
+   ```bash
+   cd infrastructure
+   npm install
+   cdk bootstrap
+   ```
+
+### Deploy to AWS
+
+1. **Deploy all stacks**:
+   ```bash
+   cd infrastructure
+   npm run deploy:dev    # For development
+   npm run deploy:prod   # For production
+   ```
+
+2. **Note the outputs** - CDK will display:
+   - `CognitoUserPoolId`
+   - `CognitoUserPoolClientId`
+   - `ApiUrl`
+   - `StorageBucketName`
+
+3. **Update frontend environment**:
+   ```bash
+   # Create .env file with AWS values
+   VITE_AWS_REGION=us-east-1
+   VITE_COGNITO_USER_POOL_ID=<from CDK output>
+   VITE_COGNITO_USER_POOL_CLIENT_ID=<from CDK output>
+   VITE_API_URL=<from CDK output>
+   VITE_S3_BUCKET=<from CDK output>
+   ```
+
+### Data Migration
+
+1. **Export Supabase data**:
+   ```bash
+   cd infrastructure/scripts
+   chmod +x migrate-data.sh
+   
+   # Set environment variables
+   export SUPABASE_HOST=db.your-project.supabase.co
+   export SUPABASE_PASSWORD=your-password
+   export RDS_HOST=your-rds-endpoint.rds.amazonaws.com
+   export RDS_PASSWORD=your-rds-password
+   
+   ./migrate-data.sh
+   ```
+
+2. **Migrate users to Cognito**:
+   ```bash
+   chmod +x migrate-users.sh
+   export USER_POOL_ID=us-east-1_xxxxxxxxx
+   ./migrate-users.sh
+   ```
+
+   > ⚠️ Users will need to reset their passwords after migration.
+
+### Switching the Frontend
+
+To switch from Supabase to AWS authentication:
+
+1. **Replace AuthProvider in `main.tsx`**:
+   ```tsx
+   // Change from:
+   import { AuthProvider } from '@/contexts/AuthContext';
+   
+   // To:
+   import { AwsAuthProvider } from '@/contexts/AwsAuthContext';
+   ```
+
+2. **Update component imports**:
+   ```tsx
+   // Change from:
+   import { useAuth } from '@/contexts/AuthContext';
+   
+   // To:
+   import { useAwsAuth } from '@/contexts/AwsAuthContext';
+   ```
+
+3. **Replace Supabase API calls with AWS API**:
+   ```tsx
+   // Change from:
+   import { supabase } from '@/integrations/supabase/client';
+   const { data } = await supabase.from('deals').select('*');
+   
+   // To:
+   import { dealsApi } from '@/integrations/aws';
+   const { data } = await dealsApi.list();
+   ```
+
+### AWS Infrastructure Files
+
+```
+infrastructure/
+├── bin/
+│   └── infrastructure.ts    # CDK app entry point
+├── lib/
+│   ├── auth-stack.ts        # Cognito User Pool
+│   ├── database-stack.ts    # RDS PostgreSQL + VPC
+│   ├── storage-stack.ts     # S3 bucket
+│   └── api-stack.ts         # API Gateway + Lambda
+├── lambda/
+│   ├── shared/              # Shared utilities
+│   ├── deals/               # Deals CRUD
+│   ├── reps/                # Reps management
+│   ├── pins/                # Location pins
+│   ├── commissions/         # Commissions tracking
+│   ├── upload/              # S3 presigned URLs
+│   └── admin/               # Admin operations
+├── scripts/
+│   ├── migrate-data.sh      # Database migration
+│   └── migrate-users.sh     # User migration
+└── package.json
+```
+
+### Cost Considerations
+
+AWS costs will vary based on usage. Estimated monthly costs for a small deployment:
+
+| Service | Estimated Cost |
+|---------|---------------|
+| RDS (t3.micro) | ~$15-25/month |
+| Lambda | ~$0-5/month (free tier) |
+| API Gateway | ~$3-10/month |
+| Cognito | ~$0-5/month |
+| S3 | ~$1-5/month |
+| **Total** | **~$20-50/month** |
+
+For production, consider:
+- RDS Multi-AZ for high availability
+- CloudFront for CDN
+- WAF for security
+- Reserved instances for cost savings
+
+---
+
 If you'd like, I can:
 - Add a `.env.example` file with placeholders for required variables.
 - Add a short development checklist or scripts to automate starting supabase + frontend together.
