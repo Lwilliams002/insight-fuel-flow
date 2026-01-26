@@ -113,6 +113,7 @@ export interface Rep {
   can_self_gen: boolean;
   manager_id: string | null;
   active: boolean;
+  training_completed: boolean;
   full_name: string;
   email: string;
   avatar_url: string | null;
@@ -285,5 +286,41 @@ export const adminApi = {
   syncReps: () =>
     fetchApi<{ message: string; synced: number; skipped: number; total: number }>('/admin/sync-reps', {
       method: 'POST',
+    }),
+};
+
+// ============ TRAINING API ============
+
+export interface CourseProgress {
+  course_id: string;
+  exam_score: number | null;
+  exam_passed: boolean;
+  completed_at: string | null;
+}
+
+export interface TrainingProgress {
+  training_completed: boolean;
+  courses: CourseProgress[];
+}
+
+export interface ExamSubmission {
+  course_id: string;
+  answers: Record<string, any>;
+}
+
+export interface ExamResult {
+  score: number;
+  passed: boolean;
+  training_completed: boolean;
+  progress: CourseProgress;
+}
+
+export const trainingApi = {
+  getProgress: () => fetchApi<TrainingProgress>('/training'),
+
+  submitExam: (submission: ExamSubmission) =>
+    fetchApi<ExamResult>('/training/submit', {
+      method: 'POST',
+      body: JSON.stringify(submission),
     }),
 };
