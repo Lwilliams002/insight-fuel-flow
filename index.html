@@ -25,6 +25,10 @@
 
   <body>
     <div id="root"></div>
+    <script>
+      // Polyfills for amazon-cognito-identity-js
+      window.global = window;
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

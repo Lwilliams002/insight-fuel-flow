@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import mapboxgl from "mapbox-gl";
+import type mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { supabase } from "@/integrations/supabase/client";
 import { BottomNav } from "@/components/BottomNav";
@@ -75,6 +75,7 @@ export default function RepMap() {
   const userMarker = useRef<mapboxgl.Marker | null>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressCoords = useRef<{ lng: number; lat: number } | null>(null);
+  const mapboxglRef = useRef<typeof mapboxgl | null>(null);
 
   // Read initial tab from URL
   const initialTab = searchParams.get("tab") as "map" | "list" | "calendar" | null;
@@ -82,6 +83,7 @@ export default function RepMap() {
   const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
+  const [mapboxReady, setMapboxReady] = useState(false);
 
   // Filters
   const [statusFilter, setStatusFilter] = useState<PinStatus | "all">("all");
@@ -128,11 +130,28 @@ export default function RepMap() {
     };
   }, [mapboxToken]);
 
+  // Dynamically load mapbox-gl only when needed (on map view)
+  useEffect(() => {
+    if (activeView !== "map" || mapboxReady) return;
+
+    let cancelled = false;
+
+    import("mapbox-gl").then((module) => {
+      if (!cancelled) {
+        mapboxglRef.current = module.default;
+        setMapboxReady(true);
+      }
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeView, mapboxReady]);
+
   // Get user's location with live updates
   useEffect(() => {
     if (!navigator.geolocation) return;
 
-    let watchId: number;
     let initialFlyDone = false;
 
     navigator.geolocation.getCurrentPosition(
@@ -147,7 +166,7 @@ export default function RepMap() {
       () => {},
     );
 
-    watchId = navigator.geolocation.watchPosition(
+    const watchId = navigator.geolocation.watchPosition(
       (position) => {
         const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
         setUserLocation(newLoc);
@@ -164,14 +183,16 @@ export default function RepMap() {
   // Initialize Mapbox
   useEffect(() => {
     if (!mapboxToken) return;
+    if (!mapboxReady || !mapboxglRef.current) return;
     if (!mapContainer.current) return;
     if (map.current) return;
 
+    const mapboxgl = mapboxglRef.current;
     mapboxgl.accessToken = mapboxToken;
 
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
-      style: "mapbox://styles/mapbox/streets-v12",
+      style: "mapbox://styles/mapbox/satellite-streets-v12",
       center: [userLocation[1], userLocation[0]],
       zoom: 17,
     });
@@ -180,10 +201,6 @@ export default function RepMap() {
 
     map.current.on("load", () => {
       setMapLoaded(true);
-
-      setTimeout(() => {
-        map.current?.setStyle("mapbox://styles/mapbox/satellite-streets-v12");
-      }, 300);
     });
 
     const handleTouchStart = (e: mapboxgl.MapTouchEvent) => {
@@ -247,7 +264,7 @@ export default function RepMap() {
         setMapLoaded(false);
       }
     };
-  }, [mapboxToken]);
+  }, [mapboxToken, mapboxReady]);
 
   // Force map resize when switching back to map view
   useEffect(() => {
@@ -266,6 +283,7 @@ export default function RepMap() {
       if (error) throw error;
       return data as Pin[];
     },
+    staleTime: 30000, // 30 seconds - prevents refetch on every mount
   });
 
   // Get rep_id for creating pins
@@ -276,6 +294,7 @@ export default function RepMap() {
       if (error) throw error;
       return data;
     },
+    staleTime: 60000, // 1 minute - rep data rarely changes
   });
 
   // Fetch appointments where current rep is assigned as closer (separate from own pins)
@@ -297,6 +316,7 @@ export default function RepMap() {
       return data as Pin[];
     },
     enabled: !!repData,
+    staleTime: 30000, // 30 seconds
   });
 
   // Filtered pins for list view
@@ -355,7 +375,9 @@ export default function RepMap() {
 
   // Update user location marker
   useEffect(() => {
-    if (!map.current || !mapLoaded) return;
+    if (!map.current || !mapLoaded || !mapboxglRef.current) return;
+
+    const mapboxgl = mapboxglRef.current;
 
     if (!userMarker.current) {
       const el = document.createElement("div");
@@ -400,7 +422,9 @@ export default function RepMap() {
 
   // Update markers when pins change
   useEffect(() => {
-    if (!map.current || !mapLoaded || !pins) return;
+    if (!map.current || !mapLoaded || !pins || !mapboxglRef.current) return;
+
+    const mapboxgl = mapboxglRef.current;
 
     markers.current.forEach((marker) => marker.remove());
     markers.current.clear();
@@ -591,6 +615,16 @@ export default function RepMap() {
                   <span className="font-mono">pk.</span>) as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>
                   .
                 </div>
+              </div>
+            </div>
+          ) : !mapboxReady ? (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-muted-foreground">Loading map...</span>
               </div>
             </div>
           ) : (

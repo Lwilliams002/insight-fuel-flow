@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback, useRef } from 'react';
 import {
   CognitoUserPool,
   CognitoUser,
@@ -20,8 +20,10 @@ interface AwsAuthContextType {
   session: CognitoUserSession | null;
   role: UserRole;
   loading: boolean;
-  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  newPasswordRequired: boolean;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null; newPasswordRequired?: boolean }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
+  completeNewPassword: (newPassword: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
 }
@@ -39,6 +41,9 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<CognitoUserSession | null>(null);
   const [role, setRole] = useState<UserRole>(null);
   const [loading, setLoading] = useState(true);
+  const [newPasswordRequired, setNewPasswordRequired] = useState(false);
+  const cognitoUserRef = useRef<CognitoUser | null>(null);
+  const userAttributesRef = useRef<Record<string, string>>({});
 
   const extractUserFromSession = useCallback((cognitoSession: CognitoUserSession): User => {
     const idToken = cognitoSession.getIdToken();
@@ -88,7 +93,10 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
     refreshSession();
   }, [refreshSession]);
 
-  const signIn = async (email: string, password: string): Promise<{ error: Error | null }> => {
+  const signIn = async (email: string, password: string): Promise<{ error: Error | null; newPasswordRequired?: boolean }> => {
+    console.log('Attempting sign in with:', email);
+    console.log('UserPool config:', { userPoolId: awsConfig.cognito.userPoolId, clientId: awsConfig.cognito.userPoolClientId });
+
     const cognitoUser = new CognitoUser({
       Username: email,
       Pool: userPool,
@@ -102,16 +110,54 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
     return new Promise((resolve) => {
       cognitoUser.authenticateUser(authDetails, {
         onSuccess: (cognitoSession) => {
+          console.log('Sign in successful!', cognitoSession);
           setSession(cognitoSession);
           setUser(extractUserFromSession(cognitoSession));
           setRole(extractRoleFromSession(cognitoSession));
+          setNewPasswordRequired(false);
           resolve({ error: null });
         },
         onFailure: (err) => {
+          console.error('Sign in failed:', err);
           resolve({ error: err });
         },
-        newPasswordRequired: () => {
-          resolve({ error: new Error('Password change required. Please contact admin.') });
+        newPasswordRequired: (userAttributes) => {
+          console.log('New password required', userAttributes);
+          // Store the cognito user and attributes for completing password change
+          cognitoUserRef.current = cognitoUser;
+          // Remove read-only attributes that can't be updated
+          delete userAttributes.email_verified;
+          delete userAttributes.email;
+          userAttributesRef.current = userAttributes;
+          setNewPasswordRequired(true);
+          resolve({ error: null, newPasswordRequired: true });
+        },
+      });
+    });
+  };
+
+  const completeNewPassword = async (newPassword: string): Promise<{ error: Error | null }> => {
+    const cognitoUser = cognitoUserRef.current;
+
+    if (!cognitoUser) {
+      return { error: new Error('No pending password change. Please sign in again.') };
+    }
+
+    return new Promise((resolve) => {
+      cognitoUser.completeNewPasswordChallenge(newPassword, userAttributesRef.current, {
+        onSuccess: (cognitoSession) => {
+          console.log('Password change successful!', cognitoSession);
+          setSession(cognitoSession);
+          setUser(extractUserFromSession(cognitoSession));
+          setRole(extractRoleFromSession(cognitoSession));
+          setNewPasswordRequired(false);
+          cognitoUserRef.current = null;
+          userAttributesRef.current = {};
+          resolve({ error: null });
+        },
+        onFailure: (err) => {
+          console.error('Password change failed:', err);
+          resolve({ error: err });
         },
       });
     });
@@ -171,8 +217,10 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
         session,
         role,
         loading,
+        newPasswordRequired,
         signIn,
         signUp,
+        completeNewPassword,
         signOut,
         getIdToken,
       }}
@@ -189,3 +237,8 @@ export function useAwsAuth() {
   }
   return context;
 }
+
+// Alias for backward compatibility with existing components
+export const useAuth = useAwsAuth;
+export const AuthProvider = AwsAuthProvider;
+

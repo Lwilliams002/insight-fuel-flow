@@ -18,7 +18,7 @@ import {
   ChevronLeft, MapPin, User, Phone, Mail, Trash2, Briefcase, 
   CalendarIcon, Clock, X, Upload, FileText, Loader2, Users
 } from 'lucide-react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AwsAuthContext';
 
 type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
 

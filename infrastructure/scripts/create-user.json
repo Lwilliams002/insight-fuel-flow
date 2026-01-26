@@ -1,0 +1,10 @@
+{
+  "UserPoolId": "us-east-1_LQ9dJW5iZ",
+  "Username": "admin@insightfuelflow.com",
+  "UserAttributes": [
+    {"Name": "email", "Value": "admin@insightfuelflow.com"},
+    {"Name": "email_verified", "Value": "true"}
+  ],
+  "TemporaryPassword": "TempPass123!",
+  "MessageAction": "SUPPRESS"
+}

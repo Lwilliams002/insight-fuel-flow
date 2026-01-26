@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AwsAuthContext';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
 import {

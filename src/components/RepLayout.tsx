@@ -1,5 +1,5 @@
 import { ReactNode } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AwsAuthContext';
 import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { LogOut } from 'lucide-react';

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AwsAuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -24,9 +24,17 @@ const signupSchema = loginSchema.extend({
   path: ["confirmPassword"],
 });
 
+const newPasswordSchema = z.object({
+  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  confirmNewPassword: z.string(),
+}).refine((data) => data.newPassword === data.confirmNewPassword, {
+  message: "Passwords don't match",
+  path: ["confirmNewPassword"],
+});
+
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp, role, user } = useAuth();
+  const { signIn, signUp, role, user, newPasswordRequired, completeNewPassword } = useAuth();
   const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('login');
   
@@ -40,10 +48,16 @@ export default function Auth() {
   const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [signupFullName, setSignupFullName] = useState('');
 
+  // New password form state
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
   // Redirect if already logged in
-  if (user && role) {
-    navigate(role === 'admin' ? '/admin' : '/dashboard');
-  }
+  useEffect(() => {
+    if (user && role) {
+      navigate(role === 'admin' ? '/admin' : '/dashboard');
+    }
+  }, [user, role, navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,11 +69,33 @@ export default function Auth() {
     }
     
     setLoading(true);
-    const { error } = await signIn(loginEmail, loginPassword);
+    const { error, newPasswordRequired: needsNewPassword } = await signIn(loginEmail, loginPassword);
+    setLoading(false);
+
+    if (error) {
+      toast.error(error.message);
+    } else if (needsNewPassword) {
+      toast.info('Please set a new password to continue.');
+    }
+  };
+
+  const handleNewPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    const result = newPasswordSchema.safeParse({ newPassword, confirmNewPassword });
+    if (!result.success) {
+      toast.error(result.error.errors[0].message);
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await completeNewPassword(newPassword);
     setLoading(false);
     
     if (error) {
       toast.error(error.message);
+    } else {
+      toast.success('Password updated successfully!');
     }
   };
 
@@ -107,6 +143,45 @@ export default function Auth() {
       </div>
 
       <Card className="w-full max-w-md border-border/50 shadow-2xl">
+        {newPasswordRequired ? (
+          <CardContent className="pt-6">
+            <div className="mb-4 text-center">
+              <h2 className="text-xl font-semibold">Set New Password</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Please create a new password to continue
+              </p>
+            </div>
+            <form onSubmit={handleNewPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirm-new-password">Confirm New Password</Label>
+                <Input
+                  id="confirm-new-password"
+                  type="password"
+                  placeholder="••••••••"
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
+              <Button type="submit" className="w-full" disabled={loading}>
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Set New Password'}
+              </Button>
+            </form>
+          </CardContent>
+        ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <CardHeader className="space-y-1 pb-4">
             <TabsList className="grid w-full grid-cols-2">
@@ -206,6 +281,7 @@ export default function Auth() {
             </TabsContent>
           </CardContent>
         </Tabs>
+        )}
       </Card>
     </div>
   );
