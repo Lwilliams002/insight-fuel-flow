@@ -61,11 +61,15 @@ export default function CalendarDateDetails() {
 
 
   const handleBack = () => {
-    navigate(`/map?tab=${fromTab}`);
+    if (fromTab === 'calendar') {
+      navigate('/calendar');
+    } else {
+      navigate('/map?tab=map');
+    }
   };
 
   const handlePinClick = (pinId: string) => {
-    navigate(`/map/pin/${pinId}?from=calendar`);
+    navigate(`/map/pin/${pinId}?from=calendar&date=${date}`);
   };
 
   return (

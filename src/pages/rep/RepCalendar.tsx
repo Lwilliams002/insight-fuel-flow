@@ -112,6 +112,7 @@ export default function RepCalendar() {
     notes: '',
     appointment_date: '',
     appointment_time: '',
+    appointment_end_time: '',
   });
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
@@ -145,6 +146,21 @@ export default function RepCalendar() {
   useEffect(() => {
     localStorage.setItem('calendar-events', JSON.stringify(calendarEvents));
   }, [calendarEvents]);
+
+  // Initialize appointment form with current time when dialog opens
+  useEffect(() => {
+    if (isAddAppointmentOpen) {
+      const now = new Date();
+      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+      setAppointmentForm(prev => ({
+        ...prev,
+        appointment_date: now.toISOString().split('T')[0], // YYYY-MM-DD format
+        appointment_time: now.toTimeString().slice(0, 5), // HH:MM format
+        appointment_end_time: oneHourLater.toTimeString().slice(0, 5), // HH:MM format
+      }));
+    }
+  }, [isAddAppointmentOpen]);
 
   // Fallback: fetch token from backend if env var isn't present
   useEffect(() => {
@@ -418,6 +434,7 @@ export default function RepCalendar() {
         notes: '',
         appointment_date: '',
         appointment_time: '',
+        appointment_end_time: '',
       });
       setAddressSuggestions([]);
       // Invalidate queries to refresh the data
@@ -498,12 +515,13 @@ export default function RepCalendar() {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-center gap-1 sm:gap-2 px-2">
             <Dialog open={isAddAppointmentOpen} onOpenChange={setIsAddAppointmentOpen}>
               <DialogTrigger asChild>
-                <Button size="sm">
-                  <Plus className="w-4 h-4 mr-2" />
-                  Add Appointment
+                <Button size="sm" className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9">
+                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                  <span className="hidden xs:inline sm:inline">Add Appointment</span>
+                  <span className="xs:hidden sm:hidden">Appt</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">
@@ -562,12 +580,23 @@ export default function RepCalendar() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="appointment_time">Time *</Label>
+                      <Label htmlFor="appointment_time">From Time *</Label>
                       <Input
                         id="appointment_time"
                         type="time"
                         value={appointmentForm.appointment_time}
                         onChange={(e) => setAppointmentForm(prev => ({ ...prev, appointment_time: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label htmlFor="appointment_end_time">To Time</Label>
+                      <Input
+                        id="appointment_end_time"
+                        type="time"
+                        value={appointmentForm.appointment_end_time}
+                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, appointment_end_time: e.target.value }))}
                       />
                     </div>
                   </div>
@@ -605,9 +634,10 @@ export default function RepCalendar() {
 
             <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" size="sm">
-                  <CalendarIcon className="w-4 h-4 mr-2" />
-                  Add Event
+                <Button variant="outline" size="sm" className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9">
+                  <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+                  <span className="hidden xs:inline sm:inline">Add Event</span>
+                  <span className="xs:hidden sm:hidden">Event</span>
                 </Button>
               </DialogTrigger>
               <DialogContent className="sm:max-w-md">

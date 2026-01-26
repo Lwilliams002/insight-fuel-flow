@@ -96,8 +96,14 @@ export default function PinDetails() {
   const lng = searchParams.get('lng');
   const initialAddress = searchParams.get('address');
   const fromTab = searchParams.get('from') || 'map';
-  
-  const getBackUrl = () => `/map?tab=${fromTab}`;
+  const dateParam = searchParams.get('date');
+
+  const getBackUrl = () => {
+    if (fromTab === 'calendar' && dateParam) {
+      return `/map/date/${dateParam}?from=calendar`;
+    }
+    return `/map?tab=${fromTab}`;
+  };
 
   const [formData, setFormData] = useState({
     status: 'lead' as PinStatus,
@@ -511,7 +517,7 @@ export default function PinDetails() {
                       {formData.appointment_date ? format(formData.appointment_date, "MMM d, yyyy") : "Pick date"}
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
+                  <PopoverContent className="w-auto p-0 max-w-[calc(100vw-2rem)]" align="start">
                     <Calendar
                       mode="single"
                       selected={formData.appointment_date}
