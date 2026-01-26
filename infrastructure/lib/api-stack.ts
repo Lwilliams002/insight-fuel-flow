@@ -119,8 +119,16 @@ export class ApiStack extends cdk.Stack {
       timeout: cdk.Duration.seconds(60), // Longer timeout for schema creation
     });
 
+    // Training function
+    const trainingFunction = new lambdaNodejs.NodejsFunction(this, 'TrainingFunction', {
+      ...lambdaConfig,
+      functionName: `${appName}-training-${stage}`,
+      entry: path.join(__dirname, '../lambda/training/index.ts'),
+      handler: 'handler',
+    });
+
     // Grant permissions
-    const allFunctions = [dealsFunction, repsFunction, pinsFunction, commissionsFunction, uploadFunction, adminFunction, initDbFunction];
+    const allFunctions = [dealsFunction, repsFunction, pinsFunction, commissionsFunction, uploadFunction, adminFunction, initDbFunction, trainingFunction];
 
     allFunctions.forEach(fn => {
       databaseSecret.grantRead(fn);
@@ -230,6 +238,13 @@ export class ApiStack extends cdk.Stack {
     // Init DB (no auth - for initial setup only)
     const initDb = admin.addResource('init-db');
     initDb.addMethod('POST', new apigateway.LambdaIntegration(initDbFunction));
+
+    // Training
+    const training = this.api.root.addResource('training');
+    training.addMethod('GET', new apigateway.LambdaIntegration(trainingFunction), authorizerOptions);
+    
+    const trainingSubmit = training.addResource('submit');
+    trainingSubmit.addMethod('POST', new apigateway.LambdaIntegration(trainingFunction), authorizerOptions);
 
     // Outputs
     new cdk.CfnOutput(this, 'ApiUrl', {

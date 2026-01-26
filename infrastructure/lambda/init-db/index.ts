@@ -24,7 +24,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment');
+    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment', 'renter', 'not_interested');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -61,6 +61,7 @@ CREATE TABLE IF NOT EXISTS reps (
     can_self_gen BOOLEAN NOT NULL DEFAULT true,
     manager_id UUID REFERENCES reps(id) ON DELETE SET NULL,
     active BOOLEAN NOT NULL DEFAULT true,
+    training_completed BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
 );
@@ -289,6 +290,34 @@ EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
 
+-- Add 'renter' to pin_status enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'renter' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
+    ) THEN
+        ALTER TYPE pin_status ADD VALUE 'renter';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Add 'not_interested' to pin_status enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'not_interested' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
+    ) THEN
+        ALTER TYPE pin_status ADD VALUE 'not_interested';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
 -- Add deal_id column to rep_pins if it doesn't exist
 DO $$
 BEGIN
@@ -321,6 +350,32 @@ CREATE INDEX IF NOT EXISTS idx_rep_pins_appointment_date ON rep_pins(appointment
 
 -- Create index for assigned_closer_id for closer calendar queries
 CREATE INDEX IF NOT EXISTS idx_rep_pins_assigned_closer_id ON rep_pins(assigned_closer_id);
+
+-- Training system tables
+CREATE TABLE IF NOT EXISTS training_progress (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+    course_id TEXT NOT NULL,
+    exam_score INTEGER,
+    exam_passed BOOLEAN DEFAULT false,
+    completed_at TIMESTAMP WITH TIME ZONE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    UNIQUE (rep_id, course_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_training_progress_rep_id ON training_progress(rep_id);
+
+-- Add training_completed column to reps if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'reps' AND column_name = 'training_completed') THEN
+        ALTER TABLE reps ADD COLUMN training_completed BOOLEAN NOT NULL DEFAULT false;
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS update_training_progress_updated_at ON training_progress;
+CREATE TRIGGER update_training_progress_updated_at BEFORE UPDATE ON training_progress FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 `;
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {

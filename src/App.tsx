@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AwsAuthProvider } from "@/contexts/AwsAuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
+import Learning from "./pages/Learning";
 import RepDashboard from "./pages/RepDashboard";
 import RepDeals from "./pages/rep/RepDeals";
 import RepMap from "./pages/rep/RepMap";
@@ -34,7 +35,17 @@ const App = () => (
             <Route path="/" element={<Navigate to="/auth" replace />} />
             <Route path="/auth" element={<Auth />} />
             
-            {/* Rep Routes */}
+            {/* Learning Route - accessible to reps regardless of training status */}
+            <Route
+              path="/learning"
+              element={
+                <ProtectedRoute allowedRoles={['rep']} skipTrainingCheck>
+                  <Learning />
+                </ProtectedRoute>
+              }
+            />
+            
+            {/* Rep Routes - require training completion */}
             <Route
               path="/dashboard"
               element={
