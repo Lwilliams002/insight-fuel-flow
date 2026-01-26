@@ -44,6 +44,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     if (path.includes('sync-reps')) {
       return await syncReps();
     }
+    if (path.includes('complete-training')) {
+      return await completeTraining(event);
+    }
     return badRequest('Unknown admin action');
   } catch (error) {
     console.error('Error:', error);
@@ -291,6 +294,71 @@ async function syncReps() {
     synced,
     skipped,
     total: cognitoUsers.length,
+  });
+}
+
+async function completeTraining(event: APIGatewayProxyEvent) {
+  const body = parseBody(event);
+  if (!body) {
+    return badRequest('Request body required');
+  }
+
+  const { email } = body;
+
+  if (!email) {
+    return badRequest('email is required');
+  }
+
+  // Find the user by email
+  const profile = await queryOne(
+    'SELECT id FROM profiles WHERE email = $1',
+    [email]
+  );
+
+  if (!profile) {
+    return badRequest(`User with email ${email} not found`);
+  }
+
+  // Find the rep record
+  const rep = await queryOne(
+    'SELECT id FROM reps WHERE user_id = $1',
+    [profile.id]
+  );
+
+  if (!rep) {
+    return badRequest(`Rep record not found for user ${email}`);
+  }
+
+  // Define required courses
+  const requiredCourses = [
+    'roof-types-components',
+    'measuring-estimating',
+    'sales-door-knocking',
+    'understanding-insurance',
+    'job-cycle-adjuster'
+  ];
+
+  // Insert training progress for all courses (marked as passed)
+  for (const courseId of requiredCourses) {
+    await execute(
+      `INSERT INTO training_progress (rep_id, course_id, exam_score, exam_passed, completed_at)
+       VALUES ($1, $2, 100, true, NOW())
+       ON CONFLICT (rep_id, course_id)
+       DO UPDATE SET exam_score = 100, exam_passed = true, completed_at = NOW(), updated_at = NOW()`,
+      [rep.id, courseId]
+    );
+  }
+
+  // Update rep's training_completed status
+  await execute(
+    'UPDATE reps SET training_completed = true WHERE id = $1',
+    [rep.id]
+  );
+
+  return success({
+    message: `Training completed for ${email}`,
+    rep_id: rep.id,
+    courses_completed: requiredCourses.length,
   });
 }
 

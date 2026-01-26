@@ -1,12 +1,11 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Home, ClipboardPlus, MapPin } from 'lucide-react';
+import { LayoutDashboard, Home, MapPin } from 'lucide-react';
 
 const navItems = [
   { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { href: '/deals', icon: Home, label: 'My Deals' },
   { href: '/map', icon: MapPin, label: 'My Map' },
-  { href: '/submit', icon: ClipboardPlus, label: 'New Deal' },
 ];
 
 export function BottomNav() {

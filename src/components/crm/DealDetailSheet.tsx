@@ -21,64 +21,53 @@ import {
   Camera,
   DollarSign,
   X,
-  Image
+  Image,
+  Package,
+  Truck,
+  Wrench,
+  CheckCircle2
 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-
-type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
-
-interface Deal {
-  id: string;
-  homeowner_name: string;
-  homeowner_phone: string | null;
-  homeowner_email: string | null;
-  address: string;
-  city: string | null;
-  state: string | null;
-  zip_code: string | null;
-  status: DealStatus;
-  total_price: number;
-  signed_date: string | null;
-  install_date: string | null;
-  completion_date: string | null;
-  created_at: string;
-  contract_signed: boolean | null;
-  signature_url: string | null;
-  signature_date: string | null;
-  notes: string | null;
-  permit_file_url?: string | null;
-  install_images?: string[] | null;
-  completion_images?: string[] | null;
-  payment_requested?: boolean | null;
-  payment_requested_at?: string | null;
-  deal_commissions?: Array<{
-    id: string;
-    commission_type: string;
-    commission_percent: number;
-    commission_amount: number;
-    paid: boolean;
-  }>;
-}
+import { Deal, DealStatus, dealsApi } from '@/integrations/aws/api';
+import { RepDealWorkflow } from './RepDealWorkflow';
+import { AdminDealWorkflow } from './AdminDealWorkflow';
 
 interface DealDetailSheetProps {
   deal: Deal | null;
   isOpen: boolean;
   onClose: () => void;
+  isAdmin?: boolean;
 }
 
 const statusConfig: Record<string, { label: string; color: string }> = {
+  // SIGN PHASE
   lead: { label: 'Lead', color: 'bg-slate-500' },
+  inspection_scheduled: { label: 'Inspection Scheduled', color: 'bg-indigo-500' },
+  claim_filed: { label: 'Claim Filed', color: 'bg-purple-500' },
+  adjuster_scheduled: { label: 'Adjuster Scheduled', color: 'bg-pink-500' },
+  adjuster_met: { label: 'Awaiting Approval', color: 'bg-rose-500' },
+  approved: { label: 'Approved', color: 'bg-teal-500' },
   signed: { label: 'Signed', color: 'bg-blue-500' },
-  permit: { label: 'Permit', color: 'bg-yellow-500' },
-  install_scheduled: { label: 'Scheduled', color: 'bg-orange-500' },
+  // BUILD PHASE
+  materials_ordered: { label: 'Materials Ordered', color: 'bg-orange-400' },
+  materials_delivered: { label: 'Materials Delivered', color: 'bg-orange-500' },
+  install_scheduled: { label: 'Scheduled', color: 'bg-amber-500' },
   installed: { label: 'Installed', color: 'bg-teal-500' },
+  // COLLECT PHASE
+  invoice_sent: { label: 'Invoice Sent', color: 'bg-indigo-500' },
+  depreciation_collected: { label: 'Depreciation Collected', color: 'bg-teal-600' },
   complete: { label: 'Complete', color: 'bg-green-500' },
+  // OTHER
+  cancelled: { label: 'Cancelled', color: 'bg-destructive' },
+  on_hold: { label: 'On Hold', color: 'bg-gray-500' },
+  // LEGACY
+  permit: { label: 'Permit', color: 'bg-yellow-500' },
   pending: { label: 'Payment Pending', color: 'bg-amber-500' },
   paid: { label: 'Paid', color: 'bg-emerald-600' },
-  cancelled: { label: 'Cancelled', color: 'bg-destructive' },
 };
 
-export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps) {
+export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: DealDetailSheetProps) {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
@@ -321,6 +310,16 @@ export function DealDetailSheet({ deal, isOpen, onClose }: DealDetailSheetProps)
               </Badge>
             )}
           </div>
+
+          {/* Rep Workflow - Show guided steps for non-admins */}
+          {!isAdmin && (
+            <RepDealWorkflow deal={deal} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['deals'] })} />
+          )}
+
+          {/* Admin Workflow - Show user-friendly admin interface */}
+          {isAdmin && (
+            <AdminDealWorkflow deal={deal} onUpdate={() => queryClient.invalidateQueries({ queryKey: ['deals'] })} />
+          )}
 
           {/* Contract Signature Section - Always visible if not signed */}
           {needsSignature && (

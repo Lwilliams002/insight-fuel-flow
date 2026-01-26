@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { pinsApi } from '@/integrations/aws/api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +67,7 @@ export function PaymentRequests() {
 
       // Fetch rep names
       const repUserIds = [...new Set(
-        data?.flatMap(d => d.deal_commissions?.map((c: any) => c.rep?.user_id)).filter(Boolean)
+        data?.flatMap(d => d.deal_commissions?.map((c: { rep_id: string; rep?: { user_id?: string } }) => c.rep?.user_id)).filter(Boolean)
       )] as string[];
 
       const { data: profiles } = await supabase
@@ -87,10 +88,15 @@ export function PaymentRequests() {
 
   const approveMutation = useMutation({
     mutationFn: async (dealId: string) => {
-      // Update deal status to paid
+      // Update deal status to 'installed' (so it shows on the map for reps)
+      // The deal flow: complete/pending -> paid also marks as installed for map visibility
       const { error: dealError } = await supabase
         .from('deals')
-        .update({ status: 'paid', payment_requested: false })
+        .update({
+          status: 'installed', // Changed from 'paid' to 'installed' per client request
+          payment_requested: false,
+          completion_date: new Date().toISOString().split('T')[0] // Mark completion date
+        })
         .eq('id', dealId);
       if (dealError) throw dealError;
 
@@ -100,12 +106,30 @@ export function PaymentRequests() {
         .update({ paid: true, paid_date: new Date().toISOString().split('T')[0] })
         .eq('deal_id', dealId);
       if (commissionError) throw commissionError;
+
+      // Update any associated pins to 'installed' status so reps can see them on the map
+      // First, fetch pins associated with this deal using AWS API
+      try {
+        const pinsResponse = await pinsApi.list();
+        if (pinsResponse.data) {
+          const dealPins = pinsResponse.data.filter(pin => pin.deal_id === dealId);
+          // Update each pin to 'installed' status
+          for (const pin of dealPins) {
+            await pinsApi.update(pin.id, { status: 'installed' });
+          }
+        }
+      } catch (pinError) {
+        // Don't throw on pin error - deal may not have associated pins
+        console.warn('Could not update pin status:', pinError);
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['payment-requests'] });
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['admin-dashboard-stats'] });
-      toast.success('Payment approved - deal marked as paid and commissions updated');
+      queryClient.invalidateQueries({ queryKey: ['admin-all-pins'] });
+      queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      toast.success('Payment approved - deal marked as installed and visible on map');
     },
     onError: (error) => {
       toast.error('Failed to approve: ' + error.message);

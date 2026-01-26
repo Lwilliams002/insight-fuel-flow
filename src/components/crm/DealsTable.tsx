@@ -18,22 +18,40 @@ interface DealsTableProps {
 }
 
 const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
+  // SIGN PHASE
   lead: { label: 'Lead', variant: 'secondary' },
+  inspection_scheduled: { label: 'Inspection Scheduled', variant: 'outline' },
+  claim_filed: { label: 'Claim Filed', variant: 'outline' },
+  adjuster_scheduled: { label: 'Adjuster Scheduled', variant: 'outline' },
+  adjuster_met: { label: 'Awaiting Approval', variant: 'outline' },
+  approved: { label: 'Approved', variant: 'default' },
   signed: { label: 'Signed', variant: 'default' },
-  permit: { label: 'Permit', variant: 'outline' },
+  // BUILD PHASE
+  materials_ordered: { label: 'Materials Ordered', variant: 'outline' },
+  materials_delivered: { label: 'Materials Delivered', variant: 'outline' },
   install_scheduled: { label: 'Scheduled', variant: 'outline' },
   installed: { label: 'Installed', variant: 'default' },
+  // COLLECT PHASE
+  invoice_sent: { label: 'Invoice Sent', variant: 'outline' },
+  depreciation_collected: { label: 'Depreciation Collected', variant: 'default' },
   complete: { label: 'Complete', variant: 'default' },
+  // OTHER
+  cancelled: { label: 'Cancelled', variant: 'destructive' },
+  on_hold: { label: 'On Hold', variant: 'secondary' },
+  // LEGACY
+  permit: { label: 'Permit', variant: 'outline' },
   pending: { label: 'Payment Pending', variant: 'outline' },
   paid: { label: 'Paid', variant: 'default' },
-  cancelled: { label: 'Cancelled', variant: 'destructive' },
 };
 
 type SortField = 'homeowner_name' | 'address' | 'status' | 'total_price' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
+// Build phase statuses that only admins can set (materials ordering and beyond)
+const adminOnlyStatuses: DealStatus[] = ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
+
 // Status requirements - what's needed to move to each status
-const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => boolean; message: string }>> = {
+const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdmin?: boolean) => boolean; message: string }>> = {
   signed: {
     check: (deal) => deal.contract_signed === true,
     message: 'Contract must be signed before marking as Signed',
@@ -42,29 +60,37 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => bo
     check: (deal) => !!deal.permit_file_url,
     message: 'Permit document must be uploaded before moving to Permit',
   },
+  materials_ordered: {
+    check: (deal, isAdmin) => isAdmin === true,
+    message: 'Only admins can order materials and advance to build phase',
+  },
+  materials_delivered: {
+    check: (deal, isAdmin) => isAdmin === true,
+    message: 'Only admins can mark materials as delivered',
+  },
   install_scheduled: {
-    check: (deal) => !!deal.install_date,
-    message: 'Install date must be set before scheduling',
+    check: (deal, isAdmin) => isAdmin === true && !!deal.install_date,
+    message: 'Only admins can schedule installations. Install date must be set.',
   },
   installed: {
-    check: (deal) => deal.install_images && deal.install_images.length > 0,
-    message: 'Installation photos must be uploaded before marking as Installed',
+    check: (deal, isAdmin) => isAdmin === true && deal.install_images && deal.install_images.length > 0,
+    message: 'Only admins can mark as installed. Installation photos must be uploaded.',
   },
   complete: {
-    check: (deal) => deal.completion_images && deal.completion_images.length > 0,
-    message: 'Completion photos must be uploaded before marking as Complete',
+    check: (deal, isAdmin) => isAdmin === true && deal.completion_images && deal.completion_images.length > 0,
+    message: 'Only admins can mark as complete. Completion photos must be uploaded.',
   },
   pending: {
     check: () => false, // Can't drag to pending - must use request payment button
     message: 'Use the Request Payment button in the deal details to mark as Pending',
   },
   paid: {
-    check: (deal) => deal.status === 'pending', // Can only move to paid from pending
-    message: 'Deal must be in Pending status (payment requested by rep). Admin approval moves it to Paid.',
+    check: (deal, isAdmin) => isAdmin === true && (deal.status === 'pending' || deal.status === 'complete'),
+    message: 'Only admins can mark as paid. Deal must be in Complete or Pending status.',
   },
 };
 
-export function DealsTable({ deals, onViewDeal }: DealsTableProps) {
+export function DealsTable({ deals, onViewDeal, isAdmin = false }: DealsTableProps) {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<DealStatus | 'all'>('all');
@@ -75,8 +101,14 @@ export function DealsTable({ deals, onViewDeal }: DealsTableProps) {
     // Allow moving backwards or to cancelled
     if (newStatus === 'cancelled' || newStatus === 'lead') return true;
     
+    // Check if this is an admin-only status
+    if (adminOnlyStatuses.includes(newStatus) && !isAdmin) {
+      toast.error('Only admins can change to this status');
+      return false;
+    }
+
     const requirement = statusRequirements[newStatus];
-    if (requirement && !requirement.check(deal)) {
+    if (requirement && !requirement.check(deal, isAdmin)) {
       toast.error(requirement.message);
       return false;
     }
@@ -232,23 +264,29 @@ export function DealsTable({ deals, onViewDeal }: DealsTableProps) {
                     </div>
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
-                    <Select
-                      value={deal.status}
-                      onValueChange={(value) => handleStatusChange(deal, value as DealStatus)}
-                    >
-                      <SelectTrigger className="w-[130px] h-8">
-                        <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
-                          {statusConfig[deal.status]?.label || deal.status}
-                        </Badge>
-                      </SelectTrigger>
-                      <SelectContent>
-                        {(Object.keys(statusConfig) as DealStatus[]).map((status) => (
-                          <SelectItem key={status} value={status}>
-                            {statusConfig[status].label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {isAdmin ? (
+                      <Select
+                        value={deal.status}
+                        onValueChange={(value) => handleStatusChange(deal, value as DealStatus)}
+                      >
+                        <SelectTrigger className="w-[130px] h-8">
+                          <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
+                            {statusConfig[deal.status]?.label || deal.status}
+                          </Badge>
+                        </SelectTrigger>
+                        <SelectContent>
+                          {(Object.keys(statusConfig) as DealStatus[]).map((status) => (
+                            <SelectItem key={status} value={status}>
+                              {statusConfig[status].label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <Badge variant={statusConfig[deal.status]?.variant || 'secondary'}>
+                        {statusConfig[deal.status]?.label || deal.status}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-right font-medium">
                     ${deal.total_price.toLocaleString()}

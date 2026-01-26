@@ -4,11 +4,13 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AwsAuthProvider } from "@/contexts/AwsAuthContext";
+import { NotificationProvider } from "@/contexts/NotificationContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Learning from "./pages/Learning";
 import RepDashboard from "./pages/RepDashboard";
 import RepDeals from "./pages/rep/RepDeals";
+import DealDetails from "./pages/rep/DealDetails";
 import RepMap from "./pages/rep/RepMap";
 import PinDetails from "./pages/rep/PinDetails";
 import CalendarDateDetails from "./pages/rep/CalendarDateDetails";
@@ -24,14 +26,18 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Get basename for GitHub Pages (production) vs local development
+const basename = import.meta.env.BASE_URL;
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
+      <BrowserRouter basename={basename}>
         <AwsAuthProvider>
-          <Routes>
+          <NotificationProvider>
+            <Routes>
             <Route path="/" element={<Navigate to="/auth" replace />} />
             <Route path="/auth" element={<Auth />} />
             
@@ -59,6 +65,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['rep']}>
                   <RepDeals />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/deals/:dealId"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <DealDetails />
                 </ProtectedRoute>
               }
             />
@@ -154,6 +168,7 @@ const App = () => (
             />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </NotificationProvider>
         </AwsAuthProvider>
       </BrowserRouter>
     </TooltipProvider>

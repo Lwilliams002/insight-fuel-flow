@@ -18,7 +18,7 @@ import { toast } from 'sonner';
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
-type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
+type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment' | 'renter' | 'not_interested';
 
 interface Pin {
   id: string;
@@ -61,10 +61,12 @@ interface RepProfile {
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: '#a855f7', label: 'Not Home' },
-  followup: { color: '#ec4899', label: 'Needs Follow-up' },
-  installed: { color: '#14b8a6', label: 'Installed' },
-  appointment: { color: '#f59e0b', label: 'Appointment' },
+  lead: { color: '#4A6FA5', label: 'Not Home' },           // Prime Steel Blue
+  followup: { color: '#C9A24D', label: 'Needs Follow-up' }, // Prime Gold
+  installed: { color: '#2E7D32', label: 'Installed' },      // Professional Green
+  appointment: { color: '#C9A24D', label: 'Appointment' },  // Prime Gold
+  renter: { color: '#78909C', label: 'Renter' },            // Gray Blue
+  not_interested: { color: '#B71C1C', label: 'Not Interested' }, // Dark Red
 };
 
 export default function AdminMap() {

@@ -6,7 +6,6 @@ import {
   Users,
   Home,
   DollarSign,
-  ClipboardList,
   FileSpreadsheet,
   Settings,
   LogOut,
@@ -24,7 +23,6 @@ const navItems = [
   { href: '/admin/map', icon: MapPin, label: 'Map' },
   { href: '/admin/reps', icon: Users, label: 'Reps' },
   { href: '/admin/commissions', icon: DollarSign, label: 'Commissions' },
-  { href: '/admin/jotform', icon: ClipboardList, label: 'New Deal' },
   { href: '/admin/reports', icon: FileSpreadsheet, label: 'Reports' },
 ];
 
@@ -51,7 +49,7 @@ export function AdminSidebar() {
         <div className={cn('flex items-center gap-3', collapsed && 'justify-center w-full')}>
           <Logo size="sm" />
           {!collapsed && (
-            <span className="font-semibold text-foreground whitespace-nowrap">RoofCommission</span>
+            <span className="font-semibold text-foreground whitespace-nowrap">Titan Prime</span>
           )}
         </div>
       </div>

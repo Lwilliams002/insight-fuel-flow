@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
+  base: mode === 'production' ? '/insight-fuel-flow/' : '/',
   server: {
     host: "::",
     port: 8080,
@@ -20,28 +21,28 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'RoofCommission Pro',
-        short_name: 'RoofComm',
-        description: 'Track your roofing sales commissions',
-        theme_color: '#00d4ff',
-        background_color: '#0d0d0d',
+        name: 'Titan Prime Solutions',
+        short_name: 'Titan Prime',
+        description: 'Titan Prime Solutions - Sales and commission tracking',
+        theme_color: '#0F1E2E',
+        background_color: '#0F1E2E',
         display: 'standalone',
         orientation: 'portrait',
-        scope: '/',
-        start_url: '/',
+        scope: mode === 'production' ? '/insight-fuel-flow/' : '/',
+        start_url: mode === 'production' ? '/insight-fuel-flow/' : '/',
         icons: [
           {
-            src: '/pwa-192x192.png',
+            src: mode === 'production' ? '/insight-fuel-flow/pwa-192x192.png' : '/pwa-192x192.png',
             sizes: '192x192',
             type: 'image/png'
           },
           {
-            src: '/pwa-512x512.png',
+            src: mode === 'production' ? '/insight-fuel-flow/pwa-512x512.png' : '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png'
           },
           {
-            src: '/pwa-512x512.png',
+            src: mode === 'production' ? '/insight-fuel-flow/pwa-512x512.png' : '/pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
             purpose: 'any maskable'
@@ -53,13 +54,24 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
+            urlPattern: /^https:\/\/.*\.execute-api\..*\.amazonaws\.com\/.*/i,
             handler: 'NetworkFirst',
             options: {
-              cacheName: 'supabase-cache',
+              cacheName: 'aws-api-cache',
               expiration: {
                 maxEntries: 100,
                 maxAgeSeconds: 60 * 60 * 24
+              }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/api\.mapbox\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'mapbox-cache',
+              expiration: {
+                maxEntries: 50,
+                maxAgeSeconds: 60 * 60 * 24 * 7
               }
             }
           }

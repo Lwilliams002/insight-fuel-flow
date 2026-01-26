@@ -6,10 +6,40 @@
 -- ==========================================
 
 CREATE TYPE app_role AS ENUM ('admin', 'rep');
-CREATE TYPE deal_status AS ENUM ('lead', 'signed', 'permit', 'install_scheduled', 'installed', 'complete', 'pending', 'paid', 'cancelled');
+
+-- Deal status follows the Sign → Build → Collect workflow from training
+-- SIGN phase: lead → inspection_scheduled → claim_filed → adjuster_scheduled → adjuster_met → approved → signed
+-- BUILD phase: materials_ordered → materials_delivered → install_scheduled → installed
+-- COLLECT phase: invoice_sent → depreciation_collected → complete
+CREATE TYPE deal_status AS ENUM (
+    -- SIGN PHASE
+    'lead',                  -- Initial contact, not yet scheduled
+    'inspection_scheduled',  -- Free inspection appointment set
+    'claim_filed',           -- Homeowner filed claim with insurance
+    'adjuster_scheduled',    -- Adjuster meeting scheduled
+    'adjuster_met',          -- Met with adjuster, awaiting approval
+    'approved',              -- Insurance approved the claim
+    'signed',                -- Homeowner signed agreement, ACV check collected
+
+    -- BUILD PHASE
+    'materials_ordered',     -- Materials ordered
+    'materials_delivered',   -- Materials delivered to property
+    'install_scheduled',     -- Installation date set
+    'installed',             -- Construction completed
+
+    -- COLLECT PHASE
+    'invoice_sent',          -- Invoice sent to insurance for depreciation
+    'depreciation_collected', -- Depreciation check collected
+    'complete',              -- Job complete, commissions paid
+
+    -- Other
+    'cancelled',             -- Deal cancelled/lost
+    'on_hold'                -- Deal on hold for any reason
+);
+
 CREATE TYPE commission_type AS ENUM ('setter', 'closer', 'self_gen');
-CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment');
-CREATE TYPE commission_level AS ENUM ('junior', 'senior', 'manager');
+CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment', 'renter', 'not_interested');
+CREATE TYPE commission_level AS ENUM ('Apprentice', 'Journeyman', 'Master Roofer');
 
 -- ==========================================
 -- CORE TABLES
@@ -63,29 +93,81 @@ CREATE TABLE deals (
     state TEXT,
     zip_code TEXT,
 
+    -- Property details (from measuring training)
+    roof_type TEXT,                    -- gable, hip, gambrel, flat
+    roof_squares DECIMAL(10,2),        -- Actual squares
+    roof_squares_with_waste DECIMAL(10,2), -- Squares + waste
+    stories INTEGER DEFAULT 1,
+
     -- Homeowner info
     homeowner_name TEXT NOT NULL,
     homeowner_phone TEXT,
     homeowner_email TEXT,
 
     -- Deal info
-    total_price NUMERIC NOT NULL DEFAULT 0,
     status deal_status NOT NULL DEFAULT 'lead',
     notes TEXT,
 
+    -- SIGN PHASE - Insurance Info
+    insurance_company TEXT,
+    policy_number TEXT,
+    claim_number TEXT,
+    date_of_loss DATE,                 -- Storm date
+    deductible NUMERIC,                -- Homeowner's deductible
+
+    -- Inspection scheduling
+    inspection_date TIMESTAMP WITH TIME ZONE,
+
+    -- Insurance Financials (from training)
+    rcv NUMERIC,                       -- Replacement Cost Value (total claim)
+    acv NUMERIC,                       -- Actual Cash Value (1st check)
+    depreciation NUMERIC,              -- Depreciation amount (held back)
+
+    -- Adjuster Info
+    adjuster_name TEXT,
+    adjuster_phone TEXT,
+    adjuster_email TEXT,
+    adjuster_meeting_date TIMESTAMP WITH TIME ZONE,
+
     -- Contract & documents
     contract_signed BOOLEAN DEFAULT false,
+    signed_date DATE,
+    agreement_document_url TEXT,       -- Signed agreement file
+
+    -- SIGN Phase Payments
+    acv_check_collected BOOLEAN DEFAULT false,
+    acv_check_amount NUMERIC,
+    acv_check_date DATE,
+
+    -- BUILD PHASE
+    materials_ordered_date DATE,
+    materials_delivered_date DATE,
+    install_date DATE,
+    completion_date DATE,
+
+    -- BUILD Phase Documents
     permit_file_url TEXT,
     install_images TEXT[],
     completion_images TEXT[],
 
-    -- Payment tracking
-    payment_requested BOOLEAN DEFAULT false,
+    -- COLLECT PHASE
+    invoice_sent_date DATE,
+    invoice_amount NUMERIC,
+    depreciation_check_collected BOOLEAN DEFAULT false,
+    depreciation_check_amount NUMERIC,
+    depreciation_check_date DATE,
 
-    -- Dates
-    signed_date DATE,
-    install_date DATE,
-    completion_date DATE
+    -- Supplements (additional items approved)
+    supplement_amount NUMERIC DEFAULT 0,
+    supplement_approved BOOLEAN DEFAULT false,
+    supplement_notes TEXT,
+
+    -- Calculated totals
+    total_contract_value NUMERIC NOT NULL DEFAULT 0,  -- RCV or total job cost
+
+    -- Legacy fields for compatibility
+    total_price NUMERIC NOT NULL DEFAULT 0,
+    payment_requested BOOLEAN DEFAULT false
 );
 
 -- Deal commissions table

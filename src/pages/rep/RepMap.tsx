@@ -37,7 +37,7 @@ import { Input } from "@/components/ui/input";
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
-type PinStatus = "lead" | "followup" | "installed" | "appointment";
+type PinStatus = "lead" | "followup" | "installed" | "appointment" | "renter" | "not_interested";
 
 // Map AWS Pin to local Pin format for compatibility
 interface Pin {
@@ -78,10 +78,12 @@ function mapAwsPinToPin(awsPin: AwsPin): Pin {
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: "#a855f7", label: "Not Home" },
-  followup: { color: "#ec4899", label: "Needs Follow-up" },
-  installed: { color: "#14b8a6", label: "Installed" },
-  appointment: { color: "#f59e0b", label: "Appointment" },
+  lead: { color: "#4A6FA5", label: "Not Home" },           // Prime Steel Blue
+  followup: { color: "#C9A24D", label: "Needs Follow-up" }, // Prime Gold
+  installed: { color: "#2E7D32", label: "Installed" },      // Professional Green
+  appointment: { color: "#C9A24D", label: "Appointment" },  // Prime Gold
+  renter: { color: "#78909C", label: "Renter" },            // Gray Blue
+  not_interested: { color: "#B71C1C", label: "Not Interested" }, // Dark Red
 };
 
 interface NewPinData {
@@ -104,7 +106,8 @@ export default function RepMap() {
   // Read initial tab from URL
   const initialTab = searchParams.get("tab") as "map" | "list" | "calendar" | null;
   const [activeView, setActiveView] = useState<"map" | "list" | "calendar">(initialTab || "map");
-  const [userLocation, setUserLocation] = useState<[number, number]>([39.8283, -98.5795]);
+  const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
+  const [locationObtained, setLocationObtained] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
   const [mapboxReady, setMapboxReady] = useState(false);
@@ -164,20 +167,25 @@ export default function RepMap() {
 
   // Get user's location with live updates
   useEffect(() => {
-    if (!navigator.geolocation) return;
-
-    let initialFlyDone = false;
+    if (!navigator.geolocation) {
+      // Fallback to default location if geolocation not available
+      setUserLocation([39.8283, -98.5795]);
+      setLocationObtained(true);
+      return;
+    }
 
     navigator.geolocation.getCurrentPosition(
       (position) => {
         const newLoc: [number, number] = [position.coords.latitude, position.coords.longitude];
         setUserLocation(newLoc);
-        if (map.current && !initialFlyDone) {
-          map.current.flyTo({ center: [newLoc[1], newLoc[0]], zoom: 17 });
-          initialFlyDone = true;
-        }
+        setLocationObtained(true);
       },
-      () => {},
+      () => {
+        // Error getting location - use default
+        setUserLocation([39.8283, -98.5795]);
+        setLocationObtained(true);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
     );
 
     const watchId = navigator.geolocation.watchPosition(
@@ -194,20 +202,24 @@ export default function RepMap() {
     };
   }, []);
 
-  // Initialize Mapbox
+  // Initialize Mapbox - only runs once when location is first obtained
   useEffect(() => {
     if (!mapboxToken) return;
     if (!mapboxReady || !mapboxglRef.current) return;
     if (!mapContainer.current) return;
-    if (map.current) return;
+    if (map.current) return; // Already initialized
+    if (!locationObtained || !userLocation) return; // Wait for location
 
     const mapboxgl = mapboxglRef.current;
     mapboxgl.accessToken = mapboxToken;
 
+    // Use current userLocation value for initial center
+    const initialCenter: [number, number] = [userLocation[1], userLocation[0]];
+
     map.current = new mapboxgl.Map({
       container: mapContainer.current,
       style: "mapbox://styles/mapbox/satellite-streets-v12",
-      center: [userLocation[1], userLocation[0]],
+      center: initialCenter,
       zoom: 17,
     });
 
@@ -278,7 +290,8 @@ export default function RepMap() {
         setMapLoaded(false);
       }
     };
-  }, [mapboxToken, mapboxReady]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapboxToken, mapboxReady, locationObtained]); // Don't include userLocation to prevent re-init on location updates
 
   // Force map resize when switching back to map view
   useEffect(() => {
@@ -383,7 +396,7 @@ export default function RepMap() {
 
   // Update user location marker
   useEffect(() => {
-    if (!map.current || !mapLoaded || !mapboxglRef.current) return;
+    if (!map.current || !mapLoaded || !mapboxglRef.current || !userLocation) return;
 
     const mapboxgl = mapboxglRef.current;
 
@@ -397,7 +410,7 @@ export default function RepMap() {
             top: 0; left: 0;
             width: 24px;
             height: 24px;
-            background: rgba(59, 130, 246, 0.3);
+            background: rgba(201, 162, 77, 0.3);
             border-radius: 50%;
             animation: pulse 2s ease-out infinite;
           "></div>
@@ -406,7 +419,7 @@ export default function RepMap() {
             top: 6px; left: 6px;
             width: 12px;
             height: 12px;
-            background: #3b82f6;
+            background: #C9A24D;
             border: 2px solid white;
             border-radius: 50%;
             box-shadow: 0 2px 6px rgba(0,0,0,0.3);
@@ -519,14 +532,14 @@ export default function RepMap() {
 
   const handleLocate = () => {
     setIsFollowing((prev) => !prev);
-    if (map.current) {
+    if (map.current && userLocation) {
       map.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17 });
     }
   };
 
   // When in follow mode, center map on location updates
   useEffect(() => {
-    if (isFollowing && map.current) {
+    if (isFollowing && map.current && userLocation) {
       map.current.easeTo({ center: [userLocation[1], userLocation[0]], duration: 500 });
     }
   }, [userLocation, isFollowing]);
@@ -620,6 +633,16 @@ export default function RepMap() {
                   <span className="font-mono">pk.</span>) as <span className="font-mono">VITE_MAPBOX_ACCESS_TOKEN</span>
                   .
                 </div>
+              </div>
+            </div>
+          ) : !locationObtained ? (
+            <div
+              className="absolute inset-0 flex items-center justify-center"
+              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
+            >
+              <div className="flex flex-col items-center gap-3">
+                <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-sm text-muted-foreground">Getting your location...</span>
               </div>
             </div>
           ) : !mapboxReady ? (

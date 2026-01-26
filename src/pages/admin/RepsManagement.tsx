@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw, GraduationCap, CheckCircle } from 'lucide-react';
 
 type CommissionLevel = 'junior' | 'senior' | 'manager';
 
@@ -26,6 +26,7 @@ interface Rep {
   user_id: string;
   commission_level: CommissionLevel;
   default_commission_percent: number;
+  training_completed: boolean;
   profile: {
     full_name: string | null;
     email: string;
@@ -33,9 +34,9 @@ interface Rep {
 }
 
 const levelColors: Record<CommissionLevel, string> = {
-  'junior': 'bg-orange-500/20 text-orange-700 border-orange-500/30',
-  'senior': 'bg-slate-400/20 text-slate-600 border-slate-400/30',
-  'manager': 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30',
+  'junior': 'bg-[#4A6FA5]/20 text-[#4A6FA5] border-[#4A6FA5]/30',   // Prime Steel Blue
+  'senior': 'bg-[#C9A24D]/20 text-[#C9A24D] border-[#C9A24D]/30',   // Prime Gold
+  'manager': 'bg-[#C9A24D]/30 text-[#C9A24D] border-[#C9A24D]/50',  // Prime Gold (stronger)
 };
 
 export default function RepsManagement() {
@@ -71,6 +72,7 @@ export default function RepsManagement() {
         user_id: rep.user_id,
         commission_level: (rep.commission_level || 'junior') as CommissionLevel,
         default_commission_percent: rep.default_commission_percent || 10,
+        training_completed: rep.training_completed || false,
         profile: {
           full_name: rep.full_name,
           email: rep.email,
@@ -146,6 +148,21 @@ export default function RepsManagement() {
     },
     onError: (error) => {
       toast.error('Failed to sync reps: ' + error.message);
+    },
+  });
+
+  const completeTrainingMutation = useMutation({
+    mutationFn: async (email: string) => {
+      const response = await adminApi.completeTraining(email);
+      if (response.error) throw new Error(response.error);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['reps'] });
+      toast.success(data?.message || 'Training marked as complete');
+    },
+    onError: (error) => {
+      toast.error('Failed to complete training: ' + error.message);
     },
   });
 
@@ -284,11 +301,38 @@ export default function RepsManagement() {
                   <div className="space-y-1">
                     <p className="font-medium">{rep.profile?.full_name || 'Unnamed'}</p>
                     <p className="text-sm text-muted-foreground">{rep.profile?.email}</p>
-                    <Badge variant="outline" className={levelColors[rep.commission_level]}>
-                      {levelInfo?.display_name || rep.commission_level} ({levelInfo?.commission_percent || rep.default_commission_percent}%)
-                    </Badge>
+                    <div className="flex gap-2 flex-wrap">
+                      <Badge variant="outline" className={levelColors[rep.commission_level]}>
+                        {levelInfo?.display_name || rep.commission_level} ({levelInfo?.commission_percent || rep.default_commission_percent}%)
+                      </Badge>
+                      {rep.training_completed ? (
+                        <Badge variant="outline" className="bg-green-500/20 text-green-500 border-green-500/30">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Training Complete
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="bg-orange-500/20 text-orange-500 border-orange-500/30">
+                          Training Required
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                   <div className="flex gap-2">
+                    {!rep.training_completed && rep.profile?.email && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        title="Complete Training"
+                        onClick={() => {
+                          if (confirm(`Mark training as complete for ${rep.profile?.full_name || rep.profile?.email}?`)) {
+                            completeTrainingMutation.mutate(rep.profile!.email);
+                          }
+                        }}
+                        disabled={completeTrainingMutation.isPending}
+                      >
+                        <GraduationCap className="h-4 w-4" />
+                      </Button>
+                    )}
                     <Dialog open={editingRep?.id === rep.id} onOpenChange={(open) => {
                       if (!open) setEditingRep(null);
                       else {

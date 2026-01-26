@@ -38,7 +38,32 @@ async function fetchApi<T>(
 
 // ============ DEALS API ============
 
-export type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'pending' | 'paid' | 'cancelled';
+// Deal status follows the Sign → Build → Collect workflow from training
+export type DealStatus =
+  // SIGN PHASE
+  | 'lead'
+  | 'inspection_scheduled'
+  | 'claim_filed'
+  | 'adjuster_scheduled'
+  | 'adjuster_met'
+  | 'approved'
+  | 'signed'
+  // BUILD PHASE
+  | 'materials_ordered'
+  | 'materials_delivered'
+  | 'install_scheduled'
+  | 'installed'
+  // COLLECT PHASE
+  | 'invoice_sent'
+  | 'depreciation_collected'
+  | 'complete'
+  // Other
+  | 'cancelled'
+  | 'on_hold'
+  // Legacy (for backwards compatibility)
+  | 'permit'
+  | 'pending'
+  | 'paid';
 
 export interface Deal {
   id: string;
@@ -50,18 +75,76 @@ export interface Deal {
   state: string | null;
   zip_code: string | null;
   status: DealStatus;
-  total_price: number;
-  signed_date: string | null;
-  install_date: string | null;
-  completion_date: string | null;
+  notes: string | null;
   created_at: string;
   updated_at: string;
+
+  // Property details
+  roof_type: string | null;
+  roof_squares: number | null;
+  roof_squares_with_waste: number | null;
+  stories: number | null;
+
+  // Insurance info
+  insurance_company: string | null;
+  policy_number: string | null;
+  claim_number: string | null;
+  date_of_loss: string | null;
+  deductible: number | null;
+
+  // Inspection scheduling
+  inspection_date: string | null;
+
+  // Insurance financials
+  rcv: number | null;              // Replacement Cost Value
+  acv: number | null;              // Actual Cash Value
+  depreciation: number | null;     // Depreciation amount
+
+  // Adjuster info
+  adjuster_name: string | null;
+  adjuster_phone: string | null;
+  adjuster_email: string | null;
+  adjuster_meeting_date: string | null;
+
+  // Contract & documents
   contract_signed: boolean | null;
-  notes: string | null;
+  signed_date: string | null;
+  signature_url: string | null;
+  signature_date: string | null;
+  agreement_document_url: string | null;
+
+  // Payment tracking - SIGN phase
+  acv_check_collected: boolean | null;
+  acv_check_amount: number | null;
+  acv_check_date: string | null;
+
+  // BUILD phase
+  materials_ordered_date: string | null;
+  materials_delivered_date: string | null;
+  install_date: string | null;
+  completion_date: string | null;
   permit_file_url: string | null;
   install_images: string[] | null;
   completion_images: string[] | null;
-  payment_requested: boolean | null;
+
+  // COLLECT phase
+  invoice_sent_date: string | null;
+  invoice_amount: number | null;
+  depreciation_check_collected: boolean | null;
+  depreciation_check_amount: number | null;
+  depreciation_check_date: string | null;
+
+  // Supplements
+  supplement_amount: number | null;
+  supplement_approved: boolean | null;
+  supplement_notes: string | null;
+
+  // Totals
+  total_contract_value: number | null;
+  total_price: number;  // Legacy field
+  payment_requested: boolean | null;  // Legacy field
+
+  // Commissions
   deal_commissions?: DealCommission[];
 }
 
@@ -121,6 +204,8 @@ export interface Rep {
 
 export const repsApi = {
   list: () => fetchApi<Rep[]>('/reps'),
+
+  listClosers: () => fetchApi<Rep[]>('/reps?for_assignment=true'),
 
   get: (id: string) => fetchApi<Rep>(`/reps/${id}`),
 
@@ -286,6 +371,12 @@ export const adminApi = {
   syncReps: () =>
     fetchApi<{ message: string; synced: number; skipped: number; total: number }>('/admin/sync-reps', {
       method: 'POST',
+    }),
+
+  completeTraining: (email: string) =>
+    fetchApi<{ message: string; rep_id: string; courses_completed: number }>('/admin/complete-training', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
     }),
 };
 

@@ -19,6 +19,12 @@ export default {
   			ring: 'hsl(var(--ring))',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
+  			// Prime Roofing Brand Colors
+  			'prime-navy': '#0F1E2E',
+  			'prime-gold': '#C9A24D',
+  			'prime-white': '#FFFFFF',
+  			'prime-charcoal': '#2E2E2E',
+  			'prime-steel': '#4A6FA5',
   			primary: {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'

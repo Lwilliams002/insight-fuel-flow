@@ -24,7 +24,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     switch (method) {
       case 'GET':
-        return repId ? await getRep(repId, user) : await listReps(user);
+        return repId ? await getRep(repId, user) : await listReps(user, event);
       case 'POST':
         return await createRep(user, event);
       case 'PUT':
@@ -40,7 +40,24 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   }
 }
 
-async function listReps(user: any) {
+async function listReps(user: any, event: APIGatewayProxyEvent) {
+  // Check if requesting closers for assignment
+  const queryParams = event.queryStringParameters || {};
+  const forAssignment = queryParams.for_assignment === 'true';
+
+  // If requesting closers for assignment, return senior and manager level reps
+  if (forAssignment) {
+    const closers = await query(
+      `SELECT r.*, p.full_name, p.email, p.avatar_url
+       FROM reps r
+       JOIN profiles p ON p.id = r.user_id
+       WHERE r.commission_level IN ('senior', 'manager')
+       AND r.active = true
+       ORDER BY p.full_name`
+    );
+    return success(closers);
+  }
+
   // Admin can see all reps, rep can only see themselves
   if (!isAdmin(user)) {
     const rep = await queryOne(

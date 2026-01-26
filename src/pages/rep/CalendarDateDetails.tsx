@@ -6,13 +6,15 @@ import { ChevronLeft, MapPin, CalendarIcon, Clock, Users } from 'lucide-react';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 
-type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
+type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment' | 'renter' | 'not_interested';
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: '#3B82F6', label: 'Lead' },
-  followup: { color: '#F59E0B', label: 'Follow Up' },
-  installed: { color: '#10B981', label: 'Installed' },
-  appointment: { color: '#8B5CF6', label: 'Appointment' },
+  lead: { color: '#4A6FA5', label: 'Lead' },              // Prime Steel Blue
+  followup: { color: '#C9A24D', label: 'Follow Up' },     // Prime Gold
+  installed: { color: '#2E7D32', label: 'Installed' },    // Professional Green
+  appointment: { color: '#C9A24D', label: 'Appointment' }, // Prime Gold
+  renter: { color: '#78909C', label: 'Renter' },          // Gray Blue
+  not_interested: { color: '#B71C1C', label: 'Not Interested' }, // Dark Red
 };
 
 export default function CalendarDateDetails() {

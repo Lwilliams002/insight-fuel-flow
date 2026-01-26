@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AwsAuthContext';
 
-type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
+type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment' | 'renter' | 'not_interested';
 
 // Local Pin interface for component
 interface Pin {
@@ -74,10 +74,12 @@ interface RepProfile {
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: '#a855f7', label: 'Not Home' },
-  followup: { color: '#ec4899', label: 'Needs Follow-up' },
-  installed: { color: '#14b8a6', label: 'Installed' },
-  appointment: { color: '#f59e0b', label: 'Appointment' },
+  lead: { color: '#4A6FA5', label: 'Not Home' },           // Prime Steel Blue
+  followup: { color: '#C9A24D', label: 'Needs Follow-up' }, // Prime Gold
+  installed: { color: '#2E7D32', label: 'Installed' },      // Professional Green
+  appointment: { color: '#C9A24D', label: 'Appointment' },  // Prime Gold
+  renter: { color: '#78909C', label: 'Renter' },            // Gray Blue
+  not_interested: { color: '#B71C1C', label: 'Not Interested' }, // Dark Red
 };
 
 export default function PinDetails() {
@@ -126,11 +128,26 @@ export default function PinDetails() {
   // Get current user's rep_id from auth context
   const currentRepId = user?.sub;
 
-  // Fetch all reps for closer assignment
-  const { data: reps } = useQuery({
-    queryKey: ['all-reps-for-assignment'],
+  // Fetch current user's rep info to check commission level
+  const { data: currentUserRep } = useQuery({
+    queryKey: ['current-user-rep', currentRepId],
     queryFn: async () => {
       const response = await repsApi.list();
+      if (response.error) throw new Error(response.error);
+      // list() returns only the current user's rep for non-admins
+      return response.data?.[0] || null;
+    },
+    enabled: !!currentRepId,
+  });
+
+  // Check if current user is junior level (requires closer)
+  const isJuniorRep = currentUserRep?.commission_level === 'junior';
+
+  // Fetch senior/manager reps for closer assignment
+  const { data: reps } = useQuery({
+    queryKey: ['closers-for-assignment'],
+    queryFn: async () => {
+      const response = await repsApi.listClosers();
       if (response.error) throw new Error(response.error);
       return (response.data || []).map(rep => ({
         id: rep.id,
@@ -338,6 +355,12 @@ export default function PinDetails() {
   };
 
   const handleSave = () => {
+    // Validate: Junior reps must assign a closer for appointments
+    if (isJuniorRep && formData.status === 'appointment' && !formData.assigned_closer_id) {
+      toast.error('As an entry-level rep, you must assign a closer for appointments');
+      return;
+    }
+
     const appointmentDateTime = getAppointmentDateTime();
 
     if (isNew && lat && lng) {
@@ -534,26 +557,34 @@ export default function PinDetails() {
               <div className="space-y-1 pt-2 border-t border-primary/20">
                 <Label className="text-muted-foreground text-[10px] flex items-center gap-1.5">
                   <Users className="w-3 h-3" />
-                  Assign Closer (optional)
+                  Assign Closer {isJuniorRep ? <span className="text-red-500">*</span> : '(optional)'}
                 </Label>
                 <Select 
                   value={formData.assigned_closer_id} 
                   onValueChange={(value) => setFormData({ ...formData, assigned_closer_id: value === 'none' ? '' : value })}
                 >
-                  <SelectTrigger className="bg-muted border-0 h-9 text-sm">
+                  <SelectTrigger className={`bg-muted border-0 h-9 text-sm ${isJuniorRep && !formData.assigned_closer_id ? 'border border-red-500/50' : ''}`}>
                     <SelectValue placeholder="Select a closer..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">No closer assigned</SelectItem>
-                    {reps?.map((rep) => (
-                      <SelectItem key={rep.id} value={rep.id}>
-                        {rep.full_name || rep.email || 'Unknown'}
-                      </SelectItem>
-                    ))}
+                    {!isJuniorRep && <SelectItem value="none">No closer assigned</SelectItem>}
+                    {reps && reps.length > 0 ? (
+                      reps.map((rep) => (
+                        <SelectItem key={rep.id} value={rep.id}>
+                          {rep.full_name || rep.email || 'Unknown'}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        No senior/manager reps available
+                      </div>
+                    )}
                   </SelectContent>
                 </Select>
                 <p className="text-[10px] text-muted-foreground">
-                  The assigned closer will see this appointment on their calendar.
+                  {isJuniorRep
+                    ? 'As an entry-level rep, you must assign a closer for all appointments.'
+                    : 'The assigned closer will see this appointment on their calendar.'}
                 </p>
               </div>
             </div>

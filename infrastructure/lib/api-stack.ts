@@ -235,6 +235,9 @@ export class ApiStack extends cdk.Stack {
     const syncReps = admin.addResource('sync-reps');
     syncReps.addMethod('POST', new apigateway.LambdaIntegration(adminFunction), authorizerOptions);
 
+    const completeTraining = admin.addResource('complete-training');
+    completeTraining.addMethod('POST', new apigateway.LambdaIntegration(adminFunction), authorizerOptions);
+
     // Init DB (no auth - for initial setup only)
     const initDb = admin.addResource('init-db');
     initDb.addMethod('POST', new apigateway.LambdaIntegration(initDbFunction));

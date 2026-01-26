@@ -4,6 +4,7 @@ import { RepLayout } from '@/components/RepLayout';
 import { KPICard } from '@/components/KPICard';
 import { PayoutChart } from '@/components/PayoutChart';
 import { AccountCard } from '@/components/AccountCard';
+import { NotificationStatus } from '@/components/NotificationPrompt';
 import { DollarSign, Building2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
@@ -111,6 +112,12 @@ export default function RepDashboard() {
   return (
     <RepLayout title="Dashboard">
       <div className="space-y-4 p-4">
+        {/* Notification Settings */}
+        <div className="space-y-2">
+          <h2 className="text-sm font-medium text-muted-foreground">Notifications</h2>
+          <NotificationStatus />
+        </div>
+
         {/* Month Selector */}
         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
           <SelectTrigger className="w-full">

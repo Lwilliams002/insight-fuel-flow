@@ -29,29 +29,29 @@ export function Logo({ className, size = 'md', showText = false }: LogoProps) {
         xmlns="http://www.w3.org/2000/svg"
         className={cn(sizes[size], 'flex-shrink-0')}
       >
-        {/* Abstract roof shape with gradient */}
+        {/* Prime Roofing Logo - Navy with Gold accent */}
         <defs>
-          <linearGradient id="roofGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="hsl(187, 100%, 50%)" />
-            <stop offset="100%" stopColor="hsl(187, 100%, 35%)" />
+          <linearGradient id="navyGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#0F1E2E" />
+            <stop offset="100%" stopColor="#1a2d42" />
           </linearGradient>
-          <linearGradient id="accentGradient" x1="0%" y1="100%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(24, 100%, 50%)" />
-            <stop offset="100%" stopColor="hsl(24, 100%, 60%)" />
+          <linearGradient id="goldGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#C9A24D" />
+            <stop offset="100%" stopColor="#d4b366" />
           </linearGradient>
         </defs>
         
-        {/* Main roof peak */}
+        {/* Main roof peak - Navy */}
         <path
           d="M24 6L4 28H12V42H36V28H44L24 6Z"
-          fill="url(#roofGradient)"
+          fill="url(#navyGradient)"
         />
         
-        {/* Accent line under the peak */}
+        {/* Accent line under the peak - Gold */}
         <path
           d="M24 10L8 26H16L24 17L32 26H40L24 10Z"
-          fill="url(#accentGradient)"
-          opacity="0.9"
+          fill="url(#goldGradient)"
+          opacity="0.95"
         />
         
         {/* Chimney detail */}
@@ -60,7 +60,7 @@ export function Logo({ className, size = 'md', showText = false }: LogoProps) {
           y="14"
           width="6"
           height="10"
-          fill="hsl(0, 0%, 20%)"
+          fill="#0F1E2E"
           rx="1"
         />
       </svg>
@@ -68,9 +68,9 @@ export function Logo({ className, size = 'md', showText = false }: LogoProps) {
       {showText && (
         <div className="flex flex-col">
           <span className={cn('font-bold text-foreground leading-tight', textSizes[size])}>
-            RoofCommission
+            Titan Prime
           </span>
-          <span className="text-xs text-primary font-medium tracking-wider">PRO</span>
+          <span className="text-xs text-primary font-medium tracking-wider">SOLUTIONS</span>
         </div>
       )}
     </div>

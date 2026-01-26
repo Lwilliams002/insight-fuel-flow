@@ -321,10 +321,20 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
   const allowedFields = [
     'homeowner_name', 'homeowner_phone', 'homeowner_email',
     'address', 'city', 'state', 'zip_code',
+    'roof_type', 'roof_squares', 'roof_squares_with_waste', 'stories',
     'status', 'total_price', 'notes',
-    'signed_date', 'install_date', 'completion_date',
-    'contract_signed', 'permit_file_url',
-    'install_images', 'completion_images', 'payment_requested',
+    'insurance_company', 'policy_number', 'claim_number', 'date_of_loss', 'deductible',
+    'inspection_date',
+    'rcv', 'acv', 'depreciation',
+    'adjuster_name', 'adjuster_phone', 'adjuster_email', 'adjuster_meeting_date',
+    'contract_signed', 'signed_date', 'agreement_document_url',
+    'acv_check_collected', 'acv_check_amount', 'acv_check_date',
+    'materials_ordered_date', 'materials_delivered_date', 'install_date', 'completion_date',
+    'permit_file_url', 'install_images', 'completion_images',
+    'invoice_sent_date', 'invoice_amount',
+    'depreciation_check_collected', 'depreciation_check_amount', 'depreciation_check_date',
+    'supplement_amount', 'supplement_approved', 'supplement_notes',
+    'total_contract_value', 'payment_requested',
   ];
 
   for (const field of allowedFields) {

@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { FileSignature, GripVertical } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface DealsKanbanProps {
   deals: Deal[];
@@ -11,19 +12,32 @@ interface DealsKanbanProps {
   isAdmin?: boolean;
 }
 
-const columns: { id: DealStatus; title: string; color: string }[] = [
+// Full admin columns including materials ordering stages
+const adminColumns: { id: DealStatus; title: string; color: string }[] = [
   { id: 'lead', title: 'Lead', color: 'bg-slate-500' },
   { id: 'signed', title: 'Signed', color: 'bg-blue-500' },
-  { id: 'permit', title: 'Permit', color: 'bg-yellow-500' },
-  { id: 'install_scheduled', title: 'Scheduled', color: 'bg-orange-500' },
+  { id: 'materials_ordered', title: 'Materials Ordered', color: 'bg-orange-400' },
+  { id: 'materials_delivered', title: 'Materials Delivered', color: 'bg-orange-500' },
+  { id: 'install_scheduled', title: 'Scheduled', color: 'bg-amber-500' },
   { id: 'installed', title: 'Installed', color: 'bg-teal-500' },
   { id: 'complete', title: 'Complete', color: 'bg-green-500' },
-  { id: 'pending', title: 'Payment Pending', color: 'bg-amber-500' },
   { id: 'paid', title: 'Paid', color: 'bg-emerald-600' },
 ];
 
+// Rep columns - simplified view (reps can only see up to signed, then wait for admin)
+const repColumns: { id: DealStatus; title: string; color: string }[] = [
+  { id: 'lead', title: 'Lead', color: 'bg-slate-500' },
+  { id: 'signed', title: 'Signed', color: 'bg-blue-500' },
+  { id: 'permit', title: 'Permit', color: 'bg-yellow-500' },
+  { id: 'installed', title: 'Installed', color: 'bg-teal-500' },
+  { id: 'pending', title: 'Payment Pending', color: 'bg-amber-500' },
+];
+
+// Build phase statuses that only admins can set (materials ordering and beyond)
+const adminOnlyStatuses: DealStatus[] = ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
+
 // Status requirements - what's needed to move to each status
-const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => boolean; message: string }>> = {
+const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdmin?: boolean) => boolean; message: string }>> = {
   signed: {
     check: (deal) => deal.contract_signed === true,
     message: 'Contract must be signed before marking as Signed',
@@ -32,37 +46,51 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal) => bo
     check: (deal) => !!deal.permit_file_url,
     message: 'Permit document must be uploaded before moving to Permit',
   },
+  materials_ordered: {
+    check: (deal, isAdmin) => isAdmin === true,
+    message: 'Only admins can order materials and advance to build phase',
+  },
+  materials_delivered: {
+    check: (deal, isAdmin) => isAdmin === true,
+    message: 'Only admins can mark materials as delivered',
+  },
   install_scheduled: {
-    check: (deal) => !!deal.install_date,
-    message: 'Install date must be set before scheduling',
+    check: (deal, isAdmin) => isAdmin === true && !!deal.install_date,
+    message: 'Only admins can schedule installations. Install date must be set.',
   },
   installed: {
-    check: (deal) => deal.install_images && deal.install_images.length > 0,
-    message: 'Installation photos must be uploaded before marking as Installed',
+    check: (deal, isAdmin) => isAdmin === true && deal.install_images && deal.install_images.length > 0,
+    message: 'Only admins can mark as installed. Installation photos must be uploaded.',
   },
   complete: {
-    check: (deal) => deal.completion_images && deal.completion_images.length > 0,
-    message: 'Completion photos must be uploaded before marking as Complete',
+    check: (deal, isAdmin) => isAdmin === true && deal.completion_images && deal.completion_images.length > 0,
+    message: 'Only admins can mark as complete. Completion photos must be uploaded.',
   },
   pending: {
     check: () => false, // Can't drag to pending - must use request payment button
     message: 'Use the Request Payment button in the deal details to mark as Pending',
   },
   paid: {
-    check: (deal) => deal.status === 'pending', // Can only move to paid from pending
-    message: 'Deal must be in Pending status (payment requested by rep). Admin approval moves it to Paid.',
+    check: (deal, isAdmin) => isAdmin === true && (deal.status === 'pending' || deal.status === 'complete'),
+    message: 'Only admins can mark as paid. Deal must be in Complete or Pending status.',
   },
 };
 
-export function DealsKanban({ deals, onViewDeal }: DealsKanbanProps) {
+export function DealsKanban({ deals, onViewDeal, isAdmin = false }: DealsKanbanProps) {
   const queryClient = useQueryClient();
 
   const validateStatusChange = (deal: Deal, newStatus: DealStatus): boolean => {
     // Allow moving backwards or to cancelled
     if (newStatus === 'cancelled' || newStatus === 'lead') return true;
     
+    // Check if this is an admin-only status
+    if (adminOnlyStatuses.includes(newStatus) && !isAdmin) {
+      toast.error('Only admins can change to this status');
+      return false;
+    }
+
     const requirement = statusRequirements[newStatus];
-    if (requirement && !requirement.check(deal)) {
+    if (requirement && !requirement.check(deal, isAdmin)) {
       toast.error(requirement.message);
       return false;
     }
@@ -106,6 +134,9 @@ export function DealsKanban({ deals, onViewDeal }: DealsKanbanProps) {
     return deals.filter((deal) => deal.status === status);
   };
 
+  // Use admin columns if isAdmin, otherwise rep columns
+  const columns = isAdmin ? adminColumns : repColumns;
+
   return (
     <ScrollArea className="w-full">
       <div className="flex gap-4 pb-4 min-w-max">
@@ -139,10 +170,13 @@ export function DealsKanban({ deals, onViewDeal }: DealsKanbanProps) {
                 {columnDeals.map((deal) => (
                   <div
                     key={deal.id}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, deal.id)}
+                    draggable={isAdmin} // Only admins can drag
+                    onDragStart={(e) => isAdmin && handleDragStart(e, deal.id)}
                     onClick={() => onViewDeal(deal)}
-                    className="bg-card border border-border rounded-lg p-3 cursor-grab active:cursor-grabbing hover:shadow-md transition-shadow"
+                    className={cn(
+                      "bg-card border border-border rounded-lg p-3 hover:shadow-md transition-shadow",
+                      isAdmin ? "cursor-grab active:cursor-grabbing" : "cursor-pointer"
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex-1 min-w-0">

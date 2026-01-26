@@ -2,24 +2,38 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { dealsApi, repsApi, Deal } from '@/integrations/aws/api';
 import { AdminShell } from '@/components/AdminShell';
-import { DealsTable } from '@/components/crm/DealsTable';
-import { DealsKanban } from '@/components/crm/DealsKanban';
 import { DealWizard } from '@/components/crm/DealWizard';
 import { DealDetailSheet } from '@/components/crm/DealDetailSheet';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Plus, LayoutList, Columns3, Users } from 'lucide-react';
+import { Card, CardContent } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { Plus, Search, Users, DollarSign, FileSignature, ChevronRight, Package, Truck, CheckCircle2, Clock } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
-type ViewMode = 'table' | 'kanban';
+const statusConfig: Record<string, { label: string; color: string; bgColor: string }> = {
+  lead: { label: 'Lead', color: 'text-slate-600', bgColor: 'bg-slate-100' },
+  inspection_scheduled: { label: 'Inspected', color: 'text-blue-600', bgColor: 'bg-blue-100' },
+  claim_filed: { label: 'Claim Filed', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  adjuster_scheduled: { label: 'Adjuster Met', color: 'text-pink-600', bgColor: 'bg-pink-100' },
+  signed: { label: 'Ready', color: 'text-green-600', bgColor: 'bg-green-100' },
+  materials_ordered: { label: 'Ordered', color: 'text-orange-600', bgColor: 'bg-orange-100' },
+  materials_delivered: { label: 'Delivered', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+  install_scheduled: { label: 'Scheduled', color: 'text-cyan-600', bgColor: 'bg-cyan-100' },
+  installed: { label: 'Installed', color: 'text-teal-600', bgColor: 'bg-teal-100' },
+  complete: { label: 'Complete', color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
+  cancelled: { label: 'Cancelled', color: 'text-red-600', bgColor: 'bg-red-100' },
+};
 
 export default function AdminDeals() {
-  const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [wizardOpen, setWizardOpen] = useState(false);
   const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [repFilter, setRepFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
 
-  // Fetch all deals with commission info
+  // Fetch all deals
   const { data: deals, isLoading } = useQuery({
     queryKey: ['deals', 'admin'],
     queryFn: async () => {
@@ -29,7 +43,7 @@ export default function AdminDeals() {
     },
   });
 
-  // Fetch all reps for filter
+  // Fetch all reps
   const { data: allReps } = useQuery({
     queryKey: ['all-reps'],
     queryFn: async () => {
@@ -39,38 +53,82 @@ export default function AdminDeals() {
     },
   });
 
-  const handleViewDeal = (deal: Deal) => {
-    setSelectedDeal(deal);
-  };
-
-  // Filter deals by rep
+  // Filter deals
   const filteredDeals = deals?.filter((deal) => {
-    if (repFilter === 'all') return true;
-    return deal.deal_commissions?.some((c) => c.rep_id === repFilter);
+    if (repFilter !== 'all' && !deal.deal_commissions?.some((c) => c.rep_id === repFilter)) return false;
+    if (statusFilter !== 'all' && deal.status !== statusFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      if (!deal.homeowner_name.toLowerCase().includes(q) && !deal.address.toLowerCase().includes(q)) return false;
+    }
+    return true;
   }) || [];
 
-  // Calculate stats
-  const totalValue = filteredDeals.reduce((sum, deal) => sum + (deal.total_price || 0), 0);
-  const signedDeals = filteredDeals.filter((d) => d.status !== 'lead' && d.status !== 'cancelled').length;
+  // Stats
+  const stats = {
+    total: filteredDeals.length,
+    readyForAction: filteredDeals.filter(d => ['signed', 'materials_ordered', 'materials_delivered', 'install_scheduled', 'installed'].includes(d.status)).length,
+    totalValue: filteredDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
+  };
+
+  // Group deals by status for quick view
+  const needsAction = filteredDeals.filter(d =>
+    ['signed', 'materials_ordered', 'materials_delivered', 'install_scheduled'].includes(d.status)
+  );
 
   return (
     <AdminShell>
-      <div className="flex flex-col h-full p-6">
+      <div className="flex flex-col h-full p-4 space-y-4 overflow-auto">
         {/* Header */}
-        <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 mb-6">
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">CRM - All Deals</h1>
-            <p className="text-muted-foreground text-sm">
-              Manage all deals across your team
-            </p>
+            <h1 className="text-xl font-bold">CRM - All Deals</h1>
+            <p className="text-sm text-muted-foreground">Manage deals across your team</p>
           </div>
+          <Button onClick={() => setWizardOpen(true)} size="sm" className="gap-1">
+            <Plus className="w-4 h-4" />
+            New
+          </Button>
+        </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            {/* Rep Filter */}
+        {/* Stats Cards - Mobile Optimized */}
+        <div className="grid grid-cols-3 gap-2">
+          <Card className="bg-card">
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Total</p>
+              <p className="text-xl font-bold">{stats.total}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-primary/10 border-primary/30">
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Action Needed</p>
+              <p className="text-xl font-bold text-primary">{stats.readyForAction}</p>
+            </CardContent>
+          </Card>
+          <Card className="bg-green-500/10 border-green-500/30">
+            <CardContent className="p-3 text-center">
+              <p className="text-xs text-muted-foreground">Value</p>
+              <p className="text-lg font-bold text-green-600">${(stats.totalValue / 1000).toFixed(0)}k</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Search & Filters */}
+        <div className="space-y-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search deals..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+          <div className="flex gap-2">
             <Select value={repFilter} onValueChange={setRepFilter}>
-              <SelectTrigger className="w-[200px]">
+              <SelectTrigger className="flex-1">
                 <Users className="w-4 h-4 mr-2" />
-                <SelectValue placeholder="Filter by rep" />
+                <SelectValue placeholder="Rep" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Reps</SelectItem>
@@ -81,70 +139,138 @@ export default function AdminDeals() {
                 ))}
               </SelectContent>
             </Select>
-
-            {/* View Toggle */}
-            <Tabs value={viewMode} onValueChange={(v) => setViewMode(v as ViewMode)}>
-              <TabsList>
-                <TabsTrigger value="table" className="gap-1.5">
-                  <LayoutList className="w-4 h-4" />
-                  Table
-                </TabsTrigger>
-                <TabsTrigger value="kanban" className="gap-1.5">
-                  <Columns3 className="w-4 h-4" />
-                  Kanban
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
-
-            <Button onClick={() => setWizardOpen(true)} className="gap-2">
-              <Plus className="w-4 h-4" />
-              New Deal
-            </Button>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="signed">Ready for Install</SelectItem>
+                <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
+                <SelectItem value="materials_delivered">Delivered</SelectItem>
+                <SelectItem value="install_scheduled">Scheduled</SelectItem>
+                <SelectItem value="installed">Installed</SelectItem>
+                <SelectItem value="complete">Complete</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Total Deals</p>
-            <p className="text-2xl font-bold">{filteredDeals.length}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Signed Deals</p>
-            <p className="text-2xl font-bold">{signedDeals}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Pipeline Value</p>
-            <p className="text-2xl font-bold text-primary">${totalValue.toLocaleString()}</p>
-          </div>
-          <div className="bg-card border rounded-lg p-4">
-            <p className="text-sm text-muted-foreground">Active Reps</p>
-            <p className="text-2xl font-bold">{allReps?.length || 0}</p>
-          </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-auto">
-          {isLoading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+        {/* Needs Action Section */}
+        {needsAction.length > 0 && statusFilter === 'all' && (
+          <div className="space-y-2">
+            <h3 className="text-sm font-semibold flex items-center gap-2 text-primary">
+              <Clock className="w-4 h-4" />
+              Needs Your Action ({needsAction.length})
+            </h3>
+            <div className="space-y-2">
+              {needsAction.slice(0, 3).map((deal) => (
+                <Card
+                  key={deal.id}
+                  className="border-primary/30 bg-primary/5 cursor-pointer hover:bg-primary/10 transition-colors"
+                  onClick={() => setSelectedDeal(deal)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{deal.homeowner_name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{deal.address}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge className={cn("text-xs", statusConfig[deal.status]?.bgColor, statusConfig[deal.status]?.color)}>
+                          {statusConfig[deal.status]?.label || deal.status}
+                        </Badge>
+                        <ChevronRight className="w-4 h-4 text-muted-foreground" />
+                      </div>
+                    </div>
+                    <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
+                      {deal.status === 'signed' && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <Package className="w-3 h-3" /> Order Materials
+                        </span>
+                      )}
+                      {deal.status === 'materials_ordered' && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <Truck className="w-3 h-3" /> Mark Delivered
+                        </span>
+                      )}
+                      {deal.status === 'materials_delivered' && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <Clock className="w-3 h-3" /> Schedule Install
+                        </span>
+                      )}
+                      {deal.status === 'install_scheduled' && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <CheckCircle2 className="w-3 h-3" /> Mark Installed
+                        </span>
+                      )}
+                      {deal.rcv && <span>${deal.rcv.toLocaleString()}</span>}
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
-          ) : viewMode === 'table' ? (
-            <DealsTable deals={filteredDeals} onViewDeal={handleViewDeal} isAdmin />
+          </div>
+        )}
+
+        {/* All Deals List */}
+        <div className="space-y-2 flex-1">
+          <h3 className="text-sm font-semibold text-muted-foreground">
+            All Deals ({filteredDeals.length})
+          </h3>
+
+          {isLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : filteredDeals.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <p>No deals found</p>
+            </div>
           ) : (
-            <DealsKanban deals={filteredDeals} onViewDeal={handleViewDeal} isAdmin />
+            <div className="space-y-2">
+              {filteredDeals.map((deal) => (
+                <Card
+                  key={deal.id}
+                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  onClick={() => setSelectedDeal(deal)}
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium truncate">{deal.homeowner_name}</p>
+                          {deal.contract_signed && (
+                            <FileSignature className="w-3 h-3 text-primary flex-shrink-0" />
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground truncate">{deal.address}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge variant="outline" className={cn("text-xs", statusConfig[deal.status]?.color)}>
+                          {statusConfig[deal.status]?.label || deal.status}
+                        </Badge>
+                        {(deal.rcv || deal.total_price) && (
+                          <span className="text-xs font-medium text-green-600">
+                            ${(deal.rcv || deal.total_price || 0).toLocaleString()}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           )}
         </div>
       </div>
 
-      {/* Deal Wizard */}
       <DealWizard open={wizardOpen} onOpenChange={setWizardOpen} isAdmin />
-
-      {/* Deal Detail Sheet - Using shared component for full functionality */}
       <DealDetailSheet
         deal={selectedDeal}
         isOpen={!!selectedDeal}
         onClose={() => setSelectedDeal(null)}
+        isAdmin
       />
     </AdminShell>
   );
