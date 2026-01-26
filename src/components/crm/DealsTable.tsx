@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { dealsApi, Deal, DealStatus } from '@/integrations/aws/api';
 import { format } from 'date-fns';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -10,31 +10,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Search, ChevronUp, ChevronDown, Eye, FileSignature } from 'lucide-react';
 import { toast } from 'sonner';
 
-type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'pending' | 'paid' | 'cancelled';
-
-interface Deal {
-  id: string;
-  homeowner_name: string;
-  homeowner_phone: string | null;
-  homeowner_email: string | null;
-  address: string;
-  city: string | null;
-  state: string | null;
-  zip_code: string | null;
-  status: DealStatus;
-  total_price: number;
-  signed_date: string | null;
-  install_date: string | null;
-  completion_date: string | null;
-  created_at: string;
-  contract_signed: boolean | null;
-  notes: string | null;
-  permit_file_url: string | null;
-  install_images: string[] | null;
-  completion_images: string[] | null;
-  payment_requested: boolean | null;
-  reps?: { rep_name: string; commission_type: string }[];
-}
 
 interface DealsTableProps {
   deals: Deal[];
@@ -110,11 +85,8 @@ export function DealsTable({ deals, onViewDeal }: DealsTableProps) {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dealId, status }: { dealId: string; status: DealStatus }) => {
-      const { error } = await supabase
-        .from('deals')
-        .update({ status })
-        .eq('id', dealId);
-      if (error) throw error;
+      const response = await dealsApi.update(dealId, { status });
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });

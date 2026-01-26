@@ -1,29 +1,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { dealsApi, Deal, DealStatus } from '@/integrations/aws/api';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { toast } from 'sonner';
 import { FileSignature, GripVertical } from 'lucide-react';
 
-type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'paid' | 'cancelled';
-
-interface Deal {
-  id: string;
-  homeowner_name: string;
-  address: string;
-  status: DealStatus;
-  total_price: number;
-  contract_signed: boolean | null;
-  install_date: string | null;
-  permit_file_url: string | null;
-  install_images: string[] | null;
-  completion_images: string[] | null;
-  payment_requested: boolean | null;
-}
-
 interface DealsKanbanProps {
   deals: Deal[];
   onViewDeal: (deal: Deal) => void;
+  isAdmin?: boolean;
 }
 
 const columns: { id: DealStatus; title: string; color: string }[] = [
@@ -86,11 +71,8 @@ export function DealsKanban({ deals, onViewDeal }: DealsKanbanProps) {
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ dealId, newStatus }: { dealId: string; newStatus: DealStatus }) => {
-      const { error } = await supabase
-        .from('deals')
-        .update({ status: newStatus })
-        .eq('id', dealId);
-      if (error) throw error;
+      const response = await dealsApi.update(dealId, { status: newStatus });
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });

@@ -1,6 +1,7 @@
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { pinsApi, Pin } from '@/integrations/aws/api';
+import { useAuth } from '@/contexts/AwsAuthContext';
 import { ChevronLeft, MapPin, CalendarIcon, Clock, Users } from 'lucide-react';
 import { format, parseISO, startOfDay, endOfDay } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
@@ -19,75 +20,43 @@ export default function CalendarDateDetails() {
   const { date } = useParams<{ date: string }>();
   const [searchParams] = useSearchParams();
   const fromTab = searchParams.get('from') || 'calendar';
-  
+  const { user } = useAuth();
+
   const selectedDate = date ? parseISO(date) : new Date();
 
-  // Get current rep ID
-  const { data: repId } = useQuery({
-    queryKey: ['current-rep'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_rep_id');
-      if (error) throw error;
-      return data as string;
-    },
-  });
-  
-  // Fetch pins with appointments on this date (own pins)
-  const { data: ownAppointments, isLoading: loadingOwn } = useQuery({
+  // Fetch all pins and filter by appointment date
+  const { data: appointments, isLoading } = useQuery({
     queryKey: ['calendar-date-appointments', date],
     queryFn: async () => {
-      const dayStart = startOfDay(selectedDate).toISOString();
-      const dayEnd = endOfDay(selectedDate).toISOString();
-      
-      const { data, error } = await supabase
-        .from('rep_pins')
-        .select('*')
-        .eq('status', 'appointment')
-        .gte('appointment_date', dayStart)
-        .lte('appointment_date', dayEnd)
-        .order('appointment_date', { ascending: true });
-      
-      if (error) throw error;
-      return data;
+      const response = await pinsApi.list();
+      if (response.error) throw new Error(response.error);
+
+      const dayStart = startOfDay(selectedDate);
+      const dayEnd = endOfDay(selectedDate);
+
+      // Filter pins that are appointments on this date
+      const filteredPins = (response.data || [])
+        .filter(pin => {
+          if (pin.status !== 'appointment' || !pin.appointment_date) return false;
+          const appointmentDate = new Date(pin.appointment_date);
+          return appointmentDate >= dayStart && appointmentDate <= dayEnd;
+        })
+        .map(pin => ({
+          ...pin,
+          isCloserAssignment: pin.assigned_closer_id === user?.sub && pin.rep_id !== user?.sub,
+        }))
+        .sort((a, b) => {
+          // Sort by appointment_date
+          const dateA = new Date(a.appointment_date!);
+          const dateB = new Date(b.appointment_date!);
+          return dateA.getTime() - dateB.getTime();
+        });
+
+      return filteredPins;
     },
     enabled: !!date,
   });
 
-  // Fetch appointments where user is assigned as closer
-  const { data: closerAppointments, isLoading: loadingCloser } = useQuery({
-    queryKey: ['closer-date-appointments', date, repId],
-    queryFn: async () => {
-      if (!repId) return [];
-      const dayStart = startOfDay(selectedDate).toISOString();
-      const dayEnd = endOfDay(selectedDate).toISOString();
-      
-      const { data, error } = await supabase
-        .from('rep_pins')
-        .select('*')
-        .eq('status', 'appointment')
-        .eq('assigned_closer_id', repId)
-        .gte('appointment_date', dayStart)
-        .lte('appointment_date', dayEnd)
-        .order('appointment_date', { ascending: true });
-      
-      if (error) {
-        console.log('Closer appointments query error:', error);
-        return [];
-      }
-      return data;
-    },
-    enabled: !!date && !!repId,
-  });
-
-  // Combine and deduplicate appointments
-  const appointments = [
-    ...(ownAppointments || []).map(apt => ({ ...apt, isCloserAssignment: false })),
-    ...(closerAppointments || [])
-      .filter(apt => !(ownAppointments || []).some(own => own.id === apt.id))
-      .map(apt => ({ ...apt, isCloserAssignment: true })),
-  ];
-
-  const isLoading = loadingOwn || loadingCloser;
 
   const handleBack = () => {
     navigate(`/map?tab=${fromTab}`);

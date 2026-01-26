@@ -29,6 +29,8 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         return await createRep(user, event);
       case 'PUT':
         return repId ? await updateRep(repId, user, event) : badRequest('Rep ID required');
+      case 'DELETE':
+        return repId ? await deleteRep(repId, user) : badRequest('Rep ID required');
       default:
         return badRequest(`Unsupported method: ${method}`);
     }
@@ -145,3 +147,21 @@ async function updateRep(repId: string, user: any, event: APIGatewayProxyEvent) 
 
   return success(result);
 }
+
+async function deleteRep(repId: string, user: any) {
+  if (!isAdmin(user)) {
+    return forbidden('Only admins can delete reps');
+  }
+
+  // Check if rep exists
+  const rep = await queryOne('SELECT * FROM reps WHERE id = $1', [repId]);
+  if (!rep) {
+    return notFound('Rep not found');
+  }
+
+  // Delete the rep (cascade will handle related records based on DB constraints)
+  await execute('DELETE FROM reps WHERE id = $1', [repId]);
+
+  return success({ message: 'Rep deleted successfully' });
+}
+

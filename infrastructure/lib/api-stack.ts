@@ -134,6 +134,7 @@ export class ApiStack extends cdk.Stack {
         'cognito-idp:AdminAddUserToGroup',
         'cognito-idp:AdminSetUserPassword',
         'cognito-idp:AdminUpdateUserAttributes',
+        'cognito-idp:ListUsersInGroup',
       ],
       resources: [userPool.userPoolArn],
     }));
@@ -188,6 +189,7 @@ export class ApiStack extends cdk.Stack {
     const repById = reps.addResource('{id}');
     repById.addMethod('GET', new apigateway.LambdaIntegration(repsFunction), authorizerOptions);
     repById.addMethod('PUT', new apigateway.LambdaIntegration(repsFunction), authorizerOptions);
+    repById.addMethod('DELETE', new apigateway.LambdaIntegration(repsFunction), authorizerOptions);
 
     // Pins
     const pins = this.api.root.addResource('pins');
@@ -221,6 +223,9 @@ export class ApiStack extends cdk.Stack {
 
     const createAdmin = admin.addResource('create-admin');
     createAdmin.addMethod('POST', new apigateway.LambdaIntegration(adminFunction), authorizerOptions);
+
+    const syncReps = admin.addResource('sync-reps');
+    syncReps.addMethod('POST', new apigateway.LambdaIntegration(adminFunction), authorizerOptions);
 
     // Init DB (no auth - for initial setup only)
     const initDb = admin.addResource('init-db');

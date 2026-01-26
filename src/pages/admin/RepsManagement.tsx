@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { repsApi, adminApi } from '@/integrations/aws/api';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,9 +10,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react';
 
-type CommissionLevel = 'bronze' | 'silver' | 'gold';
+type CommissionLevel = 'junior' | 'senior' | 'manager';
 
 interface CommissionLevelInfo {
   level: CommissionLevel;
@@ -33,9 +33,9 @@ interface Rep {
 }
 
 const levelColors: Record<CommissionLevel, string> = {
-  bronze: 'bg-orange-500/20 text-orange-700 border-orange-500/30',
-  silver: 'bg-slate-400/20 text-slate-600 border-slate-400/30',
-  gold: 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30',
+  'junior': 'bg-orange-500/20 text-orange-700 border-orange-500/30',
+  'senior': 'bg-slate-400/20 text-slate-600 border-slate-400/30',
+  'manager': 'bg-yellow-500/20 text-yellow-700 border-yellow-500/30',
 };
 
 export default function RepsManagement() {
@@ -45,75 +45,54 @@ export default function RepsManagement() {
     email: '',
     password: '',
     fullName: '',
-    commissionLevel: 'silver' as CommissionLevel,
+    commissionLevel: 'junior' as CommissionLevel,
   });
   const queryClient = useQueryClient();
 
   const { data: levels } = useQuery({
     queryKey: ['commission-levels'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('commission_levels')
-        .select('*')
-        .order('commission_percent', { ascending: true });
-      if (error) throw error;
-      return data as CommissionLevelInfo[];
+      // Commission levels matching database enum
+      return [
+        { level: 'junior', display_name: 'Junior', commission_percent: 5, description: 'Entry level' },
+        { level: 'senior', display_name: 'Senior', commission_percent: 10, description: 'Experienced rep' },
+        { level: 'manager', display_name: 'Manager', commission_percent: 13, description: 'Team manager' },
+      ] as CommissionLevelInfo[];
     },
   });
 
   const { data: reps, isLoading } = useQuery({
     queryKey: ['reps'],
     queryFn: async () => {
-      const { data: repsData, error: repsError } = await supabase
-        .from('reps')
-        .select('id, user_id, commission_level, default_commission_percent')
-        .order('created_at', { ascending: false });
-
-      if (repsError) throw repsError;
-
-      const userIds = repsData.map(r => r.user_id);
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email')
-        .in('id', userIds);
-
-      if (profilesError) throw profilesError;
-
-      return repsData.map(rep => ({
-        ...rep,
-        profile: profilesData.find(p => p.id === rep.user_id) || null,
+      const response = await repsApi.list();
+      if (response.error) throw new Error(response.error);
+      return (response.data || []).map(rep => ({
+        id: rep.id,
+        user_id: rep.user_id,
+        commission_level: (rep.commission_level || 'junior') as CommissionLevel,
+        default_commission_percent: rep.default_commission_percent || 10,
+        profile: {
+          full_name: rep.full_name,
+          email: rep.email,
+        },
       })) as Rep[];
     },
   });
 
   const createRepMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const { data: sessionData } = await supabase.auth.getSession();
-      
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/create-rep`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionData.session?.access_token}`,
-          },
-          body: JSON.stringify({
-            email: data.email,
-            password: data.password,
-            fullName: data.fullName,
-            commissionLevel: data.commissionLevel,
-          }),
-        }
-      );
+      const response = await adminApi.createRep({
+        email: data.email,
+        password: data.password,
+        fullName: data.fullName,
+        commissionLevel: data.commissionLevel,
+      });
 
-      const result = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(result.error || 'Failed to create rep');
+      if (response.error) {
+        throw new Error(response.error);
       }
       
-      return result;
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reps'] });
@@ -128,12 +107,8 @@ export default function RepsManagement() {
 
   const updateRepMutation = useMutation({
     mutationFn: async ({ repId, commissionLevel }: { repId: string; commissionLevel: CommissionLevel }) => {
-      const { error } = await supabase
-        .from('reps')
-        .update({ commission_level: commissionLevel })
-        .eq('id', repId);
-
-      if (error) throw error;
+      const response = await repsApi.update(repId, { commission_level: commissionLevel });
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reps'] });
@@ -147,8 +122,8 @@ export default function RepsManagement() {
 
   const deleteRepMutation = useMutation({
     mutationFn: async (repId: string) => {
-      const { error } = await supabase.from('reps').delete().eq('id', repId);
-      if (error) throw error;
+      const response = await repsApi.delete(repId);
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['reps'] });
@@ -159,12 +134,27 @@ export default function RepsManagement() {
     },
   });
 
+  const syncRepsMutation = useMutation({
+    mutationFn: async () => {
+      const response = await adminApi.syncReps();
+      if (response.error) throw new Error(response.error);
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['reps'] });
+      toast.success(data?.message || 'Reps synced successfully');
+    },
+    onError: (error) => {
+      toast.error('Failed to sync reps: ' + error.message);
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       email: '',
       password: '',
       fullName: '',
-      commissionLevel: 'silver',
+      commissionLevel: 'junior',
     });
   };
 
@@ -192,13 +182,22 @@ export default function RepsManagement() {
           <p className="text-muted-foreground">
             {reps?.length || 0} sales reps
           </p>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm}>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Rep
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              onClick={() => syncRepsMutation.mutate()}
+              disabled={syncRepsMutation.isPending}
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${syncRepsMutation.isPending ? 'animate-spin' : ''}`} />
+              {syncRepsMutation.isPending ? 'Syncing...' : 'Sync from Cognito'}
+            </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button onClick={resetForm}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Rep
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create New Rep</DialogTitle>
@@ -264,6 +263,7 @@ export default function RepsManagement() {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {isLoading ? (
@@ -366,3 +366,4 @@ export default function RepsManagement() {
     </AdminLayout>
   );
 }
+

@@ -25,8 +25,14 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     switch (method) {
       case 'GET':
         return dealId ? await getDeal(dealId, user) : await listDeals(user, event);
-      case 'POST':
+      case 'POST': {
+        // Check if this is a "create from pin" request
+        const body = parseBody(event);
+        if (body?.pin_id) {
+          return await createDealFromPin(user, event);
+        }
         return await createDeal(user, event);
+      }
       case 'PUT':
         return dealId ? await updateDeal(dealId, user, event) : badRequest('Deal ID required');
       case 'DELETE':
@@ -179,6 +185,109 @@ async function createDeal(user: any, event: APIGatewayProxyEvent) {
     }
 
     return deal;
+  });
+
+  return created(result);
+}
+
+async function createDealFromPin(user: any, event: APIGatewayProxyEvent) {
+  const body = parseBody(event);
+  if (!body) {
+    return badRequest('Request body required');
+  }
+
+  const { pin_id } = body;
+  if (!pin_id) {
+    return badRequest('pin_id is required');
+  }
+
+  const repId = await getRepId(user.sub);
+  if (!repId && !isAdmin(user)) {
+    return forbidden('Only reps can create deals');
+  }
+
+  // Get the pin data
+  const pin = await queryOne(
+    `SELECT * FROM rep_pins WHERE id = $1`,
+    [pin_id]
+  );
+
+  if (!pin) {
+    return notFound('Pin not found');
+  }
+
+  // Check if user has access to this pin
+  if (!isAdmin(user) && pin.rep_id !== repId && pin.assigned_closer_id !== repId) {
+    return forbidden('Access denied');
+  }
+
+  // Check if pin already has a deal
+  if (pin.deal_id) {
+    return badRequest('This pin already has an associated deal');
+  }
+
+  const result = await withTransaction(async (client) => {
+    // Create the deal from pin data
+    const dealResult = await client.query(
+      `INSERT INTO deals (
+        homeowner_name, homeowner_phone, homeowner_email,
+        address, city, state, zip_code,
+        status, total_price, notes
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      RETURNING *`,
+      [
+        pin.homeowner_name || body.homeowner_name,
+        pin.homeowner_phone || body.homeowner_phone,
+        pin.homeowner_email || body.homeowner_email,
+        pin.address || body.address,
+        pin.city || body.city,
+        pin.state || body.state,
+        pin.zip_code || body.zip_code,
+        body.status || 'lead',
+        body.total_price || 0,
+        pin.notes || body.notes,
+      ]
+    );
+
+    const deal = dealResult.rows[0];
+
+    // Create commission record for the rep who owns the pin
+    await client.query(
+      `INSERT INTO deal_commissions (
+        deal_id, rep_id, commission_type, commission_percent, commission_amount
+      ) VALUES ($1, $2, $3, $4, $5)`,
+      [
+        deal.id,
+        pin.rep_id,
+        body.commission_type || 'self_gen',
+        body.commission_percent || 0,
+        body.commission_amount || 0,
+      ]
+    );
+
+    // If there's an assigned closer, add them as well
+    if (pin.assigned_closer_id && pin.assigned_closer_id !== pin.rep_id) {
+      await client.query(
+        `INSERT INTO deal_commissions (
+          deal_id, rep_id, commission_type, commission_percent, commission_amount
+        ) VALUES ($1, $2, $3, $4, $5)`,
+        [
+          deal.id,
+          pin.assigned_closer_id,
+          'closer',
+          body.closer_commission_percent || 0,
+          body.closer_commission_amount || 0,
+        ]
+      );
+    }
+
+    // Update the pin with the deal_id and change status to 'installed'
+    await client.query(
+      `UPDATE rep_pins SET deal_id = $1, status = 'installed', updated_at = NOW() WHERE id = $2`,
+      [deal.id, pin_id]
+    );
+
+    return { deal, pin_id };
   });
 
   return created(result);

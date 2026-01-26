@@ -4,8 +4,9 @@ import {
   AdminCreateUserCommand,
   AdminAddUserToGroupCommand,
   AdminSetUserPasswordCommand,
+  ListUsersInGroupCommand,
 } from '@aws-sdk/client-cognito-identity-provider';
-import { queryOne, execute } from '../shared/database';
+import { queryOne, execute, query } from '../shared/database';
 import {
   getUserFromEvent,
   isAdmin,
@@ -39,6 +40,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     }
     if (path.includes('create-admin')) {
       return await createAdmin(event);
+    }
+    if (path.includes('sync-reps')) {
+      return await syncReps();
     }
     return badRequest('Unknown admin action');
   } catch (error) {
@@ -127,8 +131,8 @@ async function createRep(event: APIGatewayProxyEvent) {
       userId: cognitoUserId,
       rep,
     });
-  } catch (error: any) {
-    if (error.name === 'UsernameExistsException') {
+  } catch (error) {
+    if ((error as { name?: string }).name === 'UsernameExistsException') {
       return badRequest('A user with this email already exists');
     }
     throw error;
@@ -206,10 +210,87 @@ async function createAdmin(event: APIGatewayProxyEvent) {
       message: 'Admin created successfully',
       userId: cognitoUserId,
     });
-  } catch (error: any) {
-    if (error.name === 'UsernameExistsException') {
+  } catch (error) {
+    if ((error as { name?: string }).name === 'UsernameExistsException') {
       return badRequest('A user with this email already exists');
     }
     throw error;
   }
 }
+
+async function syncReps() {
+  // List all users in the 'rep' group from Cognito
+  const listUsersCommand = new ListUsersInGroupCommand({
+    UserPoolId: USER_POOL_ID,
+    GroupName: 'rep',
+    Limit: 60,
+  });
+
+  const cognitoResponse = await cognitoClient.send(listUsersCommand);
+  const cognitoUsers = cognitoResponse.Users || [];
+
+  let synced = 0;
+  let skipped = 0;
+
+  for (const cognitoUser of cognitoUsers) {
+    const username = cognitoUser.Username;
+    if (!username) continue;
+
+    // Get user attributes
+    const emailAttr = cognitoUser.Attributes?.find(a => a.Name === 'email');
+    const nameAttr = cognitoUser.Attributes?.find(a => a.Name === 'name');
+    const email = emailAttr?.Value || username;
+    const fullName = nameAttr?.Value || email.split('@')[0];
+
+    // Check if profile already exists
+    const existingProfile = await queryOne(
+      'SELECT id FROM profiles WHERE id = $1',
+      [username]
+    );
+
+    if (existingProfile) {
+      skipped++;
+      continue;
+    }
+
+    // Create profile
+    await execute(
+      `INSERT INTO profiles (id, email, full_name)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (id) DO UPDATE SET email = $2, full_name = $3`,
+      [username, email, fullName]
+    );
+
+    // Create user role
+    await execute(
+      `INSERT INTO user_roles (user_id, role)
+       VALUES ($1, 'rep')
+       ON CONFLICT (user_id) DO UPDATE SET role = 'rep'`,
+      [username]
+    );
+
+    // Check if rep record exists
+    const existingRep = await queryOne(
+      'SELECT id FROM reps WHERE user_id = $1',
+      [username]
+    );
+
+    if (!existingRep) {
+      await execute(
+        `INSERT INTO reps (user_id, commission_level, can_self_gen)
+         VALUES ($1, 'junior', true)`,
+        [username]
+      );
+    }
+
+    synced++;
+  }
+
+  return success({
+    message: `Synced ${synced} rep(s), ${skipped} already existed`,
+    synced,
+    skipped,
+    total: cognitoUsers.length,
+  });
+}
+

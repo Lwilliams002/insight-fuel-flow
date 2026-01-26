@@ -38,6 +38,8 @@ async function fetchApi<T>(
 
 // ============ DEALS API ============
 
+export type DealStatus = 'lead' | 'signed' | 'permit' | 'install_scheduled' | 'installed' | 'complete' | 'pending' | 'paid' | 'cancelled';
+
 export interface Deal {
   id: string;
   homeowner_name: string;
@@ -47,7 +49,7 @@ export interface Deal {
   city: string | null;
   state: string | null;
   zip_code: string | null;
-  status: string;
+  status: DealStatus;
   total_price: number;
   signed_date: string | null;
   install_date: string | null;
@@ -85,6 +87,12 @@ export const dealsApi = {
       body: JSON.stringify(deal),
     }),
 
+  createFromPin: (pinId: string, dealData?: Partial<Deal>) =>
+    fetchApi<{ deal: Deal; pin_id: string }>('/deals', {
+      method: 'POST',
+      body: JSON.stringify({ pin_id: pinId, ...dealData }),
+    }),
+
   update: (id: string, deal: Partial<Deal>) =>
     fetchApi<Deal>(`/deals/${id}`, {
       method: 'PUT',
@@ -101,6 +109,7 @@ export interface Rep {
   id: string;
   user_id: string;
   commission_level: string;
+  default_commission_percent?: number;
   can_self_gen: boolean;
   manager_id: string | null;
   active: boolean;
@@ -125,6 +134,9 @@ export const repsApi = {
       method: 'PUT',
       body: JSON.stringify(rep),
     }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/reps/${id}`, { method: 'DELETE' }),
 };
 
 // ============ PINS API ============
@@ -132,6 +144,7 @@ export const repsApi = {
 export interface Pin {
   id: string;
   rep_id: string;
+  deal_id: string | null;
   homeowner_name: string;
   homeowner_phone: string | null;
   homeowner_email: string | null;
@@ -144,6 +157,8 @@ export interface Pin {
   status: string;
   notes: string | null;
   appointment_date: string | null;
+  appointment_end_date: string | null;
+  appointment_all_day: boolean | null;
   document_url: string | null;
   assigned_closer_id: string | null;
   outcome: string | null;
@@ -152,6 +167,7 @@ export interface Pin {
   created_at: string;
   updated_at: string;
   rep_name?: string;
+  closer_name?: string;
 }
 
 export const pinsApi = {
@@ -264,5 +280,10 @@ export const adminApi = {
     fetchApi<{ message: string; userId: string }>('/admin/create-admin', {
       method: 'POST',
       body: JSON.stringify(params),
+    }),
+
+  syncReps: () =>
+    fetchApi<{ message: string; synced: number; skipped: number; total: number }>('/admin/sync-reps', {
+      method: 'POST',
     }),
 };

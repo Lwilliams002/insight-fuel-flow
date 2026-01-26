@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { dealsApi, Deal } from '@/integrations/aws/api';
 import { RepLayout } from '@/components/RepLayout';
 import { DealsTable } from '@/components/crm/DealsTable';
 import { DealsKanban } from '@/components/crm/DealsKanban';
@@ -15,33 +15,19 @@ type ViewMode = 'table' | 'kanban';
 export default function RepDeals() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [selectedDeal, setSelectedDeal] = useState<any | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
 
   // Fetch deals for this rep (via deal_commissions)
   const { data: deals, isLoading } = useQuery({
     queryKey: ['deals', 'rep'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deals')
-        .select(`
-          *,
-          deal_commissions (
-            id,
-            commission_type,
-            commission_percent,
-            commission_amount,
-            paid,
-            rep_id
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data;
+      const response = await dealsApi.list();
+      if (response.error) throw new Error(response.error);
+      return response.data || [];
     },
   });
 
-  const handleViewDeal = (deal: any) => {
+  const handleViewDeal = (deal: Deal) => {
     setSelectedDeal(deal);
   };
 

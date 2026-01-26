@@ -3,7 +3,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import type mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
-import { supabase } from "@/integrations/supabase/client";
+import { pinsApi, Pin as AwsPin } from "@/integrations/aws/api";
+import { useAuth } from "@/contexts/AwsAuthContext";
+import { awsConfig } from "@/integrations/aws/config";
 import { BottomNav } from "@/components/BottomNav";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -37,6 +39,7 @@ const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | un
 
 type PinStatus = "lead" | "followup" | "installed" | "appointment";
 
+// Map AWS Pin to local Pin format for compatibility
 interface Pin {
   id: string;
   latitude: number;
@@ -54,6 +57,26 @@ interface Pin {
   rep_id: string;
 }
 
+// Convert AWS Pin to local Pin format
+function mapAwsPinToPin(awsPin: AwsPin): Pin {
+  return {
+    id: awsPin.id,
+    latitude: awsPin.lat,
+    longitude: awsPin.lng,
+    status: awsPin.status as PinStatus,
+    address: awsPin.address,
+    homeowner_name: awsPin.homeowner_name,
+    notes: awsPin.notes,
+    created_at: awsPin.created_at,
+    deal_id: awsPin.deal_id,
+    appointment_date: awsPin.appointment_date,
+    appointment_end_date: awsPin.appointment_end_date,
+    appointment_all_day: awsPin.appointment_all_day,
+    assigned_closer_id: awsPin.assigned_closer_id,
+    rep_id: awsPin.rep_id,
+  };
+}
+
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
   lead: { color: "#a855f7", label: "Not Home" },
   followup: { color: "#ec4899", label: "Needs Follow-up" },
@@ -69,6 +92,7 @@ interface NewPinData {
 export default function RepMap() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { user, getIdToken } = useAuth();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -104,31 +128,21 @@ export default function RepMap() {
 
     (async () => {
       try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
+        const accessToken = await getIdToken();
         if (!accessToken) return;
 
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-token`, {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        });
-
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || "Failed to load token");
-        if (!cancelled) setMapboxToken(json.token);
+        // For now, just use the env var - backend token endpoint can be added later
+        // The mapbox token should be set via VITE_MAPBOX_ACCESS_TOKEN
+        console.log("Mapbox token not found in env, please set VITE_MAPBOX_ACCESS_TOKEN");
       } catch (e) {
-        console.error("Failed to fetch Mapbox token:", e);
+        console.error("Failed to check for Mapbox token:", e);
       }
     })();
 
     return () => {
       cancelled = true;
     };
-  }, [mapboxToken]);
+  }, [mapboxToken, getIdToken]);
 
   // Dynamically load mapbox-gl only when needed (on map view)
   useEffect(() => {
@@ -275,47 +289,41 @@ export default function RepMap() {
     }
   }, [activeView]);
 
-  // Fetch rep's pins
+  // Fetch rep's pins from AWS
   const { data: pins, isLoading } = useQuery({
     queryKey: ["rep-pins"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("rep_pins").select("*").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data as Pin[];
+      const response = await pinsApi.list();
+      if (response.error) throw new Error(response.error);
+      // Map AWS pins to local format
+      return (response.data || []).map(mapAwsPinToPin);
     },
     staleTime: 30000, // 30 seconds - prevents refetch on every mount
   });
 
-  // Get rep_id for creating pins
-  const { data: repData } = useQuery({
-    queryKey: ["current-rep"],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("get_rep_id");
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 60000, // 1 minute - rep data rarely changes
-  });
+  // Get current user's rep_id from auth context
+  const currentRepId = user?.sub;
 
   // Fetch appointments where current rep is assigned as closer (separate from own pins)
   const { data: closerAppointments } = useQuery({
-    queryKey: ["closer-appointments", repData],
+    queryKey: ["closer-appointments", currentRepId],
     queryFn: async () => {
-      if (!repData) return [];
-      // Admin RLS allows this query since closers need to see their assigned appointments
-      const { data, error } = await supabase
-        .from("rep_pins")
-        .select("*")
-        .eq("assigned_closer_id", repData)
-        .eq("status", "appointment")
-        .order("appointment_date", { ascending: true });
-      if (error) {
-        console.log("Closer appointments query error (may be RLS):", error);
+      if (!currentRepId) return [];
+      // Fetch all pins and filter for appointments where current user is assigned as closer
+      const response = await pinsApi.list();
+      if (response.error) {
+        console.log("Closer appointments query error:", response.error);
         return [];
       }
-      return data as Pin[];
+      return (response.data || [])
+        .filter(pin => pin.assigned_closer_id === currentRepId && pin.status === "appointment")
+        .map(mapAwsPinToPin)
+        .sort((a, b) => {
+          if (!a.appointment_date || !b.appointment_date) return 0;
+          return new Date(a.appointment_date).getTime() - new Date(b.appointment_date).getTime();
+        });
     },
-    enabled: !!repData,
+    enabled: !!currentRepId,
     staleTime: 30000, // 30 seconds
   });
 
@@ -483,15 +491,12 @@ export default function RepMap() {
         return;
       }
 
-      const { data: existingPin, error: checkError } = await supabase.rpc("check_address_exists", {
-        check_address: address,
-      });
+      // Check if address already exists in pins
+      const addressExists = pins?.some(pin =>
+        pin.address?.toLowerCase().trim() === address.toLowerCase().trim()
+      );
 
-      if (checkError) {
-        console.error("Error checking address:", checkError);
-      }
-
-      if (existingPin && existingPin.length > 0 && existingPin[0].exists_already) {
+      if (addressExists) {
         toast.dismiss(loadingToast);
         toast.error("This address already has a pin. Please contact management.", { duration: 5000 });
         return;
@@ -870,7 +875,12 @@ export default function RepMap() {
                 {selectedDateAppointments.length > 0 ? (
                   <div className="space-y-0.5">
                     {selectedDateAppointments
-                      .sort((a, b) => new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime())
+                      .sort((a, b) => {
+                        // All-day appointments first, then by time
+                        if (a.appointment_all_day && !b.appointment_all_day) return -1;
+                        if (!a.appointment_all_day && b.appointment_all_day) return 1;
+                        return new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime();
+                      })
                       .map((pin) => {
                         const apptTime = new Date(pin.appointment_date!);
                         const initial = (pin.homeowner_name?.[0] || "A").toUpperCase();
@@ -884,7 +894,7 @@ export default function RepMap() {
                             {/* Time */}
                             <div className="w-14 text-left shrink-0">
                               <div className="text-xs font-medium text-muted-foreground">
-                                {format(apptTime, "h:mm a")}
+                                {pin.appointment_all_day ? "All Day" : format(apptTime, "h:mm a")}
                               </div>
                             </div>
 

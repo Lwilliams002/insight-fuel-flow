@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import { supabase } from '@/integrations/supabase/client';
+import { pinsApi, repsApi, Pin as AwsPin, Rep } from '@/integrations/aws/api';
 import { AdminLayout } from '@/components/AdminLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -32,15 +32,32 @@ interface Pin {
   deal_id: string | null;
   appointment_date: string | null;
   rep_id: string;
+  rep_name?: string;
+}
+
+// Convert AWS Pin to local format
+function mapAwsPinToPin(awsPin: AwsPin): Pin {
+  return {
+    id: awsPin.id,
+    latitude: awsPin.lat,
+    longitude: awsPin.lng,
+    status: awsPin.status as PinStatus,
+    address: awsPin.address,
+    homeowner_name: awsPin.homeowner_name,
+    notes: awsPin.notes,
+    created_at: awsPin.created_at,
+    deal_id: awsPin.deal_id,
+    appointment_date: awsPin.appointment_date,
+    rep_id: awsPin.rep_id,
+    rep_name: awsPin.rep_name,
+  };
 }
 
 interface RepProfile {
   id: string;
   user_id: string;
-  profile: {
-    full_name: string | null;
-    email: string;
-  } | null;
+  full_name: string | null;
+  email: string;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
@@ -65,49 +82,20 @@ export default function AdminMap() {
   const [reassignSheetOpen, setReassignSheetOpen] = useState(false);
   const [newRepId, setNewRepId] = useState<string>('');
 
-  // Fallback: fetch token from backend if env var isn't present
+  // Mapbox token from env
   useEffect(() => {
-    if (mapboxToken) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const accessToken = sessionData.session?.access_token;
-        if (!accessToken) return;
-
-        const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/mapbox-token`, {
-          method: 'GET',
-          cache: 'no-store',
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-          },
-        });
-
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || 'Failed to load token');
-        if (!cancelled) setMapboxToken(json.token);
-      } catch (e) {
-        console.error('Failed to fetch Mapbox token:', e);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
+    if (!mapboxToken) {
+      console.log('Mapbox token not found, please set VITE_MAPBOX_ACCESS_TOKEN');
+    }
   }, [mapboxToken]);
 
-  // Fetch all pins (admin has access via RLS)
+  // Fetch all pins (admin has access to all pins via AWS API)
   const { data: pins, isLoading: pinsLoading } = useQuery({
     queryKey: ['admin-all-pins'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rep_pins')
-        .select('*')
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data as Pin[];
+      const response = await pinsApi.list();
+      if (response.error) throw new Error(response.error);
+      return (response.data || []).map(mapAwsPinToPin);
     },
   });
 
@@ -115,11 +103,14 @@ export default function AdminMap() {
   const { data: reps } = useQuery({
     queryKey: ['admin-reps-profiles'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reps')
-        .select('id, user_id, profiles!reps_user_id_fkey(full_name, email)');
-      if (error) throw error;
-      return data as unknown as RepProfile[];
+      const response = await repsApi.list();
+      if (response.error) throw new Error(response.error);
+      return (response.data || []).map(rep => ({
+        id: rep.id,
+        user_id: rep.user_id,
+        full_name: rep.full_name,
+        email: rep.email,
+      })) as RepProfile[];
     },
   });
 
@@ -127,7 +118,7 @@ export default function AdminMap() {
   const repLookup = useMemo(() => {
     const lookup: Record<string, string> = {};
     reps?.forEach(rep => {
-      const name = rep.profile?.full_name || rep.profile?.email || 'Unknown Rep';
+      const name = rep.full_name || rep.email || 'Unknown Rep';
       lookup[rep.id] = name;
     });
     return lookup;
@@ -136,11 +127,8 @@ export default function AdminMap() {
   // Reassign pin mutation
   const reassignPinMutation = useMutation({
     mutationFn: async ({ pinId, repId }: { pinId: string; repId: string }) => {
-      const { error } = await supabase
-        .from('rep_pins')
-        .update({ rep_id: repId })
-        .eq('id', pinId);
-      if (error) throw error;
+      const response = await pinsApi.update(pinId, { rep_id: repId });
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admin-all-pins'] });
@@ -330,7 +318,7 @@ export default function AdminMap() {
                   <SelectItem value="all">All Reps</SelectItem>
                   {reps?.map(rep => (
                     <SelectItem key={rep.id} value={rep.id}>
-                      {rep.profile?.full_name || rep.profile?.email || 'Unknown'}
+                      {rep.full_name || rep.email || 'Unknown'}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -516,7 +504,7 @@ export default function AdminMap() {
                 <SelectContent>
                   {reps?.filter(rep => rep.id !== selectedPin?.rep_id).map(rep => (
                     <SelectItem key={rep.id} value={rep.id}>
-                      {rep.profile?.full_name || rep.profile?.email || 'Unknown'}
+                      {rep.full_name || rep.email || 'Unknown'}
                     </SelectItem>
                   ))}
                 </SelectContent>

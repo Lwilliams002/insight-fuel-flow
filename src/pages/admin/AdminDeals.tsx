@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { dealsApi, repsApi, Deal } from '@/integrations/aws/api';
 import { AdminShell } from '@/components/AdminShell';
 import { DealsTable } from '@/components/crm/DealsTable';
 import { DealsKanban } from '@/components/crm/DealsKanban';
@@ -16,35 +16,16 @@ type ViewMode = 'table' | 'kanban';
 export default function AdminDeals() {
   const [viewMode, setViewMode] = useState<ViewMode>('table');
   const [wizardOpen, setWizardOpen] = useState(false);
-  const [selectedDeal, setSelectedDeal] = useState<any | null>(null);
+  const [selectedDeal, setSelectedDeal] = useState<Deal | null>(null);
   const [repFilter, setRepFilter] = useState<string>('all');
 
   // Fetch all deals with commission info
   const { data: deals, isLoading } = useQuery({
     queryKey: ['deals', 'admin'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('deals')
-        .select(`
-          *,
-          deal_commissions (
-            id,
-            commission_type,
-            commission_percent,
-            commission_amount,
-            paid,
-            rep_id,
-            reps:rep_id (
-              id,
-              user_id,
-              profiles:user_id (full_name, email)
-            )
-          )
-        `)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      return data;
+      const response = await dealsApi.list();
+      if (response.error) throw new Error(response.error);
+      return (response.data || []) as Deal[];
     },
   });
 
@@ -52,26 +33,20 @@ export default function AdminDeals() {
   const { data: allReps } = useQuery({
     queryKey: ['all-reps'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reps')
-        .select(`
-          id,
-          user_id,
-          profiles:user_id (full_name, email)
-        `);
-      if (error) throw error;
-      return data;
+      const response = await repsApi.list();
+      if (response.error) throw new Error(response.error);
+      return response.data || [];
     },
   });
 
-  const handleViewDeal = (deal: any) => {
+  const handleViewDeal = (deal: Deal) => {
     setSelectedDeal(deal);
   };
 
   // Filter deals by rep
   const filteredDeals = deals?.filter((deal) => {
     if (repFilter === 'all') return true;
-    return deal.deal_commissions?.some((c: any) => c.rep_id === repFilter);
+    return deal.deal_commissions?.some((c) => c.rep_id === repFilter);
   }) || [];
 
   // Calculate stats
@@ -101,7 +76,7 @@ export default function AdminDeals() {
                 <SelectItem value="all">All Reps</SelectItem>
                 {allReps?.map((rep) => (
                   <SelectItem key={rep.id} value={rep.id}>
-                    {(rep.profiles as any)?.full_name || (rep.profiles as any)?.email || 'Unknown'}
+                    {rep.full_name || rep.email || 'Unknown'}
                   </SelectItem>
                 ))}
               </SelectContent>

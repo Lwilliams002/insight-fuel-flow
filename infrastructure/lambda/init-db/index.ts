@@ -24,7 +24,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed');
+    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -116,6 +116,7 @@ CREATE TABLE IF NOT EXISTS deal_photos (
 CREATE TABLE IF NOT EXISTS rep_pins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+    deal_id UUID REFERENCES deals(id) ON DELETE SET NULL,
     latitude DECIMAL(10, 8) NOT NULL,
     longitude DECIMAL(11, 8) NOT NULL,
     address TEXT,
@@ -128,6 +129,8 @@ CREATE TABLE IF NOT EXISTS rep_pins (
     status pin_status NOT NULL DEFAULT 'lead',
     notes TEXT,
     appointment_date TIMESTAMP WITH TIME ZONE,
+    appointment_end_date TIMESTAMP WITH TIME ZONE,
+    appointment_all_day BOOLEAN DEFAULT false,
     assigned_closer_id UUID REFERENCES reps(id) ON DELETE SET NULL,
     outcome TEXT,
     outcome_notes TEXT,
@@ -269,6 +272,55 @@ CREATE TRIGGER update_merchant_assignments_updated_at BEFORE UPDATE ON merchant_
 
 DROP TRIGGER IF EXISTS update_imports_updated_at ON imports;
 CREATE TRIGGER update_imports_updated_at BEFORE UPDATE ON imports FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Migrations for existing databases
+
+-- Add 'appointment' to pin_status enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'appointment' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
+    ) THEN
+        ALTER TYPE pin_status ADD VALUE 'appointment';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Add deal_id column to rep_pins if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rep_pins' AND column_name = 'deal_id') THEN
+        ALTER TABLE rep_pins ADD COLUMN deal_id UUID REFERENCES deals(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Add appointment_end_date column to rep_pins if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rep_pins' AND column_name = 'appointment_end_date') THEN
+        ALTER TABLE rep_pins ADD COLUMN appointment_end_date TIMESTAMP WITH TIME ZONE;
+    END IF;
+END $$;
+
+-- Add appointment_all_day column to rep_pins if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'rep_pins' AND column_name = 'appointment_all_day') THEN
+        ALTER TABLE rep_pins ADD COLUMN appointment_all_day BOOLEAN DEFAULT false;
+    END IF;
+END $$;
+
+-- Create index for deal_id if it doesn't exist
+CREATE INDEX IF NOT EXISTS idx_rep_pins_deal_id ON rep_pins(deal_id);
+
+-- Create index for appointment_date for calendar queries
+CREATE INDEX IF NOT EXISTS idx_rep_pins_appointment_date ON rep_pins(appointment_date);
+
+-- Create index for assigned_closer_id for closer calendar queries
+CREATE INDEX IF NOT EXISTS idx_rep_pins_assigned_closer_id ON rep_pins(assigned_closer_id);
 `;
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {

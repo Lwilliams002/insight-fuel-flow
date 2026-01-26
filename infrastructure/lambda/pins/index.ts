@@ -53,10 +53,16 @@ async function listPins(user: any, event: APIGatewayProxyEvent) {
   const repId = await getRepId(user.sub);
 
   let sql = `
-    SELECT rp.*, p.full_name as rep_name
+    SELECT rp.*, 
+           rp.latitude as lat, 
+           rp.longitude as lng,
+           p.full_name as rep_name,
+           cp.full_name as closer_name
     FROM rep_pins rp
     LEFT JOIN reps r ON r.id = rp.rep_id
     LEFT JOIN profiles p ON p.id = r.user_id
+    LEFT JOIN reps cr ON cr.id = rp.assigned_closer_id
+    LEFT JOIN profiles cp ON cp.id = cr.user_id
   `;
 
   const params: any[] = [];
@@ -78,10 +84,16 @@ async function getPin(pinId: string, user: any) {
   const repId = await getRepId(user.sub);
 
   const pin = await queryOne(
-    `SELECT rp.*, p.full_name as rep_name
+    `SELECT rp.*, 
+            rp.latitude as lat, 
+            rp.longitude as lng,
+            p.full_name as rep_name,
+            cp.full_name as closer_name
      FROM rep_pins rp
      LEFT JOIN reps r ON r.id = rp.rep_id
      LEFT JOIN profiles p ON p.id = r.user_id
+     LEFT JOIN reps cr ON cr.id = rp.assigned_closer_id
+     LEFT JOIN profiles cp ON cp.id = cr.user_id
      WHERE rp.id = $1`,
     [pinId]
   );
@@ -113,9 +125,10 @@ async function createPin(user: any, event: APIGatewayProxyEvent) {
     `INSERT INTO rep_pins (
       rep_id, homeowner_name, homeowner_phone, homeowner_email,
       address, city, state, zip_code,
-      lat, lng, status, notes,
-      appointment_date, document_url
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      latitude, longitude, status, notes,
+      appointment_date, appointment_end_date, appointment_all_day,
+      assigned_closer_id, document_url
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
     RETURNING *`,
     [
       body.rep_id || repId,
@@ -126,11 +139,14 @@ async function createPin(user: any, event: APIGatewayProxyEvent) {
       body.city,
       body.state,
       body.zip_code,
-      body.lat,
-      body.lng,
-      body.status || 'new',
+      body.lat || body.latitude,
+      body.lng || body.longitude,
+      body.status || 'lead',
       body.notes,
       body.appointment_date,
+      body.appointment_end_date,
+      body.appointment_all_day || false,
+      body.assigned_closer_id,
       body.document_url,
     ]
   );
@@ -166,10 +182,19 @@ async function updatePin(pinId: string, user: any, event: APIGatewayProxyEvent) 
   const allowedFields = [
     'homeowner_name', 'homeowner_phone', 'homeowner_email',
     'address', 'city', 'state', 'zip_code',
-    'lat', 'lng', 'status', 'notes',
-    'appointment_date', 'document_url', 'assigned_closer_id',
+    'latitude', 'longitude', 'status', 'notes',
+    'appointment_date', 'appointment_end_date', 'appointment_all_day',
+    'document_url', 'assigned_closer_id',
     'outcome', 'outcome_notes', 'follow_up_date',
   ];
+
+  // Map lat/lng to latitude/longitude if provided
+  if (body.lat !== undefined && body.latitude === undefined) {
+    body.latitude = body.lat;
+  }
+  if (body.lng !== undefined && body.longitude === undefined) {
+    body.longitude = body.lng;
+  }
 
   for (const field of allowedFields) {
     if (body[field] !== undefined) {

@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { pinsApi, repsApi, uploadApi, dealsApi, Pin as AwsPin } from '@/integrations/aws/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,13 +15,14 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
-  ChevronLeft, MapPin, User, Phone, Mail, Trash2, Briefcase, 
+  ChevronLeft, User, Phone, Mail, Trash2, Briefcase,
   CalendarIcon, Clock, X, Upload, FileText, Loader2, Users
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AwsAuthContext';
 
 type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment';
 
+// Local Pin interface for component
 interface Pin {
   id: string;
   latitude: number;
@@ -29,6 +30,8 @@ interface Pin {
   status: PinStatus;
   address: string | null;
   homeowner_name: string | null;
+  homeowner_phone: string | null;
+  homeowner_email: string | null;
   notes: string | null;
   created_at: string;
   deal_id: string | null;
@@ -36,15 +39,38 @@ interface Pin {
   appointment_end_date: string | null;
   appointment_all_day: boolean | null;
   assigned_closer_id: string | null;
+  rep_id: string;
+  document_url: string | null;
+}
+
+// Convert AWS Pin to local format
+function mapAwsPinToPin(awsPin: AwsPin): Pin {
+  return {
+    id: awsPin.id,
+    latitude: awsPin.lat,
+    longitude: awsPin.lng,
+    status: awsPin.status as PinStatus,
+    address: awsPin.address,
+    homeowner_name: awsPin.homeowner_name,
+    homeowner_phone: awsPin.homeowner_phone,
+    homeowner_email: awsPin.homeowner_email,
+    notes: awsPin.notes,
+    created_at: awsPin.created_at,
+    deal_id: awsPin.deal_id,
+    appointment_date: awsPin.appointment_date,
+    appointment_end_date: awsPin.appointment_end_date,
+    appointment_all_day: awsPin.appointment_all_day,
+    assigned_closer_id: awsPin.assigned_closer_id,
+    rep_id: awsPin.rep_id,
+    document_url: awsPin.document_url,
+  };
 }
 
 interface RepProfile {
   id: string;
   user_id: string;
-  profile: {
-    full_name: string | null;
-    email: string;
-  } | null;
+  full_name: string;
+  email: string;
 }
 
 const statusConfig: Record<PinStatus, { color: string; label: string }> = {
@@ -90,51 +116,28 @@ export default function PinDetails() {
     queryKey: ['pin', pinId],
     queryFn: async () => {
       if (isNew) return null;
-      const { data, error } = await supabase
-        .from('rep_pins')
-        .select('*')
-        .eq('id', pinId)
-        .single();
-      if (error) throw error;
-      return data as Pin;
+      const response = await pinsApi.get(pinId!);
+      if (response.error) throw new Error(response.error);
+      return response.data ? mapAwsPinToPin(response.data) : null;
     },
     enabled: !isNew && !!pinId,
   });
 
-  // Get rep_id for creating pins
-  const { data: repData } = useQuery({
-    queryKey: ['current-rep'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_rep_id');
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Fetch documents for this pin
-  const { data: documents, refetch: refetchDocuments } = useQuery({
-    queryKey: ['pin-documents', pinId],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('pin_documents')
-        .select('*')
-        .eq('pin_id', pinId)
-        .order('created_at', { ascending: false });
-      if (error) throw error;
-      return data;
-    },
-    enabled: !isNew && !!pinId,
-  });
+  // Get current user's rep_id from auth context
+  const currentRepId = user?.sub;
 
   // Fetch all reps for closer assignment
   const { data: reps } = useQuery({
     queryKey: ['all-reps-for-assignment'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('reps')
-        .select('id, user_id, profiles!reps_user_id_fkey(full_name, email)');
-      if (error) throw error;
-      return data as unknown as RepProfile[];
+      const response = await repsApi.list();
+      if (response.error) throw new Error(response.error);
+      return (response.data || []).map(rep => ({
+        id: rep.id,
+        user_id: rep.user_id,
+        full_name: rep.full_name,
+        email: rep.email,
+      })) as RepProfile[];
     },
   });
 
@@ -145,36 +148,31 @@ export default function PinDetails() {
 
     setIsUploading(true);
     try {
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${pinId}/${Date.now()}.${fileExt}`;
+      // Get presigned upload URL from AWS
+      const urlResponse = await uploadApi.getUploadUrl(file.name, file.type, `pins/${pinId}`);
+      if (urlResponse.error) throw new Error(urlResponse.error);
 
-      const { error: uploadError } = await supabase.storage
-        .from('pin-documents')
-        .upload(fileName, file);
+      const { url, key } = urlResponse.data!;
 
-      if (uploadError) throw uploadError;
+      // Upload file directly to S3
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
 
-      const { data: { publicUrl } } = supabase.storage
-        .from('pin-documents')
-        .getPublicUrl(fileName);
+      if (!uploadResponse.ok) throw new Error('Failed to upload file');
 
-      const { error: insertError } = await supabase
-        .from('pin_documents')
-        .insert({
-          pin_id: pinId,
-          file_name: file.name,
-          file_url: publicUrl,
-          file_type: file.type,
-          file_size: file.size,
-          uploaded_by: user?.id,
-        });
-
-      if (insertError) throw insertError;
+      // Update pin with document URL
+      const updateResponse = await pinsApi.update(pinId, { document_url: key });
+      if (updateResponse.error) throw new Error(updateResponse.error);
 
       toast.success('Document uploaded');
-      refetchDocuments();
-    } catch (error: any) {
-      toast.error('Upload failed: ' + error.message);
+      queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
+    } catch (error) {
+      toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setIsUploading(false);
       if (fileInputRef.current) {
@@ -184,25 +182,17 @@ export default function PinDetails() {
   };
 
   // Delete document handler
-  const handleDeleteDocument = async (docId: string, fileUrl: string) => {
+  const handleDeleteDocument = async () => {
+    if (!pinId) return;
     try {
-      // Extract path from URL
-      const urlParts = fileUrl.split('/pin-documents/');
-      if (urlParts[1]) {
-        await supabase.storage.from('pin-documents').remove([urlParts[1]]);
-      }
-
-      const { error } = await supabase
-        .from('pin_documents')
-        .delete()
-        .eq('id', docId);
-
-      if (error) throw error;
+      // Update pin to remove document URL
+      const response = await pinsApi.update(pinId, { document_url: null });
+      if (response.error) throw new Error(response.error);
 
       toast.success('Document deleted');
-      refetchDocuments();
-    } catch (error: any) {
-      toast.error('Delete failed: ' + error.message);
+      queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
+    } catch (error) {
+      toast.error('Delete failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -213,8 +203,8 @@ export default function PinDetails() {
         status: pin.status,
         address: pin.address || '',
         homeowner_name: pin.homeowner_name || '',
-        phone: '',
-        email: '',
+        phone: pin.homeowner_phone || '',
+        email: pin.homeowner_email || '',
         notes: pin.notes || '',
         appointment_date: pin.appointment_date ? new Date(pin.appointment_date) : undefined,
         appointment_time: pin.appointment_date ? format(new Date(pin.appointment_date), 'HH:mm') : '',
@@ -232,26 +222,27 @@ export default function PinDetails() {
       status: PinStatus; 
       address: string; 
       homeowner_name: string; 
+      homeowner_phone: string;
+      homeowner_email: string;
       notes: string;
       appointment_date: string | null;
       appointment_end_date: string | null;
       appointment_all_day: boolean;
       assigned_closer_id: string | null;
     }) => {
-      const { error } = await supabase.from('rep_pins').insert({
-        rep_id: repData,
-        latitude: data.lat,
-        longitude: data.lng,
+      const response = await pinsApi.create({
+        lat: data.lat,
+        lng: data.lng,
         status: data.status,
-        address: data.address || null,
-        homeowner_name: data.homeowner_name || null,
+        address: data.address || '',
+        homeowner_name: data.homeowner_name || '',
+        homeowner_phone: data.homeowner_phone || null,
+        homeowner_email: data.homeowner_email || null,
         notes: data.notes || null,
         appointment_date: data.appointment_date,
-        appointment_end_date: data.appointment_end_date,
-        appointment_all_day: data.appointment_all_day,
         assigned_closer_id: data.assigned_closer_id,
       });
-      if (error) throw error;
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
@@ -264,9 +255,9 @@ export default function PinDetails() {
   });
 
   const updatePinMutation = useMutation({
-    mutationFn: async ({ id, updates }: { id: string; updates: Partial<Pin> }) => {
-      const { error } = await supabase.from('rep_pins').update(updates).eq('id', id);
-      if (error) throw error;
+    mutationFn: async ({ id, updates }: { id: string; updates: Partial<AwsPin> }) => {
+      const response = await pinsApi.update(id, updates);
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
@@ -281,8 +272,8 @@ export default function PinDetails() {
 
   const deletePinMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('rep_pins').delete().eq('id', id);
-      if (error) throw error;
+      const response = await pinsApi.delete(id);
+      if (response.error) throw new Error(response.error);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
@@ -294,18 +285,16 @@ export default function PinDetails() {
     },
   });
 
+  // Convert pin to deal via AWS API
   const convertToDealMutation = useMutation({
     mutationFn: async (pinData: Pin) => {
-      const { data, error } = await supabase.rpc('create_deal_from_pin', {
-        _pin_id: pinData.id,
-        _homeowner_phone: formData.phone || null,
-        _homeowner_email: formData.email || null,
-      });
-      if (error) throw error;
-      return data as string;
+      const response = await dealsApi.createFromPin(pinData.id);
+      if (response.error) throw new Error(response.error);
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['rep-pins'] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('Deal created successfully!');
       navigate(getBackUrl());
     },
@@ -350,15 +339,17 @@ export default function PinDetails() {
 
   const handleSave = () => {
     const appointmentDateTime = getAppointmentDateTime();
-    const appointmentEndDateTime = getAppointmentEndDateTime();
-    
+
     if (isNew && lat && lng) {
+      const appointmentEndDateTime = getAppointmentEndDateTime();
       createPinMutation.mutate({
         lat: parseFloat(lat),
         lng: parseFloat(lng),
         status: formData.status,
         address: formData.address,
         homeowner_name: formData.homeowner_name,
+        homeowner_phone: formData.phone,
+        homeowner_email: formData.email,
         notes: formData.notes,
         appointment_date: appointmentDateTime,
         appointment_end_date: appointmentEndDateTime,
@@ -366,12 +357,15 @@ export default function PinDetails() {
         assigned_closer_id: formData.assigned_closer_id || null,
       });
     } else if (pin) {
+      const appointmentEndDateTime = getAppointmentEndDateTime();
       updatePinMutation.mutate({
         id: pin.id,
         updates: {
           status: formData.status,
-          address: formData.address || null,
-          homeowner_name: formData.homeowner_name || null,
+          address: formData.address || '',
+          homeowner_name: formData.homeowner_name || '',
+          homeowner_phone: formData.phone || null,
+          homeowner_email: formData.email || null,
           notes: formData.notes || null,
           appointment_date: appointmentDateTime,
           appointment_end_date: appointmentEndDateTime,
@@ -553,7 +547,7 @@ export default function PinDetails() {
                     <SelectItem value="none">No closer assigned</SelectItem>
                     {reps?.map((rep) => (
                       <SelectItem key={rep.id} value={rep.id}>
-                        {rep.profile?.full_name || rep.profile?.email || 'Unknown'}
+                        {rep.full_name || rep.email || 'Unknown'}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -625,7 +619,7 @@ export default function PinDetails() {
               <div className="flex items-center justify-between">
                 <Label className="text-muted-foreground text-xs">Documents</Label>
                 <span className="text-xs text-muted-foreground">
-                  {documents?.length || 0} file{documents?.length !== 1 ? 's' : ''}
+                  {pin?.document_url ? '1 file' : '0 files'}
                 </span>
               </div>
 
@@ -642,7 +636,7 @@ export default function PinDetails() {
                 variant="outline"
                 className="w-full h-10 border-dashed"
                 onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading}
+                disabled={isUploading || !!pin?.document_url}
               >
                 {isUploading ? (
                   <>
@@ -652,43 +646,28 @@ export default function PinDetails() {
                 ) : (
                   <>
                     <Upload className="w-4 h-4 mr-2" />
-                    Upload Document
+                    {pin?.document_url ? 'Document Already Uploaded' : 'Upload Document'}
                   </>
                 )}
               </Button>
 
-              {/* Document List */}
-              {documents && documents.length > 0 && (
+              {/* Document Display */}
+              {pin?.document_url && (
                 <div className="space-y-2">
-                  {documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center gap-3 p-3 bg-muted rounded-lg"
-                    >
-                      <FileText className="w-5 h-5 text-primary shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <a
-                          href={doc.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-foreground hover:text-primary truncate block"
-                        >
-                          {doc.file_name}
-                        </a>
-                        <p className="text-xs text-muted-foreground">
-                          {doc.file_size ? `${(doc.file_size / 1024).toFixed(1)} KB` : 'Unknown size'}
-                          {' • '}
-                          {format(new Date(doc.created_at), 'MMM d, yyyy')}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => handleDeleteDocument(doc.id, doc.file_url)}
-                        className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <FileText className="w-5 h-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground truncate block">
+                        Uploaded Document
+                      </span>
                     </div>
-                  ))}
+                    <button
+                      onClick={() => handleDeleteDocument()}
+                      className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

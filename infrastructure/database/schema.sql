@@ -8,7 +8,7 @@
 CREATE TYPE app_role AS ENUM ('admin', 'rep');
 CREATE TYPE deal_status AS ENUM ('lead', 'signed', 'permit', 'install_scheduled', 'installed', 'complete', 'pending', 'paid', 'cancelled');
 CREATE TYPE commission_type AS ENUM ('setter', 'closer', 'self_gen');
-CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed');
+CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment');
 CREATE TYPE commission_level AS ENUM ('junior', 'senior', 'manager');
 
 -- ==========================================
@@ -121,6 +121,7 @@ CREATE TABLE deal_photos (
 CREATE TABLE rep_pins (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+    deal_id UUID REFERENCES deals(id) ON DELETE SET NULL,
 
     -- Location
     latitude DECIMAL(10, 8) NOT NULL,
@@ -141,6 +142,8 @@ CREATE TABLE rep_pins (
 
     -- Appointment
     appointment_date TIMESTAMP WITH TIME ZONE,
+    appointment_end_date TIMESTAMP WITH TIME ZONE,
+    appointment_all_day BOOLEAN DEFAULT false,
     assigned_closer_id UUID REFERENCES reps(id) ON DELETE SET NULL,
 
     -- Outcome tracking
