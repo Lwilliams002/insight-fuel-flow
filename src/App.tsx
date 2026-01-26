@@ -23,6 +23,7 @@ import AdminCommissions from "./pages/admin/AdminCommissions";
 import AdminJotForm from "./pages/admin/AdminJotForm";
 import AdminSettings from "./pages/admin/AdminSettings";
 import NotFound from "./pages/NotFound";
+import RepCalendar from "./pages/rep/RepCalendar";
 
 const queryClient = new QueryClient();
 
@@ -97,6 +98,14 @@ const App = () => (
               element={
                 <ProtectedRoute allowedRoles={['rep']}>
                   <CalendarDateDetails />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/calendar"
+              element={
+                <ProtectedRoute allowedRoles={['rep']}>
+                  <RepCalendar />
                 </ProtectedRoute>
               }
             />

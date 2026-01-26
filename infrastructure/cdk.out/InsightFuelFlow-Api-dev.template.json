@@ -1,0 +1,5865 @@
+{
+ "Resources": {
+  "LambdaSecurityGroup0BD9FC99": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for Lambda functions",
+    "GroupName": "InsightFuelFlow-lambda-sg-dev",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "VpcId": {
+     "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCB9E5F0B4BD23A326"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/LambdaSecurityGroup/Resource"
+   }
+  },
+  "DealsFunctionServiceRoleBB100406": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/DealsFunction/ServiceRole/Resource"
+   }
+  },
+  "DealsFunctionServiceRoleDefaultPolicy68F23DD5": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "DealsFunctionServiceRoleDefaultPolicy68F23DD5",
+    "Roles": [
+     {
+      "Ref": "DealsFunctionServiceRoleBB100406"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/DealsFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "DealsFunction0D1A3880": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "b2c2a466b7e618adfbe01e6c0b79289f99c321564b1209634d906c7dff9ae1b6.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-deals-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "DealsFunctionServiceRoleBB100406",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "DealsFunctionServiceRoleDefaultPolicy68F23DD5",
+    "DealsFunctionServiceRoleBB100406"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/DealsFunction/Resource",
+    "aws:asset:path": "asset.b2c2a466b7e618adfbe01e6c0b79289f99c321564b1209634d906c7dff9ae1b6",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "RepsFunctionServiceRoleC79903FE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/RepsFunction/ServiceRole/Resource"
+   }
+  },
+  "RepsFunctionServiceRoleDefaultPolicy3D8038CD": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "RepsFunctionServiceRoleDefaultPolicy3D8038CD",
+    "Roles": [
+     {
+      "Ref": "RepsFunctionServiceRoleC79903FE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/RepsFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "RepsFunctionE25A944B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "171b32414763c6a6dc9fc648d203fa0f2985edb1b8d09bd41586cc557f7488c4.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-reps-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "RepsFunctionServiceRoleC79903FE",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "RepsFunctionServiceRoleDefaultPolicy3D8038CD",
+    "RepsFunctionServiceRoleC79903FE"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/RepsFunction/Resource",
+    "aws:asset:path": "asset.171b32414763c6a6dc9fc648d203fa0f2985edb1b8d09bd41586cc557f7488c4",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "PinsFunctionServiceRole85B483AE": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/PinsFunction/ServiceRole/Resource"
+   }
+  },
+  "PinsFunctionServiceRoleDefaultPolicy1A774380": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "PinsFunctionServiceRoleDefaultPolicy1A774380",
+    "Roles": [
+     {
+      "Ref": "PinsFunctionServiceRole85B483AE"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/PinsFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "PinsFunctionBE777E65": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "24153c242ecba01e7515fd377d6ca6a9d9a73846de21bb1fe3836e82a3578924.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-pins-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "PinsFunctionServiceRole85B483AE",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "PinsFunctionServiceRoleDefaultPolicy1A774380",
+    "PinsFunctionServiceRole85B483AE"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/PinsFunction/Resource",
+    "aws:asset:path": "asset.24153c242ecba01e7515fd377d6ca6a9d9a73846de21bb1fe3836e82a3578924",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "CommissionsFunctionServiceRole19861EE3": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/CommissionsFunction/ServiceRole/Resource"
+   }
+  },
+  "CommissionsFunctionServiceRoleDefaultPolicyA62D388B": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "CommissionsFunctionServiceRoleDefaultPolicyA62D388B",
+    "Roles": [
+     {
+      "Ref": "CommissionsFunctionServiceRole19861EE3"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/CommissionsFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "CommissionsFunction31DA5E7C": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "37b37b0ed299d5b9c9727893ddb7c8861802543a29faec38b4e715d8711b6277.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-commissions-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "CommissionsFunctionServiceRole19861EE3",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "CommissionsFunctionServiceRoleDefaultPolicyA62D388B",
+    "CommissionsFunctionServiceRole19861EE3"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/CommissionsFunction/Resource",
+    "aws:asset:path": "asset.37b37b0ed299d5b9c9727893ddb7c8861802543a29faec38b4e715d8711b6277",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "UploadFunctionServiceRole2D7366CF": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/UploadFunction/ServiceRole/Resource"
+   }
+  },
+  "UploadFunctionServiceRoleDefaultPolicyF19D6F1F": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "UploadFunctionServiceRoleDefaultPolicyF19D6F1F",
+    "Roles": [
+     {
+      "Ref": "UploadFunctionServiceRole2D7366CF"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/UploadFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "UploadFunction18838DD8": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "b8fba5927c01e52db2fdd0d4c4facf3276dfb61f0d62a90a32f436669844f9f7.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-upload-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "UploadFunctionServiceRole2D7366CF",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "UploadFunctionServiceRoleDefaultPolicyF19D6F1F",
+    "UploadFunctionServiceRole2D7366CF"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/UploadFunction/Resource",
+    "aws:asset:path": "asset.b8fba5927c01e52db2fdd0d4c4facf3276dfb61f0d62a90a32f436669844f9f7",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "AdminFunctionServiceRoleE19718A7": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/AdminFunction/ServiceRole/Resource"
+   }
+  },
+  "AdminFunctionServiceRoleDefaultPolicyB69DB622": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      },
+      {
+       "Action": [
+        "cognito-idp:AdminCreateUser",
+        "cognito-idp:AdminAddUserToGroup",
+        "cognito-idp:AdminSetUserPassword",
+        "cognito-idp:AdminUpdateUserAttributes",
+        "cognito-idp:ListUsersInGroup"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputFnGetAttUserPool6BA7E5F2Arn686ACC00"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "AdminFunctionServiceRoleDefaultPolicyB69DB622",
+    "Roles": [
+     {
+      "Ref": "AdminFunctionServiceRoleE19718A7"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/AdminFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "AdminFunction09BA95C5": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "7be3604f355d90d57e91126edf26a1dabe951a2e67b22c1331c60ea0b4b0f148.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-admin-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "AdminFunctionServiceRoleE19718A7",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "AdminFunctionServiceRoleDefaultPolicyB69DB622",
+    "AdminFunctionServiceRoleE19718A7"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/AdminFunction/Resource",
+    "aws:asset:path": "asset.7be3604f355d90d57e91126edf26a1dabe951a2e67b22c1331c60ea0b4b0f148",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "InitDbFunctionServiceRole05110DC9": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/InitDbFunction/ServiceRole/Resource"
+   }
+  },
+  "InitDbFunctionServiceRoleDefaultPolicy54BD6E7E": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "InitDbFunctionServiceRoleDefaultPolicy54BD6E7E",
+    "Roles": [
+     {
+      "Ref": "InitDbFunctionServiceRole05110DC9"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/InitDbFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "InitDbFunction67777D6B": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "bf47d5322e10e3283ab6f1d5ddecc3c20d9e1bce4665307fba5bd3b8200cf6a0.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-init-db-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "InitDbFunctionServiceRole05110DC9",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 60,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "InitDbFunctionServiceRoleDefaultPolicy54BD6E7E",
+    "InitDbFunctionServiceRole05110DC9"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/InitDbFunction/Resource",
+    "aws:asset:path": "asset.bf47d5322e10e3283ab6f1d5ddecc3c20d9e1bce4665307fba5bd3b8200cf6a0",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "TrainingFunctionServiceRole274F0ED5": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "lambda.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+       ]
+      ]
+     },
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+       ]
+      ]
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/TrainingFunction/ServiceRole/Resource"
+   }
+  },
+  "TrainingFunctionServiceRoleDefaultPolicy158C8FB3": {
+   "Type": "AWS::IAM::Policy",
+   "Properties": {
+    "PolicyDocument": {
+     "Statement": [
+      {
+       "Action": [
+        "secretsmanager:GetSecretValue",
+        "secretsmanager:DescribeSecret"
+       ],
+       "Effect": "Allow",
+       "Resource": {
+        "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+       }
+      },
+      {
+       "Action": [
+        "s3:GetObject*",
+        "s3:GetBucket*",
+        "s3:List*",
+        "s3:DeleteObject*",
+        "s3:PutObject",
+        "s3:PutObjectLegalHold",
+        "s3:PutObjectRetention",
+        "s3:PutObjectTagging",
+        "s3:PutObjectVersionTagging",
+        "s3:Abort*"
+       ],
+       "Effect": "Allow",
+       "Resource": [
+        {
+         "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+        },
+        {
+         "Fn::Join": [
+          "",
+          [
+           {
+            "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+           },
+           "/*"
+          ]
+         ]
+        }
+       ]
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "PolicyName": "TrainingFunctionServiceRoleDefaultPolicy158C8FB3",
+    "Roles": [
+     {
+      "Ref": "TrainingFunctionServiceRole274F0ED5"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/TrainingFunction/ServiceRole/DefaultPolicy/Resource"
+   }
+  },
+  "TrainingFunctionDF02EF51": {
+   "Type": "AWS::Lambda::Function",
+   "Properties": {
+    "Code": {
+     "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
+     "S3Key": "71408c1350996662ddc06d84a0f4ce8c3f4e50ba22d379570a503f34d4304c2b.zip"
+    },
+    "Environment": {
+     "Variables": {
+      "NODE_ENV": "development",
+      "DATABASE_SECRET_ARN": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+      },
+      "DATABASE_HOST": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+      },
+      "DATABASE_PORT": {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+      },
+      "DATABASE_NAME": "insightfuelflow",
+      "S3_BUCKET": {
+       "Fn::ImportValue": "InsightFuelFlow-Storage-dev:ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+      },
+      "USER_POOL_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPool6BA7E5F296FD7236"
+      },
+      "USER_POOL_CLIENT_ID": {
+       "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputRefUserPoolClient2F5918F753847A55"
+      },
+      "MAPBOX_TOKEN": ""
+     }
+    },
+    "FunctionName": "InsightFuelFlow-training-dev",
+    "Handler": "index.handler",
+    "MemorySize": 256,
+    "Role": {
+     "Fn::GetAtt": [
+      "TrainingFunctionServiceRole274F0ED5",
+      "Arn"
+     ]
+    },
+    "Runtime": "nodejs18.x",
+    "Timeout": 30,
+    "VpcConfig": {
+     "SecurityGroupIds": [
+      {
+       "Fn::GetAtt": [
+        "LambdaSecurityGroup0BD9FC99",
+        "GroupId"
+       ]
+      }
+     ],
+     "SubnetIds": [
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+      },
+      {
+       "Fn::ImportValue": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+      }
+     ]
+    }
+   },
+   "DependsOn": [
+    "TrainingFunctionServiceRoleDefaultPolicy158C8FB3",
+    "TrainingFunctionServiceRole274F0ED5"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/TrainingFunction/Resource",
+    "aws:asset:path": "asset.71408c1350996662ddc06d84a0f4ce8c3f4e50ba22d379570a503f34d4304c2b",
+    "aws:asset:is-bundled": true,
+    "aws:asset:property": "Code"
+   }
+  },
+  "ApiF70053CD": {
+   "Type": "AWS::ApiGateway::RestApi",
+   "Properties": {
+    "Description": "Insight Fuel Flow API",
+    "Name": "InsightFuelFlow-api-dev"
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Resource"
+   }
+  },
+  "ApiCloudWatchRole73EC6FC4": {
+   "Type": "AWS::IAM::Role",
+   "Properties": {
+    "AssumeRolePolicyDocument": {
+     "Statement": [
+      {
+       "Action": "sts:AssumeRole",
+       "Effect": "Allow",
+       "Principal": {
+        "Service": "apigateway.amazonaws.com"
+       }
+      }
+     ],
+     "Version": "2012-10-17"
+    },
+    "ManagedPolicyArns": [
+     {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":iam::aws:policy/service-role/AmazonAPIGatewayPushToCloudWatchLogs"
+       ]
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/CloudWatchRole/Resource"
+   }
+  },
+  "ApiAccountA18C9B29": {
+   "Type": "AWS::ApiGateway::Account",
+   "Properties": {
+    "CloudWatchRoleArn": {
+     "Fn::GetAtt": [
+      "ApiCloudWatchRole73EC6FC4",
+      "Arn"
+     ]
+    }
+   },
+   "DependsOn": [
+    "ApiF70053CD"
+   ],
+   "UpdateReplacePolicy": "Retain",
+   "DeletionPolicy": "Retain",
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Account"
+   }
+  },
+  "ApiDeploymentB17BE62Da502ef82027b9f11085190f41f1d0c75": {
+   "Type": "AWS::ApiGateway::Deployment",
+   "Properties": {
+    "Description": "Insight Fuel Flow API",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "DependsOn": [
+    "ApiadmincompletetrainingOPTIONS09DD9EA9",
+    "ApiadmincompletetrainingPOST05C08EF5",
+    "Apiadmincompletetraining3D7D5B36",
+    "ApiadmincreateadminOPTIONS69E6E7BE",
+    "ApiadmincreateadminPOST9F600FDD",
+    "Apiadmincreateadmin899DAC4D",
+    "ApiadmincreaterepOPTIONSD7222873",
+    "ApiadmincreaterepPOST385DD0C7",
+    "ApiadmincreaterepFDEC5436",
+    "ApiadmininitdbOPTIONS0EDD8B2F",
+    "ApiadmininitdbPOST8E7D601D",
+    "ApiadmininitdbA258AD23",
+    "ApiadminOPTIONSC9D86527",
+    "ApiadminF2AEC3DE",
+    "ApiadminsyncrepsOPTIONS121A1953",
+    "ApiadminsyncrepsPOST531D3132",
+    "Apiadminsyncreps0080F8D0",
+    "ApicommissionsidOPTIONS8693A033",
+    "ApicommissionsidPUTE6450C81",
+    "Apicommissionsid0B2E0B48",
+    "ApicommissionsGET80F086A8",
+    "ApicommissionsOPTIONS017DAA49",
+    "ApicommissionsPOSTD4158F66",
+    "Apicommissions2D35E454",
+    "ApidealsidDELETED3F5053D",
+    "ApidealsidGET56B0FECB",
+    "ApidealsidOPTIONSD84B6C80",
+    "ApidealsidPUT7CDB04EF",
+    "ApidealsidD5577134",
+    "ApidealsGET2D156AB2",
+    "ApidealsOPTIONSA324CBE8",
+    "ApidealsPOST9AF9B61A",
+    "Apideals35F0FBA8",
+    "ApiOPTIONS5886EA5D",
+    "ApipinsidDELETE7333276A",
+    "ApipinsidGET988F2AC0",
+    "ApipinsidOPTIONSFAF88264",
+    "ApipinsidPUT19536431",
+    "Apipinsid282BDB13",
+    "ApipinsGET0552246B",
+    "ApipinsOPTIONSF923031B",
+    "ApipinsPOSTF440F389",
+    "Apipins83E5FD52",
+    "ApirepsidDELETE35DB4E1E",
+    "ApirepsidGETF4130A57",
+    "ApirepsidOPTIONS4F4B80A2",
+    "ApirepsidPUT7391329C",
+    "Apirepsid1523297B",
+    "ApirepsGETDFC88265",
+    "ApirepsOPTIONS9A278DC8",
+    "ApirepsPOST9F2D6B49",
+    "ApirepsAED3641D",
+    "ApitrainingGET3088CF1D",
+    "ApitrainingOPTIONS4AAED8E0",
+    "ApitrainingB90EAFA6",
+    "ApitrainingsubmitOPTIONS5F741CC5",
+    "ApitrainingsubmitPOST0F3C8561",
+    "ApitrainingsubmitB1465E7F",
+    "ApiuploadOPTIONS7F358758",
+    "ApiuploadPOST4494B89F",
+    "Apiupload610E4B84",
+    "ApiuploadurlOPTIONSB77FE95E",
+    "ApiuploadurlPOST01FA528C",
+    "Apiuploadurl4586EBC7"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Deployment/Resource",
+    "aws:cdk:do-not-refactor": true
+   }
+  },
+  "ApiDeploymentStagedev51EE5D56": {
+   "Type": "AWS::ApiGateway::Stage",
+   "Properties": {
+    "DeploymentId": {
+     "Ref": "ApiDeploymentB17BE62Da502ef82027b9f11085190f41f1d0c75"
+    },
+    "MethodSettings": [
+     {
+      "DataTraceEnabled": false,
+      "HttpMethod": "*",
+      "ResourcePath": "/*",
+      "ThrottlingBurstLimit": 2000,
+      "ThrottlingRateLimit": 1000
+     }
+    ],
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "StageName": "dev"
+   },
+   "DependsOn": [
+    "ApiAccountA18C9B29"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/DeploymentStage.dev/Resource"
+   }
+  },
+  "ApiOPTIONS5886EA5D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/OPTIONS/Resource"
+   }
+  },
+  "Apideals35F0FBA8": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "deals",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/Resource"
+   }
+  },
+  "ApidealsOPTIONSA324CBE8": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apideals35F0FBA8"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/OPTIONS/Resource"
+   }
+  },
+  "ApidealsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETdeals1E62076A": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/deals"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..deals"
+   }
+  },
+  "ApidealsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETdeals181468ED": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/deals"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..deals"
+   }
+  },
+  "ApidealsGET2D156AB2": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DealsFunction0D1A3880",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apideals35F0FBA8"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/GET/Resource"
+   }
+  },
+  "ApidealsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTdeals81350515": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/deals"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..deals"
+   }
+  },
+  "ApidealsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTdeals0BE135AB": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/deals"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..deals"
+   }
+  },
+  "ApidealsPOST9AF9B61A": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DealsFunction0D1A3880",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apideals35F0FBA8"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/POST/Resource"
+   }
+  },
+  "ApidealsidD5577134": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "Apideals35F0FBA8"
+    },
+    "PathPart": "{id}",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/Resource"
+   }
+  },
+  "ApidealsidOPTIONSD84B6C80": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApidealsidD5577134"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/OPTIONS/Resource"
+   }
+  },
+  "ApidealsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETdealsid0604EAAB": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}"
+   }
+  },
+  "ApidealsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETdealsidB805B3C3": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}"
+   }
+  },
+  "ApidealsidGET56B0FECB": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DealsFunction0D1A3880",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApidealsidD5577134"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/Resource"
+   }
+  },
+  "ApidealsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTdealsidF223A453": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/PUT/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..deals.{id}"
+   }
+  },
+  "ApidealsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTdealsid6109F989": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/PUT/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..deals.{id}"
+   }
+  },
+  "ApidealsidPUT7CDB04EF": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DealsFunction0D1A3880",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApidealsidD5577134"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/Resource"
+   }
+  },
+  "ApidealsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETEdealsidDF404E50": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/DELETE/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}"
+   }
+  },
+  "ApidealsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETEdealsidF4B3D830": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "DealsFunction0D1A3880",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/DELETE/deals/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}"
+   }
+  },
+  "ApidealsidDELETED3F5053D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "DealsFunction0D1A3880",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApidealsidD5577134"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/Resource"
+   }
+  },
+  "ApirepsAED3641D": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "reps",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/Resource"
+   }
+  },
+  "ApirepsOPTIONS9A278DC8": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApirepsAED3641D"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/OPTIONS/Resource"
+   }
+  },
+  "ApirepsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETreps7ED54024": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..reps"
+   }
+  },
+  "ApirepsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETreps45EE42AD": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..reps"
+   }
+  },
+  "ApirepsGETDFC88265": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RepsFunctionE25A944B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApirepsAED3641D"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/GET/Resource"
+   }
+  },
+  "ApirepsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTrepsD3DCD27C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..reps"
+   }
+  },
+  "ApirepsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTrepsD86DB589": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..reps"
+   }
+  },
+  "ApirepsPOST9F2D6B49": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RepsFunctionE25A944B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApirepsAED3641D"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/POST/Resource"
+   }
+  },
+  "Apirepsid1523297B": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApirepsAED3641D"
+    },
+    "PathPart": "{id}",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/Resource"
+   }
+  },
+  "ApirepsidOPTIONS4F4B80A2": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apirepsid1523297B"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/OPTIONS/Resource"
+   }
+  },
+  "ApirepsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETrepsid507B961C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..reps.{id}"
+   }
+  },
+  "ApirepsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETrepsid183EC441": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..reps.{id}"
+   }
+  },
+  "ApirepsidGETF4130A57": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RepsFunctionE25A944B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apirepsid1523297B"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/Resource"
+   }
+  },
+  "ApirepsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTrepsidDEF2221B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/PUT/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..reps.{id}"
+   }
+  },
+  "ApirepsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTrepsid7F41187D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/PUT/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..reps.{id}"
+   }
+  },
+  "ApirepsidPUT7391329C": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RepsFunctionE25A944B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apirepsid1523297B"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/Resource"
+   }
+  },
+  "ApirepsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETErepsid0B001FE3": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/DELETE/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..reps.{id}"
+   }
+  },
+  "ApirepsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETErepsid8151D050": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "RepsFunctionE25A944B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/DELETE/reps/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..reps.{id}"
+   }
+  },
+  "ApirepsidDELETE35DB4E1E": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "RepsFunctionE25A944B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apirepsid1523297B"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/Resource"
+   }
+  },
+  "Apipins83E5FD52": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "pins",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/Resource"
+   }
+  },
+  "ApipinsOPTIONSF923031B": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apipins83E5FD52"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/OPTIONS/Resource"
+   }
+  },
+  "ApipinsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETpins86BAE494": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/pins"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..pins"
+   }
+  },
+  "ApipinsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETpinsC77E6FD8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/pins"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..pins"
+   }
+  },
+  "ApipinsGET0552246B": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PinsFunctionBE777E65",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apipins83E5FD52"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/GET/Resource"
+   }
+  },
+  "ApipinsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTpins162CA0D2": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/pins"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..pins"
+   }
+  },
+  "ApipinsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTpins6368836B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/pins"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..pins"
+   }
+  },
+  "ApipinsPOSTF440F389": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PinsFunctionBE777E65",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apipins83E5FD52"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/POST/Resource"
+   }
+  },
+  "Apipinsid282BDB13": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "Apipins83E5FD52"
+    },
+    "PathPart": "{id}",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/Resource"
+   }
+  },
+  "ApipinsidOPTIONSFAF88264": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apipinsid282BDB13"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/OPTIONS/Resource"
+   }
+  },
+  "ApipinsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETpinsidCEA63B7B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..pins.{id}"
+   }
+  },
+  "ApipinsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETpinsidA3EFC1DA": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..pins.{id}"
+   }
+  },
+  "ApipinsidGET988F2AC0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PinsFunctionBE777E65",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apipinsid282BDB13"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/Resource"
+   }
+  },
+  "ApipinsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTpinsidB3F1762D": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/PUT/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..pins.{id}"
+   }
+  },
+  "ApipinsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTpinsidEBE8BBA1": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/PUT/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..pins.{id}"
+   }
+  },
+  "ApipinsidPUT19536431": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PinsFunctionBE777E65",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apipinsid282BDB13"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/Resource"
+   }
+  },
+  "ApipinsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETEpinsid3F5360EA": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/DELETE/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..pins.{id}"
+   }
+  },
+  "ApipinsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETEpinsid6C95F4B2": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "PinsFunctionBE777E65",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/DELETE/pins/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..pins.{id}"
+   }
+  },
+  "ApipinsidDELETE7333276A": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "DELETE",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "PinsFunctionBE777E65",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apipinsid282BDB13"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/Resource"
+   }
+  },
+  "Apicommissions2D35E454": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "commissions",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/Resource"
+   }
+  },
+  "ApicommissionsOPTIONS017DAA49": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apicommissions2D35E454"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/OPTIONS/Resource"
+   }
+  },
+  "ApicommissionsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETcommissions0FF4FE37": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/commissions"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..commissions"
+   }
+  },
+  "ApicommissionsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETcommissions8C38523E": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/commissions"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..commissions"
+   }
+  },
+  "ApicommissionsGET80F086A8": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CommissionsFunction31DA5E7C",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apicommissions2D35E454"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/GET/Resource"
+   }
+  },
+  "ApicommissionsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTcommissions5A8A668A": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/commissions"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..commissions"
+   }
+  },
+  "ApicommissionsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTcommissionsD5354E18": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/commissions"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..commissions"
+   }
+  },
+  "ApicommissionsPOSTD4158F66": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CommissionsFunction31DA5E7C",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apicommissions2D35E454"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/POST/Resource"
+   }
+  },
+  "Apicommissionsid0B2E0B48": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "Apicommissions2D35E454"
+    },
+    "PathPart": "{id}",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/Resource"
+   }
+  },
+  "ApicommissionsidOPTIONS8693A033": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apicommissionsid0B2E0B48"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/OPTIONS/Resource"
+   }
+  },
+  "ApicommissionsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTcommissionsidE818C7CF": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/PUT/commissions/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..commissions.{id}"
+   }
+  },
+  "ApicommissionsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTcommissionsid4478C4FE": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "CommissionsFunction31DA5E7C",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/PUT/commissions/*"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..commissions.{id}"
+   }
+  },
+  "ApicommissionsidPUTE6450C81": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "PUT",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "CommissionsFunction31DA5E7C",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apicommissionsid0B2E0B48"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/Resource"
+   }
+  },
+  "Apiupload610E4B84": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "upload",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/Resource"
+   }
+  },
+  "ApiuploadOPTIONS7F358758": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiupload610E4B84"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/OPTIONS/Resource"
+   }
+  },
+  "ApiuploadPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTupload74ABFF38": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/upload"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..upload"
+   }
+  },
+  "ApiuploadPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTupload657A6FB4": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/upload"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..upload"
+   }
+  },
+  "ApiuploadPOST4494B89F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "UploadFunction18838DD8",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiupload610E4B84"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/POST/Resource"
+   }
+  },
+  "Apiuploadurl4586EBC7": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "Apiupload610E4B84"
+    },
+    "PathPart": "url",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/url/Resource"
+   }
+  },
+  "ApiuploadurlOPTIONSB77FE95E": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiuploadurl4586EBC7"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/url/OPTIONS/Resource"
+   }
+  },
+  "ApiuploadurlPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTuploadurl589EE00B": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/upload/url"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..upload.url"
+   }
+  },
+  "ApiuploadurlPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTuploadurlB6E4EBF8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "UploadFunction18838DD8",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/upload/url"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..upload.url"
+   }
+  },
+  "ApiuploadurlPOST01FA528C": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "UploadFunction18838DD8",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiuploadurl4586EBC7"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/Resource"
+   }
+  },
+  "ApiadminF2AEC3DE": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "admin",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/Resource"
+   }
+  },
+  "ApiadminOPTIONSC9D86527": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/OPTIONS/Resource"
+   }
+  },
+  "ApiadmincreaterepFDEC5436": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "PathPart": "create-rep",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/Resource"
+   }
+  },
+  "ApiadmincreaterepOPTIONSD7222873": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiadmincreaterepFDEC5436"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/OPTIONS/Resource"
+   }
+  },
+  "ApiadmincreaterepPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincreaterep51933023": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/admin/create-rep"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.create-rep"
+   }
+  },
+  "ApiadmincreaterepPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincreaterep263BB7C1": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/admin/create-rep"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.create-rep"
+   }
+  },
+  "ApiadmincreaterepPOST385DD0C7": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AdminFunction09BA95C5",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApiadmincreaterepFDEC5436"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/Resource"
+   }
+  },
+  "Apiadmincreateadmin899DAC4D": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "PathPart": "create-admin",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/Resource"
+   }
+  },
+  "ApiadmincreateadminOPTIONS69E6E7BE": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiadmincreateadmin899DAC4D"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/OPTIONS/Resource"
+   }
+  },
+  "ApiadmincreateadminPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincreateadminF900144C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/admin/create-admin"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.create-admin"
+   }
+  },
+  "ApiadmincreateadminPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincreateadmin0463CC69": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/admin/create-admin"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.create-admin"
+   }
+  },
+  "ApiadmincreateadminPOST9F600FDD": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AdminFunction09BA95C5",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiadmincreateadmin899DAC4D"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/Resource"
+   }
+  },
+  "Apiadminsyncreps0080F8D0": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "PathPart": "sync-reps",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/Resource"
+   }
+  },
+  "ApiadminsyncrepsOPTIONS121A1953": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiadminsyncreps0080F8D0"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/OPTIONS/Resource"
+   }
+  },
+  "ApiadminsyncrepsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadminsyncreps55F11650": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/admin/sync-reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.sync-reps"
+   }
+  },
+  "ApiadminsyncrepsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadminsyncreps94C92064": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/admin/sync-reps"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.sync-reps"
+   }
+  },
+  "ApiadminsyncrepsPOST531D3132": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AdminFunction09BA95C5",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiadminsyncreps0080F8D0"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/Resource"
+   }
+  },
+  "Apiadmincompletetraining3D7D5B36": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "PathPart": "complete-training",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/Resource"
+   }
+  },
+  "ApiadmincompletetrainingOPTIONS09DD9EA9": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "Apiadmincompletetraining3D7D5B36"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/OPTIONS/Resource"
+   }
+  },
+  "ApiadmincompletetrainingPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincompletetraining497639E1": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/admin/complete-training"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.complete-training"
+   }
+  },
+  "ApiadmincompletetrainingPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincompletetrainingFA126571": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "AdminFunction09BA95C5",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/admin/complete-training"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.complete-training"
+   }
+  },
+  "ApiadmincompletetrainingPOST05C08EF5": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "AdminFunction09BA95C5",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "Apiadmincompletetraining3D7D5B36"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/Resource"
+   }
+  },
+  "ApiadmininitdbA258AD23": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApiadminF2AEC3DE"
+    },
+    "PathPart": "init-db",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/init-db/Resource"
+   }
+  },
+  "ApiadmininitdbOPTIONS0EDD8B2F": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApiadmininitdbA258AD23"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/init-db/OPTIONS/Resource"
+   }
+  },
+  "ApiadmininitdbPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmininitdb5AC9AD25": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "InitDbFunction67777D6B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/admin/init-db"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.init-db"
+   }
+  },
+  "ApiadmininitdbPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmininitdbD803947C": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "InitDbFunction67777D6B",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/admin/init-db"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.init-db"
+   }
+  },
+  "ApiadmininitdbPOST8E7D601D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "NONE",
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "InitDbFunction67777D6B",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApiadmininitdbA258AD23"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/Resource"
+   }
+  },
+  "ApitrainingB90EAFA6": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Fn::GetAtt": [
+      "ApiF70053CD",
+      "RootResourceId"
+     ]
+    },
+    "PathPart": "training",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/Resource"
+   }
+  },
+  "ApitrainingOPTIONS4AAED8E0": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApitrainingB90EAFA6"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/OPTIONS/Resource"
+   }
+  },
+  "ApitrainingGETApiPermissionInsightFuelFlowApidevApi26E1307BGETtraining63F47796": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "TrainingFunctionDF02EF51",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/GET/training"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..training"
+   }
+  },
+  "ApitrainingGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETtraining99DC1E12": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "TrainingFunctionDF02EF51",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/GET/training"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..training"
+   }
+  },
+  "ApitrainingGET3088CF1D": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "GET",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "TrainingFunctionDF02EF51",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApitrainingB90EAFA6"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/GET/Resource"
+   }
+  },
+  "ApitrainingsubmitB1465E7F": {
+   "Type": "AWS::ApiGateway::Resource",
+   "Properties": {
+    "ParentId": {
+     "Ref": "ApitrainingB90EAFA6"
+    },
+    "PathPart": "submit",
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/submit/Resource"
+   }
+  },
+  "ApitrainingsubmitOPTIONS5F741CC5": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "ApiKeyRequired": false,
+    "AuthorizationType": "NONE",
+    "HttpMethod": "OPTIONS",
+    "Integration": {
+     "IntegrationResponses": [
+      {
+       "ResponseParameters": {
+        "method.response.header.Access-Control-Allow-Headers": "'Content-Type,Authorization,X-Amz-Date,X-Api-Key'",
+        "method.response.header.Access-Control-Allow-Origin": "'*'",
+        "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,GET,PUT,POST,DELETE,PATCH,HEAD'",
+        "method.response.header.Access-Control-Allow-Credentials": "'true'"
+       },
+       "StatusCode": "204"
+      }
+     ],
+     "RequestTemplates": {
+      "application/json": "{ statusCode: 200 }"
+     },
+     "Type": "MOCK"
+    },
+    "MethodResponses": [
+     {
+      "ResponseParameters": {
+       "method.response.header.Access-Control-Allow-Headers": true,
+       "method.response.header.Access-Control-Allow-Origin": true,
+       "method.response.header.Access-Control-Allow-Methods": true,
+       "method.response.header.Access-Control-Allow-Credentials": true
+      },
+      "StatusCode": "204"
+     }
+    ],
+    "ResourceId": {
+     "Ref": "ApitrainingsubmitB1465E7F"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/submit/OPTIONS/Resource"
+   }
+  },
+  "ApitrainingsubmitPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTtrainingsubmit50E63FB8": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "TrainingFunctionDF02EF51",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/",
+       {
+        "Ref": "ApiDeploymentStagedev51EE5D56"
+       },
+       "/POST/training/submit"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..training.submit"
+   }
+  },
+  "ApitrainingsubmitPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTtrainingsubmitB94CEA48": {
+   "Type": "AWS::Lambda::Permission",
+   "Properties": {
+    "Action": "lambda:InvokeFunction",
+    "FunctionName": {
+     "Fn::GetAtt": [
+      "TrainingFunctionDF02EF51",
+      "Arn"
+     ]
+    },
+    "Principal": "apigateway.amazonaws.com",
+    "SourceArn": {
+     "Fn::Join": [
+      "",
+      [
+       "arn:",
+       {
+        "Ref": "AWS::Partition"
+       },
+       ":execute-api:us-east-1:880147167659:",
+       {
+        "Ref": "ApiF70053CD"
+       },
+       "/test-invoke-stage/POST/training/submit"
+      ]
+     ]
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..training.submit"
+   }
+  },
+  "ApitrainingsubmitPOST0F3C8561": {
+   "Type": "AWS::ApiGateway::Method",
+   "Properties": {
+    "AuthorizationType": "COGNITO_USER_POOLS",
+    "AuthorizerId": {
+     "Ref": "CognitoAuthorizerF3215DBC"
+    },
+    "HttpMethod": "POST",
+    "Integration": {
+     "IntegrationHttpMethod": "POST",
+     "Type": "AWS_PROXY",
+     "Uri": {
+      "Fn::Join": [
+       "",
+       [
+        "arn:",
+        {
+         "Ref": "AWS::Partition"
+        },
+        ":apigateway:us-east-1:lambda:path/2015-03-31/functions/",
+        {
+         "Fn::GetAtt": [
+          "TrainingFunctionDF02EF51",
+          "Arn"
+         ]
+        },
+        "/invocations"
+       ]
+      ]
+     }
+    },
+    "ResourceId": {
+     "Ref": "ApitrainingsubmitB1465E7F"
+    },
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/Resource"
+   }
+  },
+  "CognitoAuthorizerF3215DBC": {
+   "Type": "AWS::ApiGateway::Authorizer",
+   "Properties": {
+    "IdentitySource": "method.request.header.Authorization",
+    "Name": "CognitoAuthorizer",
+    "ProviderARNs": [
+     {
+      "Fn::ImportValue": "InsightFuelFlow-Auth-dev:ExportsOutputFnGetAttUserPool6BA7E5F2Arn686ACC00"
+     }
+    ],
+    "RestApiId": {
+     "Ref": "ApiF70053CD"
+    },
+    "Type": "COGNITO_USER_POOLS"
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/CognitoAuthorizer/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/1VQ0U7DMAz8lr1nZnSI924InoCpE89TlnqdtzauYoepVP13lK4MeLo7n+y7JINs+QiLmb3I3JXneU176Ldq3dnYi+x6dBn0W3QxkHYvgWNr1gf/bzCY2jb70u48l3gSeBvhOXqnxN6QbaAvuMa0OOKGa3Jdklc2GFnurAiqQJ7AyBJW0Z1RV1ZwOg/9+uBvV9MyhoZEiP1gbEuVVbzYDvoCRfOWxrhfmjvH0at5wrbmrkGvafpHbdVWY8crKVA4Bodjg1fUI5fJnNiPO4VMnCtPyh+CYcNcSx71yIG+MIwFbmoYzPjMFES+SuZ71DbqYNIXwknuPrMM7h9gMTsJ0TxEr9QgFFf8BtsYsJ+0AQAA"
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Api-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "ApiEndpoint4F160690": {
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "ApiF70053CD"
+      },
+      ".execute-api.us-east-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "ApiDeploymentStagedev51EE5D56"
+      },
+      "/"
+     ]
+    ]
+   }
+  },
+  "ApiUrl": {
+   "Description": "API Gateway URL",
+   "Value": {
+    "Fn::Join": [
+     "",
+     [
+      "https://",
+      {
+       "Ref": "ApiF70053CD"
+      },
+      ".execute-api.us-east-1.",
+      {
+       "Ref": "AWS::URLSuffix"
+      },
+      "/",
+      {
+       "Ref": "ApiDeploymentStagedev51EE5D56"
+      },
+      "/"
+     ]
+    ]
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

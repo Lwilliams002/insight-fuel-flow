@@ -1,0 +1,21 @@
+{
+  "version": "48.0.0",
+  "files": {
+    "e0dab0bf0be0d2f305134c51d7f51064a8567ec6909548b13b8ce5a474f49dea": {
+      "displayName": "InsightFuelFlow-Auth-dev Template",
+      "source": {
+        "path": "InsightFuelFlow-Auth-dev.template.json",
+        "packaging": "file"
+      },
+      "destinations": {
+        "880147167659-us-east-1-91415490": {
+          "bucketName": "cdk-hnb659fds-assets-880147167659-us-east-1",
+          "objectKey": "e0dab0bf0be0d2f305134c51d7f51064a8567ec6909548b13b8ce5a474f49dea.json",
+          "region": "us-east-1",
+          "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-file-publishing-role-880147167659-us-east-1"
+        }
+      }
+    }
+  },
+  "dockerImages": {}
+}

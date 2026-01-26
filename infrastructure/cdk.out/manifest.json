@@ -1,0 +1,1983 @@
+{
+  "version": "48.0.0",
+  "artifacts": {
+    "InsightFuelFlow-Auth-dev.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "InsightFuelFlow-Auth-dev.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "InsightFuelFlow-Auth-dev": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://880147167659/us-east-1",
+      "properties": {
+        "templateFile": "InsightFuelFlow-Auth-dev.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-deploy-role-880147167659-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-cfn-exec-role-880147167659-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/e0dab0bf0be0d2f305134c51d7f51064a8567ec6909548b13b8ce5a474f49dea.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "InsightFuelFlow-Auth-dev.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-lookup-role-880147167659-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "InsightFuelFlow-Auth-dev.assets"
+      ],
+      "metadata": {
+        "/InsightFuelFlow-Auth-dev/UserPool/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPool6BA7E5F2"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/UserPoolClient/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClient2F5918F7"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/AdminGroup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminGroup"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/RepGroup": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RepGroup"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/CognitoUserPoolId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoUserPoolId"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/CognitoUserPoolClientId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoUserPoolClientId"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/CognitoRegion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoRegion"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/UserPoolId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolId"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/UserPoolClientId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UserPoolClientId"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/Exports/Output{\"Ref\":\"UserPool6BA7E5F2\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefUserPool6BA7E5F296FD7236"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/Exports/Output{\"Ref\":\"UserPoolClient2F5918F7\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefUserPoolClient2F5918F753847A55"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/Exports/Output{\"Fn::GetAtt\":[\"UserPool6BA7E5F2\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttUserPool6BA7E5F2Arn686ACC00"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/InsightFuelFlow-Auth-dev/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "InsightFuelFlow-Auth-dev"
+    },
+    "InsightFuelFlow-Database-dev.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "InsightFuelFlow-Database-dev.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "InsightFuelFlow-Database-dev": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://880147167659/us-east-1",
+      "properties": {
+        "templateFile": "InsightFuelFlow-Database-dev.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-deploy-role-880147167659-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-cfn-exec-role-880147167659-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/860d95e9e5af9ad719dcef5fb3da03733c49d488890c27db9a7a94c4c5e10646.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "InsightFuelFlow-Database-dev.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-lookup-role-880147167659-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "InsightFuelFlow-Database-dev.assets"
+      ],
+      "metadata": {
+        "/InsightFuelFlow-Database-dev/VPC/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCB9E5F0B4"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1SubnetB4246D30"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1RouteTableFEE4B781"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1RouteTableAssociation0B0896DC"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1DefaultRoute91CEF279"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/EIP": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1EIP6AD938E8"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet1/NATGateway": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet1NATGatewayE0556630"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet2Subnet74179F39"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet2RouteTable6F1A15F1"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet2RouteTableAssociation5A808732"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PublicSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPublicSubnet2DefaultRouteB7481BBA"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet1Subnet8BCA10E0"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet1RouteTableBE8A6027"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet1RouteTableAssociation347902D1"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet1DefaultRouteAE1D6490"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet2SubnetCFCDAA7A"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet2RouteTable0A19E10E"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet2RouteTableAssociation0C73D413"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/DefaultRoute": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCPrivateSubnet2DefaultRouteF4F5CFD2"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet1SubnetEBD00FC6"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet1RouteTableEB156210"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet1RouteTableAssociationA2D18F7C"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/Subnet": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet2Subnet4B1C8CAA"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/RouteTable": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet2RouteTable9B4F78DC"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/RouteTableAssociation": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIsolatedSubnet2RouteTableAssociation7BF8E0EB"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/IGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCIGWB7E252D3"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VPC/VPCGW": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VPCVPCGW99B986DC"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabaseSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecurityGroup7319C0F6"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabaseCredentials/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseCredentials8547B3E7"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabaseCredentials/Attachment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseCredentialsAttachment7BAB329F"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Database/SubnetGroup/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSubnetGroup7D60F180"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Database/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseB269D8BB"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabaseEndpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseEndpoint"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabasePort": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabasePort"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/DatabaseSecretArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DatabaseSecretArn"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/VpcId": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "VpcId"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Ref\":\"VPCB9E5F0B4\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefVPCB9E5F0B4BD23A326"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Ref\":\"DatabaseCredentials8547B3E7\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Fn::GetAtt\":[\"DatabaseB269D8BB\",\"Endpoint.Address\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Fn::GetAtt\":[\"DatabaseB269D8BB\",\"Endpoint.Port\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Ref\":\"VPCPrivateSubnet1Subnet8BCA10E0\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/Exports/Output{\"Ref\":\"VPCPrivateSubnet2SubnetCFCDAA7A\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/InsightFuelFlow-Database-dev/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "InsightFuelFlow-Database-dev"
+    },
+    "InsightFuelFlow-Storage-dev.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "InsightFuelFlow-Storage-dev.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "InsightFuelFlow-Storage-dev": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://880147167659/us-east-1",
+      "properties": {
+        "templateFile": "InsightFuelFlow-Storage-dev.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-deploy-role-880147167659-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-cfn-exec-role-880147167659-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/eb3fffa9bcb800723657e1362213a4fd8a22f9979362350f894af69a84d76b3a.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "InsightFuelFlow-Storage-dev.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-lookup-role-880147167659-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "InsightFuelFlow-Storage-dev.assets"
+      ],
+      "metadata": {
+        "/InsightFuelFlow-Storage-dev/StorageBucket/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StorageBucket19DB2FF8"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/StorageBucket/Policy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StorageBucketPolicy41A048DB"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/StorageBucket/AutoDeleteObjectsCustomResource/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StorageBucketAutoDeleteObjectsCustomResource105C81BD"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider": [
+          {
+            "type": "aws:cdk:is-custom-resource-handler-customResourceProvider",
+            "data": true
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Role": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderRole3B1BD092"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/Custom::S3AutoDeleteObjectsCustomResourceProvider/Handler": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CustomS3AutoDeleteObjectsCustomResourceProviderHandler9D90184F"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/BucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketName"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/BucketArn": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BucketArn"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/StorageBucketName": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "StorageBucketName"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/Exports/Output{\"Fn::GetAtt\":[\"StorageBucket19DB2FF8\",\"Arn\"]}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputFnGetAttStorageBucket19DB2FF8Arn891486CC"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/Exports/Output{\"Ref\":\"StorageBucket19DB2FF8\"}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ExportsOutputRefStorageBucket19DB2FF8E6209EFA"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/InsightFuelFlow-Storage-dev/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "InsightFuelFlow-Storage-dev"
+    },
+    "InsightFuelFlow-Api-dev.assets": {
+      "type": "cdk:asset-manifest",
+      "properties": {
+        "file": "InsightFuelFlow-Api-dev.assets.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+      }
+    },
+    "InsightFuelFlow-Api-dev": {
+      "type": "aws:cloudformation:stack",
+      "environment": "aws://880147167659/us-east-1",
+      "properties": {
+        "templateFile": "InsightFuelFlow-Api-dev.template.json",
+        "terminationProtection": false,
+        "validateOnSynth": false,
+        "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-deploy-role-880147167659-us-east-1",
+        "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-cfn-exec-role-880147167659-us-east-1",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/2e3865711bf9d8b697cae900efc07b26c3bbce6c2fd860d4348ae2f2557401ba.json",
+        "requiresBootstrapStackVersion": 6,
+        "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
+        "additionalDependencies": [
+          "InsightFuelFlow-Api-dev.assets"
+        ],
+        "lookupRole": {
+          "arn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-lookup-role-880147167659-us-east-1",
+          "requiresBootstrapStackVersion": 8,
+          "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version"
+        }
+      },
+      "dependencies": [
+        "InsightFuelFlow-Auth-dev",
+        "InsightFuelFlow-Database-dev",
+        "InsightFuelFlow-Storage-dev",
+        "InsightFuelFlow-Api-dev.assets"
+      ],
+      "metadata": {
+        "/InsightFuelFlow-Api-dev": [
+          {
+            "type": "aws:cdk:warning",
+            "data": "If you are relying on AWS SDK v2 to be present in the Lambda environment already, please explicitly configure a NodeJS runtime of Node 16 or lower. [ack: @aws-cdk/aws-lambda-nodejs:sdkV2NotInRuntime]",
+            "trace": [
+              "Annotations.addMessage (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/core/lib/annotations.js:1:2066)",
+              "Annotations.addWarningV2 (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/core/lib/annotations.js:1:984)",
+              "new Bundling (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:4190)",
+              "Function.bundle (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:1141)",
+              "new NodejsFunction (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:2443)",
+              "new ApiStack (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/lib/api-stack.ts:71:27)",
+              "Object.<anonymous> (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/bin/infrastructure.ts:42:18)",
+              "Module._compile (node:internal/modules/cjs/loader:1554:14)",
+              "Module.m._compile (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/index.ts:1618:23)",
+              "node:internal/modules/cjs/loader:1706:10",
+              "Object.require.extensions.<computed> [as .ts] (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/index.ts:1621:12)",
+              "Module.load (node:internal/modules/cjs/loader:1289:32)",
+              "Function._load (node:internal/modules/cjs/loader:1108:12)",
+              "TracingChannel.traceSync (node:diagnostics_channel:322:14)",
+              "wrapModuleLoad (node:internal/modules/cjs/loader:220:24)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)",
+              "phase4 (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:649:14)",
+              "bootstrap (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:95:10)",
+              "main (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:55:10)",
+              "Object.<anonymous> (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/bin.ts:800:3)",
+              "Module._compile (node:internal/modules/cjs/loader:1554:14)",
+              "Object.<anonymous> (node:internal/modules/cjs/loader:1706:10)",
+              "Module.load (node:internal/modules/cjs/loader:1289:32)",
+              "Function._load (node:internal/modules/cjs/loader:1108:12)",
+              "TracingChannel.traceSync (node:diagnostics_channel:322:14)",
+              "wrapModuleLoad (node:internal/modules/cjs/loader:220:24)",
+              "Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:170:5)",
+              "node:internal/main/run_main_module:36:49"
+            ]
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/LambdaSecurityGroup/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "LambdaSecurityGroup0BD9FC99"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/DealsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DealsFunctionServiceRoleBB100406"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/DealsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DealsFunctionServiceRoleDefaultPolicy68F23DD5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/DealsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "DealsFunction0D1A3880"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/RepsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RepsFunctionServiceRoleC79903FE"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/RepsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RepsFunctionServiceRoleDefaultPolicy3D8038CD"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/RepsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "RepsFunctionE25A944B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/PinsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PinsFunctionServiceRole85B483AE"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/PinsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PinsFunctionServiceRoleDefaultPolicy1A774380"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/PinsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "PinsFunctionBE777E65"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CommissionsFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CommissionsFunctionServiceRole19861EE3"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CommissionsFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CommissionsFunctionServiceRoleDefaultPolicyA62D388B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CommissionsFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CommissionsFunction31DA5E7C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/UploadFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UploadFunctionServiceRole2D7366CF"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/UploadFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UploadFunctionServiceRoleDefaultPolicyF19D6F1F"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/UploadFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "UploadFunction18838DD8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/AdminFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunctionServiceRoleE19718A7"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/AdminFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunctionServiceRoleDefaultPolicyB69DB622"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/AdminFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "AdminFunction09BA95C5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/InitDbFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InitDbFunctionServiceRole05110DC9"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/InitDbFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InitDbFunctionServiceRoleDefaultPolicy54BD6E7E"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/InitDbFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "InitDbFunction67777D6B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/TrainingFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TrainingFunctionServiceRole274F0ED5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/TrainingFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TrainingFunctionServiceRoleDefaultPolicy158C8FB3"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/TrainingFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "TrainingFunctionDF02EF51"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiF70053CD"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/CloudWatchRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiCloudWatchRole73EC6FC4"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Account": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiAccountA18C9B29"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Deployment/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiDeploymentB17BE62Da502ef82027b9f11085190f41f1d0c75"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/DeploymentStage.dev/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiDeploymentStagedev51EE5D56"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Endpoint": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiEndpoint4F160690"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiOPTIONS5886EA5D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apideals35F0FBA8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsOPTIONSA324CBE8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..deals": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETdeals1E62076A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..deals": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETdeals181468ED"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsGET2D156AB2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..deals": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTdeals81350515"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..deals": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTdeals0BE135AB"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsPOST9AF9B61A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidD5577134"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidOPTIONSD84B6C80"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETdealsid0604EAAB"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETdealsidB805B3C3"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidGET56B0FECB"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTdealsidF223A453"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTdealsid6109F989"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidPUT7CDB04EF"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETEdealsidDF404E50"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETEdealsidF4B3D830"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsidDELETED3F5053D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsAED3641D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsOPTIONS9A278DC8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETreps7ED54024"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETreps45EE42AD"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsGETDFC88265"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTrepsD3DCD27C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTrepsD86DB589"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsPOST9F2D6B49"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apirepsid1523297B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidOPTIONS4F4B80A2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETrepsid507B961C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETrepsid183EC441"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidGETF4130A57"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTrepsidDEF2221B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTrepsid7F41187D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidPUT7391329C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETErepsid0B001FE3"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..reps.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETErepsid8151D050"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/reps/{id}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApirepsidDELETE35DB4E1E"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apipins83E5FD52"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsOPTIONSF923031B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..pins": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETpins86BAE494"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..pins": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETpinsC77E6FD8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsGET0552246B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..pins": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTpins162CA0D2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..pins": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTpins6368836B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsPOSTF440F389"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apipinsid282BDB13"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidOPTIONSFAF88264"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidGETApiPermissionInsightFuelFlowApidevApi26E1307BGETpinsidCEA63B7B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETpinsidA3EFC1DA"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidGET988F2AC0"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTpinsidB3F1762D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTpinsidEBE8BBA1"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidPUT19536431"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETEpinsid3F5360EA"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..pins.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETEpinsid6C95F4B2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/pins/{id}/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApipinsidDELETE7333276A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apicommissions2D35E454"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsOPTIONS017DAA49"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..commissions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETcommissions0FF4FE37"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..commissions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETcommissions8C38523E"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsGET80F086A8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..commissions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTcommissions5A8A668A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..commissions": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTcommissionsD5354E18"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsPOSTD4158F66"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apicommissionsid0B2E0B48"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsidOPTIONS8693A033"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/ApiPermission.InsightFuelFlowApidevApi26E1307B.PUT..commissions.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsidPUTApiPermissionInsightFuelFlowApidevApi26E1307BPUTcommissionsidE818C7CF"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.PUT..commissions.{id}": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsidPUTApiPermissionTestInsightFuelFlowApidevApi26E1307BPUTcommissionsid4478C4FE"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/commissions/{id}/PUT/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApicommissionsidPUTE6450C81"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiupload610E4B84"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadOPTIONS7F358758"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..upload": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTupload74ABFF38"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..upload": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTupload657A6FB4"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadPOST4494B89F"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/url/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiuploadurl4586EBC7"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/url/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadurlOPTIONSB77FE95E"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..upload.url": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadurlPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTuploadurl589EE00B"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..upload.url": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadurlPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTuploadurlB6E4EBF8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/url/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploadurlPOST01FA528C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminF2AEC3DE"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminOPTIONSC9D86527"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreaterepFDEC5436"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreaterepOPTIONSD7222873"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.create-rep": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreaterepPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincreaterep51933023"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.create-rep": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreaterepPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincreaterep263BB7C1"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-rep/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreaterepPOST385DD0C7"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiadmincreateadmin899DAC4D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreateadminOPTIONS69E6E7BE"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.create-admin": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreateadminPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincreateadminF900144C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.create-admin": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreateadminPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincreateadmin0463CC69"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/create-admin/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincreateadminPOST9F600FDD"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiadminsyncreps0080F8D0"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminsyncrepsOPTIONS121A1953"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.sync-reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminsyncrepsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadminsyncreps55F11650"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.sync-reps": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminsyncrepsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadminsyncreps94C92064"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/sync-reps/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminsyncrepsPOST531D3132"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiadmincompletetraining3D7D5B36"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincompletetrainingOPTIONS09DD9EA9"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.complete-training": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincompletetrainingPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmincompletetraining497639E1"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.complete-training": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincompletetrainingPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmincompletetrainingFA126571"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/complete-training/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmincompletetrainingPOST05C08EF5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/init-db/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmininitdbA258AD23"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/init-db/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmininitdbOPTIONS0EDD8B2F"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.init-db": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmininitdbPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadmininitdb5AC9AD25"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.init-db": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmininitdbPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadmininitdbD803947C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/init-db/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadmininitdbPOST8E7D601D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingB90EAFA6"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingOPTIONS4AAED8E0"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..training": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingGETApiPermissionInsightFuelFlowApidevApi26E1307BGETtraining63F47796"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..training": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETtraining99DC1E12"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingGET3088CF1D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/submit/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingsubmitB1465E7F"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/submit/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingsubmitOPTIONS5F741CC5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..training.submit": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingsubmitPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTtrainingsubmit50E63FB8"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..training.submit": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingsubmitPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTtrainingsubmitB94CEA48"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/training/submit/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApitrainingsubmitPOST0F3C8561"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CognitoAuthorizer/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CognitoAuthorizerF3215DBC"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/ApiUrl": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiUrl"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CDKMetadata/Default": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CDKMetadata"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/BootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "BootstrapVersion"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/CheckBootstrapVersion": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "CheckBootstrapVersion"
+          }
+        ]
+      },
+      "displayName": "InsightFuelFlow-Api-dev"
+    },
+    "Tree": {
+      "type": "cdk:tree",
+      "properties": {
+        "file": "tree.json"
+      }
+    },
+    "aws-cdk-lib/feature-flag-report": {
+      "type": "cdk:feature-flag-report",
+      "properties": {
+        "module": "aws-cdk-lib",
+        "flags": {
+          "@aws-cdk/aws-signer:signingProfileNamePassedToCfn": {
+            "recommendedValue": true,
+            "explanation": "Pass signingProfileName to CfnSigningProfile"
+          },
+          "@aws-cdk/core:newStyleStackSynthesis": {
+            "recommendedValue": true,
+            "explanation": "Switch to new stack synthesis method which enables CI/CD",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:stackRelativeExports": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Name exports based on the construct paths relative to the stack, rather than the global construct path",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-ecs-patterns:secGroupsDisablesImplicitOpenListener": {
+            "recommendedValue": true,
+            "explanation": "Disable implicit openListener when custom security groups are provided"
+          },
+          "@aws-cdk/aws-rds:lowercaseDbIdentifier": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Force lowercasing of RDS Cluster names in CDK",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-apigateway:usagePlanKeyOrderInsensitiveId": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Allow adding/removing multiple UsagePlanKeys independently",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-lambda:recognizeVersionProps": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to opt in to the updated logical id calculation for Lambda Version created using the  `fn.currentVersion`.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-lambda:recognizeLayerVersion": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to opt in to the updated logical id calculation for Lambda Version created using the `fn.currentVersion`."
+          },
+          "@aws-cdk/aws-cloudfront:defaultSecurityPolicyTLSv1.2_2021": {
+            "userValue": true,
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to have cloudfront distributions use the security policy TLSv1.2_2021 by default.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:checkSecretUsage": {
+            "recommendedValue": true,
+            "explanation": "Enable this flag to make it impossible to accidentally use SecretValues in unsafe locations"
+          },
+          "@aws-cdk/core:target-partitions": {
+            "recommendedValue": [
+              "aws",
+              "aws-cn"
+            ],
+            "explanation": "What regions to include in lookup tables of environment agnostic stacks"
+          },
+          "@aws-cdk-containers/ecs-service-extensions:enableDefaultLogDriver": {
+            "recommendedValue": true,
+            "explanation": "ECS extensions will automatically add an `awslogs` driver if no logging is specified"
+          },
+          "@aws-cdk/aws-ec2:uniqueImdsv2TemplateName": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to have Launch Templates generated by the `InstanceRequireImdsv2Aspect` use unique names."
+          },
+          "@aws-cdk/aws-ecs:arnFormatIncludesClusterName": {
+            "recommendedValue": true,
+            "explanation": "ARN format used by ECS. In the new ARN format, the cluster name is part of the resource ID."
+          },
+          "@aws-cdk/aws-iam:minimizePolicies": {
+            "recommendedValue": true,
+            "explanation": "Minimize IAM policies by combining Statements"
+          },
+          "@aws-cdk/core:validateSnapshotRemovalPolicy": {
+            "recommendedValue": true,
+            "explanation": "Error on snapshot removal policies on resources that do not support it."
+          },
+          "@aws-cdk/aws-codepipeline:crossAccountKeyAliasStackSafeResourceName": {
+            "recommendedValue": true,
+            "explanation": "Generate key aliases that include the stack name"
+          },
+          "@aws-cdk/aws-s3:createDefaultLoggingPolicy": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature flag to create an S3 bucket policy by default in cases where an AWS service would automatically create the Policy if one does not exist."
+          },
+          "@aws-cdk/aws-sns-subscriptions:restrictSqsDescryption": {
+            "recommendedValue": true,
+            "explanation": "Restrict KMS key policy for encrypted Queues a bit more"
+          },
+          "@aws-cdk/aws-apigateway:disableCloudWatchRole": {
+            "recommendedValue": true,
+            "explanation": "Make default CloudWatch Role behavior safe for multiple API Gateways in one environment"
+          },
+          "@aws-cdk/core:enablePartitionLiterals": {
+            "recommendedValue": true,
+            "explanation": "Make ARNs concrete if AWS partition is known"
+          },
+          "@aws-cdk/aws-events:eventsTargetQueueSameAccount": {
+            "recommendedValue": true,
+            "explanation": "Event Rules may only push to encrypted SQS queues in the same account"
+          },
+          "@aws-cdk/aws-ecs:disableExplicitDeploymentControllerForCircuitBreaker": {
+            "recommendedValue": true,
+            "explanation": "Avoid setting the \"ECS\" deployment controller when adding a circuit breaker"
+          },
+          "@aws-cdk/aws-iam:importedRoleStackSafeDefaultPolicyName": {
+            "recommendedValue": true,
+            "explanation": "Enable this feature to create default policy names for imported roles that depend on the stack the role is in."
+          },
+          "@aws-cdk/aws-s3:serverAccessLogsUseBucketPolicy": {
+            "recommendedValue": true,
+            "explanation": "Use S3 Bucket Policy instead of ACLs for Server Access Logging"
+          },
+          "@aws-cdk/aws-route53-patters:useCertificate": {
+            "recommendedValue": true,
+            "explanation": "Use the official `Certificate` resource instead of `DnsValidatedCertificate`"
+          },
+          "@aws-cdk/customresources:installLatestAwsSdkDefault": {
+            "recommendedValue": false,
+            "explanation": "Whether to install the latest SDK by default in AwsCustomResource"
+          },
+          "@aws-cdk/aws-rds:databaseProxyUniqueResourceName": {
+            "recommendedValue": true,
+            "explanation": "Use unique resource name for Database Proxy"
+          },
+          "@aws-cdk/aws-codedeploy:removeAlarmsFromDeploymentGroup": {
+            "recommendedValue": true,
+            "explanation": "Remove CloudWatch alarms from deployment group"
+          },
+          "@aws-cdk/aws-apigateway:authorizerChangeDeploymentLogicalId": {
+            "recommendedValue": true,
+            "explanation": "Include authorizer configuration in the calculation of the API deployment logical ID."
+          },
+          "@aws-cdk/aws-ec2:launchTemplateDefaultUserData": {
+            "recommendedValue": true,
+            "explanation": "Define user data for a launch template by default when a machine image is provided."
+          },
+          "@aws-cdk/aws-secretsmanager:useAttachedSecretResourcePolicyForSecretTargetAttachments": {
+            "recommendedValue": true,
+            "explanation": "SecretTargetAttachments uses the ResourcePolicy of the attached Secret."
+          },
+          "@aws-cdk/aws-redshift:columnId": {
+            "recommendedValue": true,
+            "explanation": "Whether to use an ID to track Redshift column changes"
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:enableEmrServicePolicyV2": {
+            "recommendedValue": true,
+            "explanation": "Enable AmazonEMRServicePolicy_v2 managed policies"
+          },
+          "@aws-cdk/aws-ec2:restrictDefaultSecurityGroup": {
+            "recommendedValue": true,
+            "explanation": "Restrict access to the VPC default security group"
+          },
+          "@aws-cdk/aws-apigateway:requestValidatorUniqueId": {
+            "recommendedValue": true,
+            "explanation": "Generate a unique id for each RequestValidator added to a method"
+          },
+          "@aws-cdk/aws-kms:aliasNameRef": {
+            "recommendedValue": true,
+            "explanation": "KMS Alias name and keyArn will have implicit reference to KMS Key"
+          },
+          "@aws-cdk/aws-kms:applyImportedAliasPermissionsToPrincipal": {
+            "recommendedValue": true,
+            "explanation": "Enable grant methods on Aliases imported by name to use kms:ResourceAliases condition"
+          },
+          "@aws-cdk/aws-autoscaling:generateLaunchTemplateInsteadOfLaunchConfig": {
+            "recommendedValue": true,
+            "explanation": "Generate a launch template when creating an AutoScalingGroup"
+          },
+          "@aws-cdk/core:includePrefixInUniqueNameGeneration": {
+            "recommendedValue": true,
+            "explanation": "Include the stack prefix in the stack name generation process"
+          },
+          "@aws-cdk/aws-efs:denyAnonymousAccess": {
+            "recommendedValue": true,
+            "explanation": "EFS denies anonymous clients accesses"
+          },
+          "@aws-cdk/aws-opensearchservice:enableOpensearchMultiAzWithStandby": {
+            "recommendedValue": true,
+            "explanation": "Enables support for Multi-AZ with Standby deployment for opensearch domains"
+          },
+          "@aws-cdk/aws-lambda-nodejs:useLatestRuntimeVersion": {
+            "recommendedValue": true,
+            "explanation": "Enables aws-lambda-nodejs.Function to use the latest available NodeJs runtime as the default"
+          },
+          "@aws-cdk/aws-efs:mountTargetOrderInsensitiveLogicalId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, mount targets will have a stable logicalId that is linked to the associated subnet."
+          },
+          "@aws-cdk/aws-rds:auroraClusterChangeScopeOfInstanceParameterGroupWithEachParameters": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a scope of InstanceParameterGroup for AuroraClusterInstance with each parameters will change."
+          },
+          "@aws-cdk/aws-appsync:useArnForSourceApiAssociationIdentifier": {
+            "recommendedValue": true,
+            "explanation": "When enabled, will always use the arn for identifiers for CfnSourceApiAssociation in the GraphqlApi construct rather than id."
+          },
+          "@aws-cdk/aws-rds:preventRenderingDeprecatedCredentials": {
+            "recommendedValue": true,
+            "explanation": "When enabled, creating an RDS database cluster from a snapshot will only render credentials for snapshot credentials."
+          },
+          "@aws-cdk/aws-codepipeline-actions:useNewDefaultBranchForCodeCommitSource": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the CodeCommit source action is using the default branch name 'main'."
+          },
+          "@aws-cdk/aws-cloudwatch-actions:changeLambdaPermissionLogicalIdForLambdaAction": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the logical ID of a Lambda permission for a Lambda action includes an alarm ID."
+          },
+          "@aws-cdk/aws-codepipeline:crossAccountKeysDefaultValueToFalse": {
+            "recommendedValue": true,
+            "explanation": "Enables Pipeline to set the default value for crossAccountKeys to false."
+          },
+          "@aws-cdk/aws-codepipeline:defaultPipelineTypeToV2": {
+            "recommendedValue": true,
+            "explanation": "Enables Pipeline to set the default pipeline type to V2."
+          },
+          "@aws-cdk/aws-kms:reduceCrossAccountRegionPolicyScope": {
+            "recommendedValue": true,
+            "explanation": "When enabled, IAM Policy created from KMS key grant will reduce the resource scope to this key only."
+          },
+          "@aws-cdk/pipelines:reduceAssetRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "Remove the root account principal from PipelineAssetsFileRole trust policy",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-eks:nodegroupNameAttribute": {
+            "recommendedValue": true,
+            "explanation": "When enabled, nodegroupName attribute of the provisioned EKS NodeGroup will not have the cluster name prefix."
+          },
+          "@aws-cdk/aws-ec2:ebsDefaultGp3Volume": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default volume type of the EBS volume will be GP3"
+          },
+          "@aws-cdk/aws-ecs:removeDefaultDeploymentAlarm": {
+            "recommendedValue": true,
+            "explanation": "When enabled, remove default deployment alarm settings"
+          },
+          "@aws-cdk/custom-resources:logApiResponseDataPropertyTrueDefault": {
+            "recommendedValue": false,
+            "explanation": "When enabled, the custom resource used for `AwsCustomResource` will configure the `logApiResponseData` property as true by default"
+          },
+          "@aws-cdk/aws-s3:keepNotificationInImportedBucket": {
+            "recommendedValue": false,
+            "explanation": "When enabled, Adding notifications to a bucket in the current stack will not remove notification from imported stack."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:useNewS3UriParametersForBedrockInvokeModelTask": {
+            "recommendedValue": true,
+            "explanation": "When enabled, use new props for S3 URI field in task definition of state machine for bedrock invoke model.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/core:explicitStackTags": {
+            "recommendedValue": true,
+            "explanation": "When enabled, stack tags need to be assigned explicitly on a Stack."
+          },
+          "@aws-cdk/aws-ecs:reduceEc2FargateCloudWatchPermissions": {
+            "recommendedValue": true,
+            "explanation": "When enabled, we will only grant the necessary permissions when users specify cloudwatch log group through logConfiguration"
+          },
+          "@aws-cdk/aws-dynamodb:resourcePolicyPerReplica": {
+            "recommendedValue": true,
+            "explanation": "When enabled will allow you to specify a resource policy per replica, and not copy the source table policy to all replicas"
+          },
+          "@aws-cdk/aws-ec2:ec2SumTImeoutEnabled": {
+            "recommendedValue": true,
+            "explanation": "When enabled, initOptions.timeout and resourceSignalTimeout values will be summed together."
+          },
+          "@aws-cdk/aws-appsync:appSyncGraphQLAPIScopeLambdaPermission": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a Lambda authorizer Permission created when using GraphqlApi will be properly scoped with a SourceArn."
+          },
+          "@aws-cdk/aws-rds:setCorrectValueForDatabaseInstanceReadReplicaInstanceResourceId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the value of property `instanceResourceId` in construct `DatabaseInstanceReadReplica` will be set to the correct value which is `DbiResourceId` instead of currently `DbInstanceArn`"
+          },
+          "@aws-cdk/core:cfnIncludeRejectComplexResourceUpdateCreatePolicyIntrinsics": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CFN templates added with `cfn-include` will error if the template contains Resource Update or Create policies with CFN Intrinsics that include non-primitive values."
+          },
+          "@aws-cdk/aws-lambda-nodejs:sdkV3ExcludeSmithyPackages": {
+            "recommendedValue": true,
+            "explanation": "When enabled, both `@aws-sdk` and `@smithy` packages will be excluded from the Lambda Node.js 18.x runtime to prevent version mismatches in bundled applications."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:fixRunEcsTaskPolicy": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the resource of IAM Run Ecs policy generated by SFN EcsRunTask will reference the definition, instead of constructing ARN."
+          },
+          "@aws-cdk/aws-ec2:bastionHostUseAmazonLinux2023ByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the BastionHost construct will use the latest Amazon Linux 2023 AMI, instead of Amazon Linux 2."
+          },
+          "@aws-cdk/core:aspectStabilization": {
+            "recommendedValue": true,
+            "explanation": "When enabled, a stabilization loop will be run when invoking Aspects during synthesis.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-route53-targets:userPoolDomainNameMethodWithoutCustomResource": {
+            "recommendedValue": true,
+            "explanation": "When enabled, use a new method for DNS Name of user pool domain target without creating a custom resource."
+          },
+          "@aws-cdk/aws-elasticloadbalancingV2:albDualstackWithoutPublicIpv4SecurityGroupRulesDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default security group ingress rules will allow IPv6 ingress from anywhere"
+          },
+          "@aws-cdk/aws-iam:oidcRejectUnauthorizedConnections": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the default behaviour of OIDC provider will reject unauthorized connections"
+          },
+          "@aws-cdk/core:enableAdditionalMetadataCollection": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK will expand the scope of usage data collected to better inform CDK development and improve communication for security concerns and emerging issues."
+          },
+          "@aws-cdk/aws-lambda:createNewPoliciesWithAddToRolePolicy": {
+            "recommendedValue": false,
+            "explanation": "[Deprecated] When enabled, Lambda will create new inline policies with AddToRolePolicy instead of adding to the Default Policy Statement"
+          },
+          "@aws-cdk/aws-s3:setUniqueReplicationRoleName": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK will automatically generate a unique role name that is used for s3 object replication."
+          },
+          "@aws-cdk/pipelines:reduceStageRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "Remove the root account principal from Stage addActions trust policy",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-events:requireEventBusPolicySid": {
+            "recommendedValue": true,
+            "explanation": "When enabled, grantPutEventsTo() will use resource policies with Statement IDs for service principals."
+          },
+          "@aws-cdk/core:aspectPrioritiesMutating": {
+            "recommendedValue": true,
+            "explanation": "When set to true, Aspects added by the construct library on your behalf will be given a priority of MUTATING."
+          },
+          "@aws-cdk/aws-dynamodb:retainTableReplica": {
+            "recommendedValue": true,
+            "explanation": "When enabled, table replica will be default to the removal policy of source table unless specified otherwise."
+          },
+          "@aws-cdk/cognito:logUserPoolClientSecretValue": {
+            "recommendedValue": false,
+            "explanation": "When disabled, the value of the user pool client secret will not be logged in the custom resource lambda function logs."
+          },
+          "@aws-cdk/pipelines:reduceCrossAccountActionRoleTrustScope": {
+            "recommendedValue": true,
+            "explanation": "When enabled, scopes down the trust policy for the cross-account action role",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-stepfunctions:useDistributedMapResultWriterV2": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the resultWriterV2 property of DistributedMap will be used insted of resultWriter"
+          },
+          "@aws-cdk/s3-notifications:addS3TrustKeyPolicyForSnsSubscriptions": {
+            "recommendedValue": true,
+            "explanation": "Add an S3 trust policy to a KMS key resource policy for SNS subscriptions."
+          },
+          "@aws-cdk/aws-ec2:requirePrivateSubnetsForEgressOnlyInternetGateway": {
+            "recommendedValue": true,
+            "explanation": "When enabled, the EgressOnlyGateway resource is only created if private subnets are defined in the dual-stack VPC."
+          },
+          "@aws-cdk/aws-ec2-alpha:useResourceIdForVpcV2Migration": {
+            "recommendedValue": false,
+            "explanation": "When enabled, use resource IDs for VPC V2 migration"
+          },
+          "@aws-cdk/aws-s3:publicAccessBlockedByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, setting any combination of options for BlockPublicAccess will automatically set true for any options not defined."
+          },
+          "@aws-cdk/aws-lambda:useCdkManagedLogGroup": {
+            "recommendedValue": true,
+            "explanation": "When enabled, CDK creates and manages loggroup for the lambda function"
+          },
+          "@aws-cdk/aws-elasticloadbalancingv2:networkLoadBalancerWithSecurityGroupByDefault": {
+            "recommendedValue": true,
+            "explanation": "When enabled, Network Load Balancer will be created with a security group by default."
+          },
+          "@aws-cdk/aws-stepfunctions-tasks:httpInvokeDynamicJsonPathEndpoint": {
+            "recommendedValue": true,
+            "explanation": "When enabled, allows using a dynamic apiEndpoint with JSONPath format in HttpInvoke tasks.",
+            "unconfiguredBehavesLike": {
+              "v2": true
+            }
+          },
+          "@aws-cdk/aws-ecs-patterns:uniqueTargetGroupId": {
+            "recommendedValue": true,
+            "explanation": "When enabled, ECS patterns will generate unique target group IDs to prevent conflicts during load balancer replacement"
+          },
+          "@aws-cdk/aws-route53-patterns:useDistribution": {
+            "recommendedValue": true,
+            "explanation": "Use the `Distribution` resource instead of `CloudFrontWebDistribution`"
+          }
+        }
+      }
+    }
+  },
+  "minimumCliVersion": "2.1033.0"
+}

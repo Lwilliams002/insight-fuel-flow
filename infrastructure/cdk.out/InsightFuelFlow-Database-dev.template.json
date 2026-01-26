@@ -1,0 +1,786 @@
+{
+ "Resources": {
+  "VPCB9E5F0B4": {
+   "Type": "AWS::EC2::VPC",
+   "Properties": {
+    "CidrBlock": "10.0.0.0/16",
+    "EnableDnsHostnames": true,
+    "EnableDnsSupport": true,
+    "InstanceTenancy": "default",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-vpc-dev"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/Resource"
+   }
+  },
+  "VPCPublicSubnet1SubnetB4246D30": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.0.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/Subnet"
+   }
+  },
+  "VPCPublicSubnet1RouteTableFEE4B781": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/RouteTable"
+   }
+  },
+  "VPCPublicSubnet1RouteTableAssociation0B0896DC": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCPublicSubnet1RouteTableFEE4B781"
+    },
+    "SubnetId": {
+     "Ref": "VPCPublicSubnet1SubnetB4246D30"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/RouteTableAssociation"
+   }
+  },
+  "VPCPublicSubnet1DefaultRoute91CEF279": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "VPCIGWB7E252D3"
+    },
+    "RouteTableId": {
+     "Ref": "VPCPublicSubnet1RouteTableFEE4B781"
+    }
+   },
+   "DependsOn": [
+    "VPCVPCGW99B986DC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/DefaultRoute"
+   }
+  },
+  "VPCPublicSubnet1EIP6AD938E8": {
+   "Type": "AWS::EC2::EIP",
+   "Properties": {
+    "Domain": "vpc",
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/EIP"
+   }
+  },
+  "VPCPublicSubnet1NATGatewayE0556630": {
+   "Type": "AWS::EC2::NatGateway",
+   "Properties": {
+    "AllocationId": {
+     "Fn::GetAtt": [
+      "VPCPublicSubnet1EIP6AD938E8",
+      "AllocationId"
+     ]
+    },
+    "SubnetId": {
+     "Ref": "VPCPublicSubnet1SubnetB4246D30"
+    },
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1"
+     }
+    ]
+   },
+   "DependsOn": [
+    "VPCPublicSubnet1DefaultRoute91CEF279",
+    "VPCPublicSubnet1RouteTableAssociation0B0896DC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet1/NATGateway"
+   }
+  },
+  "VPCPublicSubnet2Subnet74179F39": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.1.0/24",
+    "MapPublicIpOnLaunch": true,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Public"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Public"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2/Subnet"
+   }
+  },
+  "VPCPublicSubnet2RouteTable6F1A15F1": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2/RouteTable"
+   }
+  },
+  "VPCPublicSubnet2RouteTableAssociation5A808732": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCPublicSubnet2RouteTable6F1A15F1"
+    },
+    "SubnetId": {
+     "Ref": "VPCPublicSubnet2Subnet74179F39"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2/RouteTableAssociation"
+   }
+  },
+  "VPCPublicSubnet2DefaultRouteB7481BBA": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "GatewayId": {
+     "Ref": "VPCIGWB7E252D3"
+    },
+    "RouteTableId": {
+     "Ref": "VPCPublicSubnet2RouteTable6F1A15F1"
+    }
+   },
+   "DependsOn": [
+    "VPCVPCGW99B986DC"
+   ],
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PublicSubnet2/DefaultRoute"
+   }
+  },
+  "VPCPrivateSubnet1Subnet8BCA10E0": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.2.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/Subnet"
+   }
+  },
+  "VPCPrivateSubnet1RouteTableBE8A6027": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/RouteTable"
+   }
+  },
+  "VPCPrivateSubnet1RouteTableAssociation347902D1": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCPrivateSubnet1RouteTableBE8A6027"
+    },
+    "SubnetId": {
+     "Ref": "VPCPrivateSubnet1Subnet8BCA10E0"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/RouteTableAssociation"
+   }
+  },
+  "VPCPrivateSubnet1DefaultRouteAE1D6490": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "VPCPublicSubnet1NATGatewayE0556630"
+    },
+    "RouteTableId": {
+     "Ref": "VPCPrivateSubnet1RouteTableBE8A6027"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet1/DefaultRoute"
+   }
+  },
+  "VPCPrivateSubnet2SubnetCFCDAA7A": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.3.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Private"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Private"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/Subnet"
+   }
+  },
+  "VPCPrivateSubnet2RouteTable0A19E10E": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/RouteTable"
+   }
+  },
+  "VPCPrivateSubnet2RouteTableAssociation0C73D413": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCPrivateSubnet2RouteTable0A19E10E"
+    },
+    "SubnetId": {
+     "Ref": "VPCPrivateSubnet2SubnetCFCDAA7A"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/RouteTableAssociation"
+   }
+  },
+  "VPCPrivateSubnet2DefaultRouteF4F5CFD2": {
+   "Type": "AWS::EC2::Route",
+   "Properties": {
+    "DestinationCidrBlock": "0.0.0.0/0",
+    "NatGatewayId": {
+     "Ref": "VPCPublicSubnet1NATGatewayE0556630"
+    },
+    "RouteTableId": {
+     "Ref": "VPCPrivateSubnet2RouteTable0A19E10E"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/PrivateSubnet2/DefaultRoute"
+   }
+  },
+  "VPCIsolatedSubnet1SubnetEBD00FC6": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1a",
+    "CidrBlock": "10.0.4.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/Subnet"
+   }
+  },
+  "VPCIsolatedSubnet1RouteTableEB156210": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/RouteTable"
+   }
+  },
+  "VPCIsolatedSubnet1RouteTableAssociationA2D18F7C": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCIsolatedSubnet1RouteTableEB156210"
+    },
+    "SubnetId": {
+     "Ref": "VPCIsolatedSubnet1SubnetEBD00FC6"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet1/RouteTableAssociation"
+   }
+  },
+  "VPCIsolatedSubnet2Subnet4B1C8CAA": {
+   "Type": "AWS::EC2::Subnet",
+   "Properties": {
+    "AvailabilityZone": "us-east-1b",
+    "CidrBlock": "10.0.5.0/24",
+    "MapPublicIpOnLaunch": false,
+    "Tags": [
+     {
+      "Key": "aws-cdk:subnet-name",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "aws-cdk:subnet-type",
+      "Value": "Isolated"
+     },
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/Subnet"
+   }
+  },
+  "VPCIsolatedSubnet2RouteTable9B4F78DC": {
+   "Type": "AWS::EC2::RouteTable",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2"
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/RouteTable"
+   }
+  },
+  "VPCIsolatedSubnet2RouteTableAssociation7BF8E0EB": {
+   "Type": "AWS::EC2::SubnetRouteTableAssociation",
+   "Properties": {
+    "RouteTableId": {
+     "Ref": "VPCIsolatedSubnet2RouteTable9B4F78DC"
+    },
+    "SubnetId": {
+     "Ref": "VPCIsolatedSubnet2Subnet4B1C8CAA"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IsolatedSubnet2/RouteTableAssociation"
+   }
+  },
+  "VPCIGWB7E252D3": {
+   "Type": "AWS::EC2::InternetGateway",
+   "Properties": {
+    "Tags": [
+     {
+      "Key": "Name",
+      "Value": "InsightFuelFlow-vpc-dev"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/IGW"
+   }
+  },
+  "VPCVPCGW99B986DC": {
+   "Type": "AWS::EC2::VPCGatewayAttachment",
+   "Properties": {
+    "InternetGatewayId": {
+     "Ref": "VPCIGWB7E252D3"
+    },
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/VPC/VPCGW"
+   }
+  },
+  "DatabaseSecurityGroup7319C0F6": {
+   "Type": "AWS::EC2::SecurityGroup",
+   "Properties": {
+    "GroupDescription": "Security group for RDS PostgreSQL",
+    "GroupName": "InsightFuelFlow-db-sg-dev",
+    "SecurityGroupEgress": [
+     {
+      "CidrIp": "0.0.0.0/0",
+      "Description": "Allow all outbound traffic by default",
+      "IpProtocol": "-1"
+     }
+    ],
+    "SecurityGroupIngress": [
+     {
+      "CidrIp": {
+       "Fn::GetAtt": [
+        "VPCB9E5F0B4",
+        "CidrBlock"
+       ]
+      },
+      "Description": "Allow PostgreSQL access from VPC",
+      "FromPort": 5432,
+      "IpProtocol": "tcp",
+      "ToPort": 5432
+     }
+    ],
+    "VpcId": {
+     "Ref": "VPCB9E5F0B4"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/DatabaseSecurityGroup/Resource"
+   }
+  },
+  "DatabaseCredentials8547B3E7": {
+   "Type": "AWS::SecretsManager::Secret",
+   "Properties": {
+    "Description": "RDS PostgreSQL credentials",
+    "GenerateSecretString": {
+     "ExcludePunctuation": true,
+     "GenerateStringKey": "password",
+     "PasswordLength": 32,
+     "SecretStringTemplate": "{\"username\":\"postgres\"}"
+    },
+    "Name": "InsightFuelFlow/database/dev"
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/DatabaseCredentials/Resource"
+   }
+  },
+  "DatabaseCredentialsAttachment7BAB329F": {
+   "Type": "AWS::SecretsManager::SecretTargetAttachment",
+   "Properties": {
+    "SecretId": {
+     "Ref": "DatabaseCredentials8547B3E7"
+    },
+    "TargetId": {
+     "Ref": "DatabaseB269D8BB"
+    },
+    "TargetType": "AWS::RDS::DBInstance"
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/DatabaseCredentials/Attachment/Resource"
+   }
+  },
+  "DatabaseSubnetGroup7D60F180": {
+   "Type": "AWS::RDS::DBSubnetGroup",
+   "Properties": {
+    "DBSubnetGroupDescription": "Subnet group for Database database",
+    "SubnetIds": [
+     {
+      "Ref": "VPCIsolatedSubnet1SubnetEBD00FC6"
+     },
+     {
+      "Ref": "VPCIsolatedSubnet2Subnet4B1C8CAA"
+     }
+    ]
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/Database/SubnetGroup/Default"
+   }
+  },
+  "DatabaseB269D8BB": {
+   "Type": "AWS::RDS::DBInstance",
+   "Properties": {
+    "AllocatedStorage": "20",
+    "AutoMinorVersionUpgrade": true,
+    "BackupRetentionPeriod": 1,
+    "CopyTagsToSnapshot": true,
+    "DBInstanceClass": "db.t3.micro",
+    "DBInstanceIdentifier": "insightfuelflow-dev",
+    "DBName": "insightfuelflow",
+    "DBSubnetGroupName": {
+     "Ref": "DatabaseSubnetGroup7D60F180"
+    },
+    "DeleteAutomatedBackups": true,
+    "DeletionProtection": false,
+    "EnablePerformanceInsights": false,
+    "Engine": "postgres",
+    "EngineVersion": "15",
+    "MasterUserPassword": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "DatabaseCredentials8547B3E7"
+       },
+       ":SecretString:password::}}"
+      ]
+     ]
+    },
+    "MasterUsername": {
+     "Fn::Join": [
+      "",
+      [
+       "{{resolve:secretsmanager:",
+       {
+        "Ref": "DatabaseCredentials8547B3E7"
+       },
+       ":SecretString:username::}}"
+      ]
+     ]
+    },
+    "MaxAllocatedStorage": 100,
+    "MultiAZ": false,
+    "PubliclyAccessible": false,
+    "StorageType": "gp3",
+    "VPCSecurityGroups": [
+     {
+      "Fn::GetAtt": [
+       "DatabaseSecurityGroup7319C0F6",
+       "GroupId"
+      ]
+     }
+    ]
+   },
+   "UpdateReplacePolicy": "Delete",
+   "DeletionPolicy": "Delete",
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/Database/Resource"
+   }
+  },
+  "CDKMetadata": {
+   "Type": "AWS::CDK::Metadata",
+   "Properties": {
+    "Analytics": "v2:deflate64:H4sIAAAAAAAA/2WQwW6DQAxEvyX3ZZvSqvc0qSIuLYIo18osbroJeNHaGxQh/r0ipBC1pxk/j6yRYx0/vejlAlqOTHmKKlvoLhcwJwUtf3ZoYt3tG6PWX7RP1yoNRWVNHgpCGdjsMhcEd1BUOPOZrZidsSDW0RQezFuSDvIOsgXBFi4q9fYMgvPhhAQ94RQYm9ymlQiY7xpJVI4meCuXrXehuXa4B71iNB6FayA4oNddfp1vwcGNsgN/QLm7OwX+bnrlS9bdBgQKYEyIBcigGqtPNTav/8BvtO9VhuyCN9dnfARpgvSKXIn6yA/nONaPz3q5OLK1kQ8ktkadjfoDgDwbm7oBAAA="
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Database-dev/CDKMetadata/Default"
+   }
+  }
+ },
+ "Outputs": {
+  "DatabaseEndpoint": {
+   "Description": "RDS Database Endpoint",
+   "Value": {
+    "Fn::GetAtt": [
+     "DatabaseB269D8BB",
+     "Endpoint.Address"
+    ]
+   }
+  },
+  "DatabasePort": {
+   "Description": "RDS Database Port",
+   "Value": {
+    "Fn::GetAtt": [
+     "DatabaseB269D8BB",
+     "Endpoint.Port"
+    ]
+   }
+  },
+  "DatabaseSecretArn": {
+   "Description": "Database Credentials Secret ARN",
+   "Value": {
+    "Ref": "DatabaseCredentials8547B3E7"
+   }
+  },
+  "VpcId": {
+   "Description": "VPC ID",
+   "Value": {
+    "Ref": "VPCB9E5F0B4"
+   }
+  },
+  "ExportsOutputRefVPCB9E5F0B4BD23A326": {
+   "Value": {
+    "Ref": "VPCB9E5F0B4"
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCB9E5F0B4BD23A326"
+   }
+  },
+  "ExportsOutputRefDatabaseCredentials8547B3E729671DA7": {
+   "Value": {
+    "Ref": "DatabaseCredentials8547B3E7"
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputRefDatabaseCredentials8547B3E729671DA7"
+   }
+  },
+  "ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059": {
+   "Value": {
+    "Fn::GetAtt": [
+     "DatabaseB269D8BB",
+     "Endpoint.Address"
+    ]
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointAddressA4DBD059"
+   }
+  },
+  "ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51": {
+   "Value": {
+    "Fn::GetAtt": [
+     "DatabaseB269D8BB",
+     "Endpoint.Port"
+    ]
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputFnGetAttDatabaseB269D8BBEndpointPort3ACB3F51"
+   }
+  },
+  "ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7": {
+   "Value": {
+    "Ref": "VPCPrivateSubnet1Subnet8BCA10E0"
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet1Subnet8BCA10E01F79A1B7"
+   }
+  },
+  "ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D": {
+   "Value": {
+    "Ref": "VPCPrivateSubnet2SubnetCFCDAA7A"
+   },
+   "Export": {
+    "Name": "InsightFuelFlow-Database-dev:ExportsOutputRefVPCPrivateSubnet2SubnetCFCDAA7AB22CF85D"
+   }
+  }
+ },
+ "Parameters": {
+  "BootstrapVersion": {
+   "Type": "AWS::SSM::Parameter::Value<String>",
+   "Default": "/cdk-bootstrap/hnb659fds/version",
+   "Description": "Version of the CDK Bootstrap resources in this environment, automatically retrieved from SSM Parameter Store. [cdk:skip]"
+  }
+ },
+ "Rules": {
+  "CheckBootstrapVersion": {
+   "Assertions": [
+    {
+     "Assert": {
+      "Fn::Not": [
+       {
+        "Fn::Contains": [
+         [
+          "1",
+          "2",
+          "3",
+          "4",
+          "5"
+         ],
+         {
+          "Ref": "BootstrapVersion"
+         }
+        ]
+       }
+      ]
+     },
+     "AssertDescription": "CDK bootstrap stack version 6 required. Please run 'cdk bootstrap' with a recent version of the CDK CLI."
+    }
+   ]
+  }
+ }
+}

@@ -396,7 +396,7 @@ export interface TrainingProgress {
 
 export interface ExamSubmission {
   course_id: string;
-  answers: Record<string, any>;
+  answers: Record<string, string | number | boolean>;
 }
 
 export interface ExamResult {

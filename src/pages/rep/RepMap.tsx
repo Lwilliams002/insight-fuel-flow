@@ -1,39 +1,35 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { pinsApi, Pin as AwsPin } from "@/integrations/aws/api";
 import { useAuth } from "@/contexts/AwsAuthContext";
-import { awsConfig } from "@/integrations/aws/config";
 import { BottomNav } from "@/components/BottomNav";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import {
-  format,
-  isSameDay,
-  startOfMonth,
-  endOfMonth,
-  addMonths,
-  subMonths,
-  isToday,
-  startOfWeek,
-  endOfWeek,
-  addDays,
-} from "date-fns";
+import { format, isToday, startOfWeek, endOfWeek } from "date-fns";
 import {
   MapPin,
   Crosshair,
   X,
-  CalendarIcon,
   Filter,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   Search,
   Navigation,
+  Plus,
+  Users,
+  Clock,
+  CheckCircle,
+  Calendar as CalendarIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
@@ -86,15 +82,12 @@ const statusConfig: Record<PinStatus, { color: string; label: string }> = {
   not_interested: { color: "#B71C1C", label: "Not Interested" }, // Dark Red
 };
 
-interface NewPinData {
-  lat: number;
-  lng: number;
-}
 
 export default function RepMap() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { user, getIdToken } = useAuth();
+  const queryClient = useQueryClient();
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<Map<string, mapboxgl.Marker>>(new Map());
@@ -104,12 +97,11 @@ export default function RepMap() {
   const mapboxglRef = useRef<typeof mapboxgl | null>(null);
 
   // Read initial tab from URL
-  const initialTab = searchParams.get("tab") as "map" | "list" | "calendar" | null;
-  const [activeView, setActiveView] = useState<"map" | "list" | "calendar">(initialTab || "map");
+  const initialTab = searchParams.get("tab") as "map" | "list" | null;
+  const [activeView, setActiveView] = useState<"map" | "list">(initialTab || "map");
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
   const [locationObtained, setLocationObtained] = useState(false);
   const [mapLoaded, setMapLoaded] = useState(false);
-  const [mapboxToken, setMapboxToken] = useState<string | undefined>(MAPBOX_TOKEN_ENV);
   const [mapboxReady, setMapboxReady] = useState(false);
 
   // Filters
@@ -120,32 +112,18 @@ export default function RepMap() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Calendar
-  const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
-
-  // Fallback: fetch token from backend if env var isn't present
-  useEffect(() => {
-    if (mapboxToken) return;
-    let cancelled = false;
-
-    (async () => {
-      try {
-        const accessToken = await getIdToken();
-        if (!accessToken) return;
-
-        // For now, just use the env var - backend token endpoint can be added later
-        // The mapbox token should be set via VITE_MAPBOX_ACCESS_TOKEN
-        console.log("Mapbox token not found in env, please set VITE_MAPBOX_ACCESS_TOKEN");
-      } catch (e) {
-        console.error("Failed to check for Mapbox token:", e);
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [mapboxToken, getIdToken]);
+  // Add pin dialog
+  const [isAddPinOpen, setIsAddPinOpen] = useState(false);
+  const [pinForm, setPinForm] = useState({
+    status: 'lead' as PinStatus,
+    homeowner_name: '',
+    address: '',
+    notes: '',
+    appointment_date: '',
+    appointment_time: '',
+  });
+  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   // Dynamically load mapbox-gl only when needed (on map view)
   useEffect(() => {
@@ -202,16 +180,62 @@ export default function RepMap() {
     };
   }, []);
 
+  const handleLocate = () => {
+    setIsFollowing((prev) => !prev);
+    if (map.current && userLocation) {
+      map.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17 });
+    }
+  };
+
+  const handleMapLongPress = (lat: number, lng: number) => {
+    console.log("handleMapLongPress called with:", lat, lng);
+    // Reverse geocode to get address from coordinates
+    if (!MAPBOX_TOKEN_ENV) {
+      console.log("No Mapbox token available");
+      return;
+    }
+
+    fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN_ENV}`)
+      .then(response => response.json())
+      .then(data => {
+        console.log("Geocoding response:", data);
+        const address = data.features?.[0]?.place_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        console.log("Setting address to:", address);
+        setPinForm(prev => ({
+          ...prev,
+          address,
+        }));
+        console.log("Opening appointment dialog");
+        setIsAddPinOpen(true);
+      })
+      .catch(error => {
+        console.error("Error reverse geocoding:", error);
+        // Fallback to coordinates if geocoding fails
+        const fallbackAddress = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        console.log("Using fallback address:", fallbackAddress);
+        setPinForm(prev => ({
+          ...prev,
+          address: fallbackAddress,
+        }));
+        console.log("Opening appointment dialog (fallback)");
+        setIsAddPinOpen(true);
+      });
+  };
+
+  const handlePinClick = useCallback((pin: Pin) => {
+    // Navigate to pin detail/edit page
+    navigate(`/map/pin/${pin.id}`);
+  }, [navigate]);
+
   // Initialize Mapbox - only runs once when location is first obtained
   useEffect(() => {
-    if (!mapboxToken) return;
     if (!mapboxReady || !mapboxglRef.current) return;
     if (!mapContainer.current) return;
     if (map.current) return; // Already initialized
     if (!locationObtained || !userLocation) return; // Wait for location
 
     const mapboxgl = mapboxglRef.current;
-    mapboxgl.accessToken = mapboxToken;
+    mapboxgl.accessToken = MAPBOX_TOKEN_ENV;
 
     // Use current userLocation value for initial center
     const initialCenter: [number, number] = [userLocation[1], userLocation[0]];
@@ -230,9 +254,11 @@ export default function RepMap() {
     });
 
     const handleTouchStart = (e: mapboxgl.MapTouchEvent) => {
+      console.log("Touch start detected");
       if (e.originalEvent.touches.length !== 1) return;
       longPressCoords.current = e.lngLat;
       longPressTimer.current = setTimeout(() => {
+        console.log("Long press timer fired");
         if (longPressCoords.current) {
           handleMapLongPress(longPressCoords.current.lat, longPressCoords.current.lng);
         }
@@ -240,6 +266,7 @@ export default function RepMap() {
     };
 
     const handleTouchEnd = () => {
+      console.log("Touch end detected");
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
@@ -247,6 +274,7 @@ export default function RepMap() {
     };
 
     const handleTouchMove = () => {
+      console.log("Touch move detected");
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
@@ -254,8 +282,10 @@ export default function RepMap() {
     };
 
     const handleMouseDown = (e: mapboxgl.MapMouseEvent) => {
+      console.log("Mouse down detected");
       longPressCoords.current = e.lngLat;
       longPressTimer.current = setTimeout(() => {
+        console.log("Long press timer fired (mouse)");
         if (longPressCoords.current) {
           handleMapLongPress(longPressCoords.current.lat, longPressCoords.current.lng);
         }
@@ -263,6 +293,7 @@ export default function RepMap() {
     };
 
     const handleMouseUp = () => {
+      console.log("Mouse up detected");
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
@@ -270,6 +301,7 @@ export default function RepMap() {
     };
 
     const handleMouseMove = () => {
+      console.log("Mouse move detected");
       if (longPressTimer.current) {
         clearTimeout(longPressTimer.current);
         longPressTimer.current = null;
@@ -291,7 +323,7 @@ export default function RepMap() {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapboxToken, mapboxReady, locationObtained]); // Don't include userLocation to prevent re-init on location updates
+  }, [mapboxReady, locationObtained]); // Don't include userLocation to prevent re-init on location updates
 
   // Force map resize when switching back to map view
   useEffect(() => {
@@ -303,7 +335,7 @@ export default function RepMap() {
   }, [activeView]);
 
   // Fetch rep's pins from AWS
-  const { data: pins, isLoading } = useQuery({
+  const { data: pins } = useQuery({
     queryKey: ["rep-pins"],
     queryFn: async () => {
       const response = await pinsApi.list();
@@ -340,6 +372,76 @@ export default function RepMap() {
     staleTime: 30000, // 30 seconds
   });
 
+  // Dashboard stats
+  const stats = useMemo(() => {
+    const totalLeads = pins?.length || 0;
+    const todayAppts = closerAppointments?.filter(pin => pin.appointment_date && isToday(new Date(pin.appointment_date))).length || 0;
+    const thisWeekAppts = closerAppointments?.filter(pin => {
+      if (!pin.appointment_date) return false;
+      const apptDate = new Date(pin.appointment_date);
+      const weekStart = startOfWeek(new Date());
+      const weekEnd = endOfWeek(new Date());
+      return apptDate >= weekStart && apptDate <= weekEnd;
+    }).length || 0;
+    const installedCount = pins?.filter(pin => pin.status === 'installed').length || 0;
+    return { totalLeads, todayAppts, thisWeekAppts, installedCount };
+  }, [pins, closerAppointments]);
+
+  // Render pins as markers on the map
+  useEffect(() => {
+    if (!map.current || !mapLoaded || !pins || !mapboxglRef.current) return;
+
+    const mapboxgl = mapboxglRef.current;
+
+    // Clear existing markers
+    markers.current.forEach(marker => marker.remove());
+    markers.current.clear();
+
+    // Add markers for each pin
+    pins.forEach(pin => {
+      if (pin.latitude && pin.longitude) {
+        const markerElement = document.createElement('div');
+        markerElement.className = 'w-6 h-6 rounded-full border-2 border-white shadow-lg flex items-center justify-center';
+        markerElement.style.backgroundColor = statusConfig[pin.status]?.color || '#888';
+
+        const marker = new mapboxgl.Marker(markerElement)
+          .setLngLat([pin.longitude, pin.latitude])
+          .addTo(map.current!);
+
+        // Add click handler
+        marker.getElement().addEventListener('click', () => {
+          handlePinClick(pin);
+        });
+
+        markers.current.set(pin.id, marker);
+      }
+    });
+
+    // Add user location marker if available
+    if (userLocation && userMarker.current) {
+      userMarker.current.remove();
+    }
+    if (userLocation) {
+      const userMarkerElement = document.createElement('div');
+      userMarkerElement.className = 'w-4 h-4 rounded-full border-2 border-white shadow-lg';
+      userMarkerElement.style.backgroundColor = "#C9A24D"; // Prime Gold color
+
+      userMarker.current = new mapboxgl.Marker(userMarkerElement)
+        .setLngLat([userLocation[1], userLocation[0]])
+        .addTo(map.current!);
+    }
+
+    return () => {
+      // Cleanup markers when component unmounts or pins change
+      markers.current.forEach(marker => marker.remove());
+      markers.current.clear();
+      if (userMarker.current) {
+        userMarker.current.remove();
+        userMarker.current = null;
+      }
+    };
+  }, [mapLoaded, pins, userLocation, handlePinClick]);
+
   // Filtered pins for list view
   const filteredPins = useMemo(() => {
     if (!pins) return [];
@@ -347,219 +449,215 @@ export default function RepMap() {
     return pins.filter((pin) => pin.status === statusFilter);
   }, [pins, statusFilter]);
 
-  // Appointments for calendar (own pins + assigned as closer)
-  const appointmentPins = useMemo(() => {
-    const ownAppointments = (pins || []).filter((pin) => pin.status === "appointment" && pin.appointment_date);
-    const closerAppts = (closerAppointments || []).filter((pin) => 
-      !ownAppointments.some(p => p.id === pin.id) // Avoid duplicates
+  const handleStatusFilterChange = (status: PinStatus | "all") => {
+    setStatusFilter(status);
+    setShowFilterDropdown(false);
+  };
+
+  // Search pins by homeowner name or address
+  const searchedPins = useMemo(() => {
+    if (!pins) return [];
+    if (!searchQuery) return pins;
+    const query = searchQuery.toLowerCase();
+    return pins.filter((pin) =>
+      (pin.homeowner_name?.toLowerCase().includes(query) || false) ||
+      (pin.address?.toLowerCase().includes(query) || false)
     );
-    return [...ownAppointments, ...closerAppts];
-  }, [pins, closerAppointments]);
+  }, [pins, searchQuery]);
 
-  // Appointments for selected calendar date
-  const selectedDateAppointments = useMemo(() => {
-    if (!selectedCalendarDate || !appointmentPins) return [];
-    return appointmentPins.filter(
-      (pin) => pin.appointment_date && isSameDay(new Date(pin.appointment_date), selectedCalendarDate),
-    );
-  }, [selectedCalendarDate, appointmentPins]);
+  // Combined filtered and searched pins for display
+  const displayedPins = useMemo(() => {
+    return searchedPins.filter(pin => statusFilter === "all" || pin.status === statusFilter);
+  }, [searchedPins, statusFilter]);
 
-  // Days with appointments for calendar highlighting
-  const daysWithAppointments = useMemo(() => {
-    if (!appointmentPins) return new Map<string, Pin[]>();
-    const daysMap = new Map<string, Pin[]>();
-    appointmentPins.forEach((pin) => {
-      if (pin.appointment_date) {
-        const key = format(new Date(pin.appointment_date), "yyyy-MM-dd");
-        const existing = daysMap.get(key) || [];
-        daysMap.set(key, [...existing, pin]);
-      }
-    });
-    return daysMap;
-  }, [appointmentPins]);
-
-  // Get calendar grid days (includes previous/next month padding)
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(calendarMonth);
-    const monthEnd = endOfMonth(calendarMonth);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 0 });
-    const calendarEnd = endOfWeek(monthEnd, { weekStartsOn: 0 });
-
-    const days: Date[] = [];
-    let currentDay = calendarStart;
-    while (currentDay <= calendarEnd) {
-      days.push(currentDay);
-      currentDay = addDays(currentDay, 1);
-    }
-    return days;
-  }, [calendarMonth]);
-
-  // Update user location marker
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !mapboxglRef.current || !userLocation) return;
-
-    const mapboxgl = mapboxglRef.current;
-
-    if (!userMarker.current) {
-      const el = document.createElement("div");
-      el.className = "user-location-marker";
-      el.innerHTML = `
-        <div style="position: relative; width: 24px; height: 24px;">
-          <div style="
-            position: absolute;
-            top: 0; left: 0;
-            width: 24px;
-            height: 24px;
-            background: rgba(201, 162, 77, 0.3);
-            border-radius: 50%;
-            animation: pulse 2s ease-out infinite;
-          "></div>
-          <div style="
-            position: absolute;
-            top: 6px; left: 6px;
-            width: 12px;
-            height: 12px;
-            background: #C9A24D;
-            border: 2px solid white;
-            border-radius: 50%;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
-          "></div>
-        </div>
-        <style>
-          @keyframes pulse {
-            0% { transform: scale(1); opacity: 1; }
-            100% { transform: scale(2.5); opacity: 0; }
-          }
-        </style>
-      `;
-
-      userMarker.current = new mapboxgl.Marker({ element: el })
-        .setLngLat([userLocation[1], userLocation[0]])
-        .addTo(map.current);
-    } else {
-      userMarker.current.setLngLat([userLocation[1], userLocation[0]]);
-    }
-  }, [userLocation, mapLoaded]);
-
-  // Update markers when pins change
-  useEffect(() => {
-    if (!map.current || !mapLoaded || !pins || !mapboxglRef.current) return;
-
-    const mapboxgl = mapboxglRef.current;
-
-    markers.current.forEach((marker) => marker.remove());
-    markers.current.clear();
-
-    pins.forEach((pin) => {
-      const el = document.createElement("div");
-      el.className = "custom-marker";
-      el.innerHTML = `
-        <div style="
-          background-color: ${statusConfig[pin.status]?.color || "#888"};
-          width: 28px;
-          height: 28px;
-          border-radius: 50%;
-          border: 3px solid white;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.4);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-        ">
-          <div style="
-            width: 10px;
-            height: 10px;
-            background: white;
-            border-radius: 50%;
-            opacity: 0.9;
-          "></div>
-        </div>
-      `;
-
-      el.addEventListener("click", () => handlePinClick(pin));
-
-      const marker = new mapboxgl.Marker({ element: el }).setLngLat([pin.longitude, pin.latitude]).addTo(map.current!);
-
-      markers.current.set(pin.id, marker);
-    });
-  }, [pins, mapLoaded]);
-
-  const handleMapLongPress = async (lat: number, lng: number) => {
-    if (!mapboxToken) {
-      toast.error("Map token missing. Please set a public Mapbox token (pk.*).");
+  const handleAddPinSubmit = async () => {
+    // Validate form data
+    if (!pinForm.address || !pinForm.homeowner_name) {
+      toast.error("Address and homeowner name are required.");
       return;
     }
-    const loadingToast = toast.loading("Getting address...");
+
+    // Convert appointment date and time to UTC ISO string
+    let appointmentDateTimeUtc: string | null = null;
+    if (pinForm.appointment_date && pinForm.appointment_time) {
+      const date = new Date(pinForm.appointment_date);
+      const time = pinForm.appointment_time.split(":");
+      date.setHours(parseInt(time[0]), parseInt(time[1]), 0, 0);
+      appointmentDateTimeUtc = date.toISOString();
+    }
 
     try {
+      // Create new pin
+      const response = await pinsApi.create({
+        ...pinForm,
+        latitude: longPressCoords.current?.lat || 0,
+        longitude: longPressCoords.current?.lng || 0,
+        status: 'lead',
+        homeowner_name: pinForm.homeowner_name.trim(),
+        address: pinForm.address.trim(),
+        notes: pinForm.notes?.trim() || "",
+        appointment_date: appointmentDateTimeUtc,
+        appointment_end_date: appointmentDateTimeUtc,
+        appointment_all_day: false,
+        assigned_closer_id: null,
+        rep_id: user?.sub,
+      });
+      if (response.error) throw new Error(response.error);
+
+      toast.success("Pin added successfully.");
+      setIsAddPinOpen(false);
+      setPinForm({
+        status: 'lead' as PinStatus,
+        homeowner_name: '',
+        address: '',
+        notes: '',
+        appointment_date: '',
+        appointment_time: '',
+      });
+      queryClient.invalidateQueries(["rep-pins"]);
+    } catch (error) {
+      toast.error(`Error adding pin: ${(error as Error).message}`);
+    }
+  };
+
+  const handleAddressChange = (value: string) => {
+    setPinForm(prev => ({ ...prev, address: value }));
+    if (value.length > 2) {
+      searchAddresses(value);
+    } else {
+      setAddressSuggestions([]);
+    }
+  };
+
+  const handleAddressSelect = (address: string) => {
+    setPinForm(prev => ({ ...prev, address }));
+    setAddressSuggestions([]);
+  };
+
+  const searchAddresses = async (query: string) => {
+    if (!MAPBOX_TOKEN_ENV || query.length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+
+    setIsSearchingAddress(true);
+    try {
       const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${mapboxToken}`,
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=5&types=address`,
       );
       const data = await response.json();
-      const address = data.features?.[0]?.place_name || "";
-
-      if (!address) {
-        toast.dismiss(loadingToast);
-        toast.error("Could not determine address for this location.");
-        return;
-      }
-
-      // Check if address already exists in pins
-      const addressExists = pins?.some(pin =>
-        pin.address?.toLowerCase().trim() === address.toLowerCase().trim()
-      );
-
-      if (addressExists) {
-        toast.dismiss(loadingToast);
-        toast.error("This address already has a pin. Please contact management.", { duration: 5000 });
-        return;
-      }
-
-      toast.dismiss(loadingToast);
-
-      // Navigate to new pin page with coordinates and address
-      navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}&from=${activeView}`);
+      const suggestions = data.features?.map((feature: { place_name: string }) => feature.place_name) || [];
+      setAddressSuggestions(suggestions);
     } catch (error) {
-      toast.dismiss(loadingToast);
-      console.error("Error during pin creation:", error);
-      toast.error("Failed to get address. Please try again.");
+      console.error("Error searching addresses:", error);
+      setAddressSuggestions([]);
+    } finally {
+      setIsSearchingAddress(false);
     }
   };
 
-  const handlePinClick = (pin: Pin) => {
-    navigate(`/map/pin/${pin.id}?from=${activeView}`);
-  };
-
-  const handleLocate = () => {
-    setIsFollowing((prev) => !prev);
-    if (map.current && userLocation) {
-      map.current.flyTo({ center: [userLocation[1], userLocation[0]], zoom: 17 });
-    }
-  };
-
-  // When in follow mode, center map on location updates
-  useEffect(() => {
-    if (isFollowing && map.current && userLocation) {
-      map.current.easeTo({ center: [userLocation[1], userLocation[0]], duration: 500 });
-    }
-  }, [userLocation, isFollowing]);
-
-  // Disable follow mode when user manually pans the map
-  useEffect(() => {
-    if (!map.current) return;
-
-    const handleDragStart = () => {
-      if (isFollowing) {
-        setIsFollowing(false);
+  // Create pin mutation
+  const createPinMutation = useMutation({
+    mutationFn: async (formData: typeof pinForm) => {
+      if (!MAPBOX_TOKEN_ENV) {
+        throw new Error("Mapbox token missing");
       }
-    };
 
-    map.current.on("dragstart", handleDragStart);
+      // Geocode the address to get coordinates
+      const geocodeResponse = await fetch(
+        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(formData.address)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=1`,
+      );
+      const geocodeData = await geocodeResponse.json();
+      const feature = geocodeData.features?.[0];
 
+      if (!feature) {
+        throw new Error("Could not find coordinates for this address");
+      }
+
+      const [lng, lat] = feature.center;
+
+      // Prepare pin data
+      const pinData: Omit<AwsPin, 'id' | 'created_at' | 'rep_id'> = {
+        lat,
+        lng,
+        status: formData.status,
+        address: formData.address,
+        homeowner_name: formData.homeowner_name,
+        notes: formData.notes,
+      };
+
+      // Add appointment fields if status is appointment
+      if (formData.status === "appointment") {
+        const appointmentDateTime = new Date(`${formData.appointment_date}T${formData.appointment_time}`).toISOString();
+        pinData.appointment_date = appointmentDateTime;
+        pinData.appointment_all_day = false;
+      }
+
+      const response = await pinsApi.create(pinData);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success("Pin created successfully!");
+      setIsAddPinOpen(false);
+      setPinForm({
+        status: 'lead' as PinStatus,
+        homeowner_name: '',
+        address: '',
+        notes: '',
+        appointment_date: '',
+        appointment_time: '',
+      });
+      setAddressSuggestions([]);
+      // Invalidate queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ["rep-pins"] });
+      queryClient.invalidateQueries({ queryKey: ["closer-appointments"] });
+    },
+    onError: (error) => {
+      console.error("Error creating pin:", error);
+      toast.error(error.message || "Failed to create pin");
+    },
+  });
+
+  const handleAddPin = () => {
+    if (!pinForm.homeowner_name || !pinForm.address) {
+      toast.error('Please fill in all required fields');
+      return;
+    }
+    if (pinForm.status === "appointment" && (!pinForm.appointment_date || !pinForm.appointment_time)) {
+      toast.error('Please fill in appointment date and time');
+      return;
+    }
+
+    createPinMutation.mutate(pinForm);
+  };
+
+  // Debounced address search for autocomplete
+  useEffect(() => {
+    if (!pinForm.address) {
+      setAddressSuggestions([]);
+      return;
+    }
+    setIsSearchingAddress(true);
+    const handler = setTimeout(() => {
+      fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places?access_token=${MAPBOX_TOKEN_ENV}&limit=5&autocomplete=true&proximity=${userLocation?.[1]},${userLocation?.[0]}&country=us&q=${encodeURIComponent(pinForm.address)}`)
+        .then(response => response.json())
+        .then(data => {
+          const suggestions = data.features?.map((feature: { place_name: string }) => feature.place_name) || [];
+          setAddressSuggestions(suggestions);
+          setIsSearchingAddress(false);
+        })
+        .catch(error => {
+          console.error("Error fetching address suggestions:", error);
+          setIsSearchingAddress(false);
+        });
+    }, 300);
     return () => {
-      map.current?.off("dragstart", handleDragStart);
+      clearTimeout(handler);
     };
-  }, [isFollowing]);
+  }, [pinForm.address, userLocation]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
@@ -569,27 +667,6 @@ export default function RepMap() {
           className="absolute inset-x-0 z-[1000] flex flex-col items-center gap-2 px-4"
           style={{ top: "calc(env(safe-area-inset-top, 0px) + 16px)" }}
         >
-          {/* Month Name - Only in Calendar View */}
-          {activeView === "calendar" && (
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
-                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
-              >
-                <ChevronLeft className="w-5 h-5 text-foreground" />
-              </button>
-              <div className="bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg px-5 py-2 min-w-[150px] text-center">
-                <span className="text-sm font-medium text-foreground">{format(calendarMonth, "MMMM yyyy")}</span>
-              </div>
-              <button
-                onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
-                className="p-2 rounded-full bg-card/95 backdrop-blur-sm border border-border shadow-lg hover:bg-muted transition-colors"
-              >
-                <ChevronRight className="w-5 h-5 text-foreground" />
-              </button>
-            </div>
-          )}
-
           {/* View Tabs */}
           <div className="flex bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg overflow-hidden">
             <button
@@ -608,20 +685,52 @@ export default function RepMap() {
             >
               List
             </button>
-            <button
-              onClick={() => setActiveView("calendar")}
-              className={`px-5 py-2 text-sm font-medium transition-colors ${
-                activeView === "calendar" ? "bg-card text-foreground" : "bg-muted text-muted-foreground"
-              }`}
-            >
-              Calendar
-            </button>
+          </div>
+
+          {/* Stats Cards */}
+          <div className="flex gap-1 overflow-x-auto px-2 w-full max-w-full justify-center">
+            <div className="flex-shrink-0 bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg p-2 min-w-[80px] sm:min-w-[120px] flex-1 sm:flex-initial">
+              <div className="flex items-center gap-1">
+                <Users className="w-3 h-3 text-blue-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Total Leads</p>
+                  <p className="text-sm font-semibold text-foreground">{stats.totalLeads}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-shrink-0 bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg p-2 min-w-[80px] sm:min-w-[120px] flex-1 sm:flex-initial">
+              <div className="flex items-center gap-1">
+                <Clock className="w-3 h-3 text-amber-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Today</p>
+                  <p className="text-sm font-semibold text-foreground">{stats.todayAppts}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-shrink-0 bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg p-2 min-w-[80px] sm:min-w-[120px] flex-1 sm:flex-initial">
+              <div className="flex items-center gap-1">
+                <CalendarIcon className="w-3 h-3 text-purple-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">This Week</p>
+                  <p className="text-sm font-semibold text-foreground">{stats.thisWeekAppts}</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex-shrink-0 bg-card/95 backdrop-blur-sm rounded-lg border border-border shadow-lg p-2 min-w-[80px] sm:min-w-[120px] flex-1 sm:flex-initial">
+              <div className="flex items-center gap-1">
+                <CheckCircle className="w-3 h-3 text-green-500" />
+                <div>
+                  <p className="text-xs text-muted-foreground">Installed</p>
+                  <p className="text-sm font-semibold text-foreground">{stats.installedCount}</p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Map View */}
         <div className={`${activeView === "map" ? "block" : "hidden"}`}>
-          {!mapboxToken ? (
+          {!MAPBOX_TOKEN_ENV ? (
             <div
               className="absolute inset-0 flex items-center justify-center p-6"
               style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
@@ -686,7 +795,7 @@ export default function RepMap() {
         <div
           className={`absolute inset-0 overflow-auto ${activeView === "list" ? "block" : "hidden"}`}
           style={{
-            paddingTop: "calc(env(safe-area-inset-top, 0px) + 64px)",
+            paddingTop: "calc(env(safe-area-inset-top, 0px) + 140px)",
             paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
           }}
         >
@@ -765,7 +874,7 @@ export default function RepMap() {
                     <div className="space-y-1 flex-1 min-w-0">
                       <p className="font-medium text-foreground truncate">{pin.homeowner_name || "Unknown"}</p>
                       <p className="text-sm text-muted-foreground truncate">
-                        {pin.address || `${pin.latitude.toFixed(5)}, ${pin.longitude.toFixed(5)}`}
+                        {pin.address || (pin.latitude !== null && pin.latitude !== undefined && pin.longitude !== null && pin.longitude !== undefined ? `${Number(pin.latitude).toFixed(5)}, ${Number(pin.longitude).toFixed(5)}` : "No location")}
                       </p>
                       {pin.status === "appointment" && pin.appointment_date && (
                         <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
@@ -800,160 +909,134 @@ export default function RepMap() {
             )}
           </div>
         </div>
-
-        {/* Calendar View */}
-        <div
-          className={`absolute inset-0 flex flex-col ${activeView === "calendar" ? "flex" : "hidden"}`}
-          style={{
-            paddingTop: "calc(env(safe-area-inset-top, 0px) + 120px)",
-            paddingBottom: "calc(80px + env(safe-area-inset-bottom, 0px))",
-          }}
-        >
-          {/* Day of Week Headers */}
-          <div className="grid grid-cols-7 border-b border-border bg-background">
-            {["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"].map((day) => (
-              <div key={day} className="text-center py-2 text-xs font-medium text-muted-foreground">
-                {day}
-              </div>
-            ))}
-          </div>
-
-          {/* Calendar Grid */}
-          <div className="flex-1 overflow-auto">
-            <div className="grid grid-cols-7 auto-rows-fr min-h-full">
-              {calendarDays.map((day, index) => {
-                const dateKey = format(day, "yyyy-MM-dd");
-                const dayAppointments = daysWithAppointments.get(dateKey) || [];
-                const isCurrentMonth = day.getMonth() === calendarMonth.getMonth();
-                const isSelected = selectedCalendarDate && isSameDay(day, selectedCalendarDate);
-                const isTodayDate = isToday(day);
-
-                return (
-                  <button
-                    key={index}
-                    onClick={() => navigate(`/map/date/${format(day, "yyyy-MM-dd")}?from=calendar`)}
-                    className={cn(
-                      "flex flex-col p-1 border-b border-r border-border min-h-[80px] text-left transition-colors",
-                      !isCurrentMonth && "opacity-40",
-                      isSelected && "bg-primary/10",
-                      !isSelected && "hover:bg-muted/50",
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full mb-1",
-                        isTodayDate && "bg-primary text-primary-foreground",
-                        !isTodayDate && isCurrentMonth && "text-foreground",
-                        !isTodayDate && !isCurrentMonth && "text-muted-foreground",
-                      )}
-                    >
-                      {format(day, "d")}
-                    </span>
-                    {/* Event Pills */}
-                    <div className="flex-1 space-y-0.5 overflow-hidden">
-                      {dayAppointments.slice(0, 3).map((appt) => (
-                        <div
-                          key={appt.id}
-                          className="text-[10px] px-1 py-0.5 rounded bg-primary/80 text-primary-foreground truncate"
-                        >
-                          {appt.homeowner_name || "Appt"}
-                        </div>
-                      ))}
-                      {dayAppointments.length > 3 && (
-                        <div className="text-[10px] text-muted-foreground px-1">+{dayAppointments.length - 3} more</div>
-                      )}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Selected Day Detail Panel (Bottom Sheet Style) */}
-          {selectedCalendarDate && (
-            <div
-              className="absolute inset-x-0 bottom-0 bg-card border-t border-border rounded-t-3xl shadow-2xl max-h-[60vh] flex flex-col"
-              style={{ bottom: "calc(64px + env(safe-area-inset-bottom, 0px))" }}
-            >
-              {/* Drag Handle */}
-              <div className="flex-shrink-0 pt-3 pb-1">
-                <div className="w-12 h-1 bg-muted rounded-full mx-auto" />
-              </div>
-
-              {/* Header */}
-              <div className="flex items-center justify-between px-4 py-2">
-                <h3 className="text-base font-semibold text-foreground">
-                  {format(selectedCalendarDate, "EEE, MMM d")}
-                </h3>
-                <button
-                  onClick={() => setSelectedCalendarDate(undefined)}
-                  className="p-1.5 rounded-full hover:bg-muted transition-colors"
-                >
-                  <X className="w-4 h-4 text-muted-foreground" />
-                </button>
-              </div>
-
-              {/* Appointments List */}
-              <div className="flex-1 overflow-auto px-4 pb-3">
-                {selectedDateAppointments.length > 0 ? (
-                  <div className="space-y-0.5">
-                    {selectedDateAppointments
-                      .sort((a, b) => {
-                        // All-day appointments first, then by time
-                        if (a.appointment_all_day && !b.appointment_all_day) return -1;
-                        if (!a.appointment_all_day && b.appointment_all_day) return 1;
-                        return new Date(a.appointment_date!).getTime() - new Date(b.appointment_date!).getTime();
-                      })
-                      .map((pin) => {
-                        const apptTime = new Date(pin.appointment_date!);
-                        const initial = (pin.homeowner_name?.[0] || "A").toUpperCase();
-
-                        return (
-                          <button
-                            key={pin.id}
-                            onClick={() => handlePinClick(pin)}
-                            className="w-full flex items-center gap-2 py-2 hover:bg-muted/50 rounded-lg transition-colors -mx-1.5 px-1.5"
-                          >
-                            {/* Time */}
-                            <div className="w-14 text-left shrink-0">
-                              <div className="text-xs font-medium text-muted-foreground">
-                                {pin.appointment_all_day ? "All Day" : format(apptTime, "h:mm a")}
-                              </div>
-                            </div>
-
-                            {/* Colored Bar */}
-                            <div className="w-0.5 h-8 rounded-full bg-primary shrink-0" />
-
-                            {/* Content */}
-                            <div className="flex-1 min-w-0 text-left">
-                              <p className="text-sm font-medium text-foreground truncate">
-                                {pin.homeowner_name || "Unknown"}
-                              </p>
-                              <p className="text-xs text-muted-foreground truncate">{pin.address || "No address"}</p>
-                            </div>
-
-                            {/* Avatar */}
-                            <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center shrink-0">
-                              <span className="text-xs font-semibold text-primary-foreground">{initial}</span>
-                            </div>
-                          </button>
-                        );
-                      })}
-                  </div>
-                ) : (
-                  <div className="text-center py-6 text-muted-foreground">
-                    <CalendarIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                    <p className="text-sm">No appointments on this day</p>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
       </main>
 
       {/* Bottom Navigation */}
       <BottomNav />
+
+      {/* Add Pin Dialog */}
+      <Dialog open={isAddPinOpen} onOpenChange={setIsAddPinOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Add New Pin</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="status" className="text-right">
+                Type
+              </Label>
+              <div className="col-span-3">
+                <select
+                  id="status"
+                  value={pinForm.status}
+                  onChange={(e) => setPinForm(prev => ({ ...prev, status: e.target.value as PinStatus }))}
+                  className="w-full h-10 bg-muted rounded-md border border-border focus:ring-1 focus:ring-primary focus:outline-none"
+                >
+                  {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
+                    <option key={status} value={status} className="text-sm">
+                      {statusConfig[status].label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="homeowner_name" className="text-right">
+                Name
+              </Label>
+              <Input
+                id="homeowner_name"
+                value={pinForm.homeowner_name}
+                onChange={(e) => setPinForm(prev => ({ ...prev, homeowner_name: e.target.value }))}
+                className="col-span-3"
+                placeholder="Homeowner name"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="address" className="text-right">
+                Address
+              </Label>
+              <div className="col-span-3 relative">
+                <Input
+                  id="address"
+                  value={pinForm.address}
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  placeholder="Address"
+                  className="w-full"
+                />
+                {isSearchingAddress && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                  </div>
+                )}
+                {addressSuggestions.length > 0 && (
+                  <div className="absolute top-full left-0 right-0 bg-card border border-border rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
+                    {addressSuggestions.map((suggestion, index) => (
+                      <button
+                        key={index}
+                        onClick={() => handleAddressSelect(suggestion)}
+                        className="w-full px-3 py-2 text-left hover:bg-muted transition-colors text-sm"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {pinForm.status === "appointment" && (
+              <>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="appointment_date" className="text-right">
+                    Date
+                  </Label>
+                  <Input
+                    id="appointment_date"
+                    type="date"
+                    value={pinForm.appointment_date}
+                    onChange={(e) => setPinForm(prev => ({ ...prev, appointment_date: e.target.value }))}
+                    className="col-span-3"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="appointment_time" className="text-right">
+                    Time
+                  </Label>
+                  <Input
+                    id="appointment_time"
+                    type="time"
+                    value={pinForm.appointment_time}
+                    onChange={(e) => setPinForm(prev => ({ ...prev, appointment_time: e.target.value }))}
+                    className="col-span-3"
+                  />
+                </div>
+              </>
+            )}
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="notes" className="text-right">
+                Notes
+              </Label>
+              <Textarea
+                id="notes"
+                value={pinForm.notes}
+                onChange={(e) => setPinForm(prev => ({ ...prev, notes: e.target.value }))}
+                className="col-span-3"
+                placeholder="Additional notes"
+                rows={3}
+              />
+            </div>
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsAddPinOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddPin} disabled={createPinMutation.isPending}>
+              {createPinMutation.isPending ? "Creating..." : "Create Pin"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
+

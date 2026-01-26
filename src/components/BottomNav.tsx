@@ -1,39 +1,42 @@
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { LayoutDashboard, Home, MapPin } from 'lucide-react';
+import { LayoutDashboard, Home, MapPin, Calendar } from 'lucide-react';
 
 const navItems = [
-  { href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/deals', icon: Home, label: 'My Deals' },
-  { href: '/map', icon: MapPin, label: 'My Map' },
+	{ href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+	{ href: '/deals', icon: Home, label: 'My Deals' },
+	{ href: '/map', icon: MapPin, label: 'My Map' },
+	{ href: '/calendar', icon: Calendar, label: 'Calendar' },
 ];
 
 export function BottomNav() {
-  const location = useLocation();
+	const location = useLocation();
 
-  return (
-    <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
-    >
-      <div className="flex h-16 items-center justify-around">
-        {navItems.map((item) => {
-          const isActive = location.pathname === item.href;
-          return (
-            <Link
-              key={item.href}
-              to={item.href}
-              className={cn(
-                'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
-                isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground'
-              )}
-            >
-              <item.icon className="h-5 w-5" />
-              <span className="text-xs font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
-  );
+	return (
+		<nav
+			className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-card"
+			style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
+		>
+			<div className="flex h-16 items-center justify-around">
+				{navItems.map((item) => {
+					const isActive = location.pathname === item.href;
+					return (
+						<Link
+							key={item.href}
+							to={item.href}
+							className={cn(
+								'flex flex-col items-center gap-1 px-4 py-2 transition-colors',
+								isActive
+									? 'text-primary'
+									: 'text-muted-foreground hover:text-foreground'
+							)}
+						>
+							<item.icon className="h-5 w-5" />
+							<span className="text-xs font-medium">{item.label}</span>
+						</Link>
+					);
+				})}
+			</div>
+		</nav>
+	);
 }
