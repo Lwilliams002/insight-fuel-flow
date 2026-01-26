@@ -24,7 +24,7 @@ EXCEPTION
 END $$;
 
 DO $$ BEGIN
-    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment');
+    CREATE TYPE pin_status AS ENUM ('lead', 'followup', 'installed', 'appointment', 'renter', 'not_interested');
 EXCEPTION
     WHEN duplicate_object THEN null;
 END $$;
@@ -285,6 +285,34 @@ BEGIN
         AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
     ) THEN
         ALTER TYPE pin_status ADD VALUE 'appointment';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Add 'renter' to pin_status enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'renter' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
+    ) THEN
+        ALTER TYPE pin_status ADD VALUE 'renter';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Add 'not_interested' to pin_status enum if it doesn't exist
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'not_interested' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'pin_status')
+    ) THEN
+        ALTER TYPE pin_status ADD VALUE 'not_interested';
     END IF;
 EXCEPTION
     WHEN duplicate_object THEN null;
