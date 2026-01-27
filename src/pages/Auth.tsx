@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Loader2, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
-import logoImage from '@/assets/logo.png';
+import logoImage from '/logo.png';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
