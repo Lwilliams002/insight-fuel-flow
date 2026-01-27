@@ -139,9 +139,29 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
         dealUpdates.signed_date = new Date().toISOString().split('T')[0];
       }
 
+      // Filter out any status values not in the database enum
+      const validStatuses = ['lead', 'signed', 'permit', 'install_scheduled', 'installed', 'complete', 'paid', 'cancelled'];
+      const updateData: Record<string, unknown> = { ...dealUpdates };
+      if (updateData.status && !validStatuses.includes(updateData.status as string)) {
+        delete updateData.status;
+      }
+      
+      // Remove any extended properties that don't exist in the database schema
+      const dbFields = ['address', 'city', 'completion_date', 'completion_images', 'contract_signed', 'created_at', 
+        'homeowner_email', 'homeowner_name', 'homeowner_phone', 'id', 'install_date', 'install_images', 'notes',
+        'payment_requested', 'payment_requested_at', 'permit_file_url', 'signature_date', 'signature_url', 
+        'signed_date', 'state', 'status', 'total_price', 'updated_at', 'zip_code'];
+      
+      const cleanedData: Record<string, unknown> = {};
+      for (const key of Object.keys(updateData)) {
+        if (dbFields.includes(key)) {
+          cleanedData[key] = updateData[key];
+        }
+      }
+      
       const { error } = await supabase
         .from('deals')
-        .update(dealUpdates)
+        .update(cleanedData)
         .eq('id', deal!.id);
       
       if (error) throw error;
@@ -245,8 +265,8 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
     if (!deal) return;
     
     try {
+      // Keep status as 'complete' but set payment_requested flag
       await supabase.from('deals').update({
-        status: 'pending',
         payment_requested: true,
         payment_requested_at: new Date().toISOString(),
       }).eq('id', deal.id);

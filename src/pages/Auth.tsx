@@ -4,24 +4,14 @@ import { useAuth } from '@/contexts/AwsAuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader } from '@/components/ui/card';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Logo } from '@/components/Logo';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Mail, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { z } from 'zod';
+import logoImage from '@/assets/logo.png';
 
 const loginSchema = z.object({
   email: z.string().email('Please enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
-});
-
-const signupSchema = loginSchema.extend({
-  fullName: z.string().min(2, 'Name must be at least 2 characters'),
-  confirmPassword: z.string(),
-}).refine((data) => data.password === data.confirmPassword, {
-  message: "Passwords don't match",
-  path: ["confirmPassword"],
 });
 
 const newPasswordSchema = z.object({
@@ -34,19 +24,12 @@ const newPasswordSchema = z.object({
 
 export default function Auth() {
   const navigate = useNavigate();
-  const { signIn, signUp, role, user, newPasswordRequired, completeNewPassword } = useAuth();
+  const { signIn, role, user, newPasswordRequired, completeNewPassword } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('login');
   
   // Login form state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
-  
-  // Signup form state
-  const [signupEmail, setSignupEmail] = useState('');
-  const [signupPassword, setSignupPassword] = useState('');
-  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
-  const [signupFullName, setSignupFullName] = useState('');
 
   // New password form state
   const [newPassword, setNewPassword] = useState('');
@@ -99,190 +82,132 @@ export default function Auth() {
     }
   };
 
-  const handleSignup = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const result = signupSchema.safeParse({
-      email: signupEmail,
-      password: signupPassword,
-      confirmPassword: signupConfirmPassword,
-      fullName: signupFullName
-    });
-    
-    if (!result.success) {
-      toast.error(result.error.errors[0].message);
-      return;
-    }
-    
-    setLoading(true);
-    const { error } = await signUp(signupEmail, signupPassword, signupFullName);
-    setLoading(false);
-    
-    if (error) {
-      if (error.message.includes('already registered')) {
-        toast.error('This email is already registered. Please sign in.');
-        setActiveTab('login');
-      } else {
-        toast.error(error.message);
-      }
-    } else {
-      toast.success('Account created! Please check your email to confirm.');
-    }
-  };
-
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background p-4">
-      {/* Gradient background effect */}
-      <div className="fixed inset-0 -z-10 overflow-hidden">
-        <div className="absolute -top-1/2 -left-1/2 h-full w-full rounded-full bg-primary/5 blur-3xl" />
-        <div className="absolute -bottom-1/2 -right-1/2 h-full w-full rounded-full bg-accent/5 blur-3xl" />
+    <div className="flex min-h-screen flex-col items-center justify-start bg-[#0F1E2E] px-6 pt-16 pb-8">
+      {/* Logo section */}
+      <div className="mb-12 flex flex-col items-center">
+        <img
+          src={logoImage}
+          alt="Prime Pros"
+          className="h-40 w-40 mb-6"
+        />
+        <h1 className="text-2xl font-bold text-foreground">
+          <span className="text-prime-gold">PRIME</span>{' '}
+          <span className="text-prime-white">PROS</span>
+        </h1>
       </div>
 
-      <div className="mb-8">
-        <Logo size="xl" showText />
-      </div>
-
-      <Card className="w-full max-w-md border-border/50 shadow-2xl">
+      {/* Form section */}
+      <div className="w-full max-w-sm">
         {newPasswordRequired ? (
-          <CardContent className="pt-6">
-            <div className="mb-4 text-center">
-              <h2 className="text-xl font-semibold">Set New Password</h2>
+          <div className="space-y-6">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-foreground">Set New Password</h2>
               <p className="text-sm text-muted-foreground mt-1">
                 Please create a new password to continue
               </p>
             </div>
             <form onSubmit={handleNewPassword} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="new-password">New Password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    id="new-password"
+                    type="password"
+                    placeholder="New Password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    className="pl-10 h-12 bg-[#1a2d42] border-[#2a3f54] text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="confirm-new-password">Confirm New Password</Label>
-                <Input
-                  id="confirm-new-password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={confirmNewPassword}
-                  onChange={(e) => setConfirmNewPassword(e.target.value)}
-                  required
-                  autoComplete="new-password"
-                />
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
+                  <Input
+                    id="confirm-new-password"
+                    type="password"
+                    placeholder="Confirm New Password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    required
+                    autoComplete="new-password"
+                    className="pl-10 h-12 bg-[#1a2d42] border-[#2a3f54] text-foreground placeholder:text-muted-foreground"
+                  />
+                </div>
               </div>
-              <Button type="submit" className="w-full" disabled={loading}>
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Set New Password'}
+              <Button 
+                type="submit" 
+                className="w-full h-12 bg-prime-gold hover:bg-prime-gold/90 text-prime-navy font-semibold text-base"
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Set New Password'}
               </Button>
             </form>
-          </CardContent>
+          </div>
         ) : (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <CardHeader className="space-y-1 pb-4">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Sign In</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-          </CardHeader>
-          <CardContent>
-            <TabsContent value="login" className="mt-0">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="login-email">Email</Label>
+          <div className="space-y-6">
+            <div className="text-center mb-8">
+              <h2 className="text-xl font-semibold text-foreground">Sign in to Prime Pros</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Titan Prime Solutions CRM
+              </p>
+            </div>
+            
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="login-email"
                     type="email"
-                    placeholder="you@company.com"
+                    placeholder="Email address"
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     required
                     autoComplete="email"
+                    className="pl-10 h-12 bg-[#1a2d42] border-[#2a3f54] text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="login-password">Password</Label>
+              </div>
+              <div className="space-y-2">
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                   <Input
                     id="login-password"
                     type="password"
-                    placeholder="••••••••"
+                    placeholder="Password"
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     required
                     autoComplete="current-password"
+                    className="pl-10 h-12 bg-[#1a2d42] border-[#2a3f54] text-foreground placeholder:text-muted-foreground"
                   />
                 </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Sign In'}
-                </Button>
-              </form>
-            </TabsContent>
+              </div>
+              <Button 
+                type="submit" 
+                className="w-full h-12 bg-prime-gold hover:bg-prime-gold/90 text-prime-navy font-semibold text-base"
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Sign In'}
+              </Button>
+            </form>
             
-            <TabsContent value="signup" className="mt-0">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="signup-name">Full Name</Label>
-                  <Input
-                    id="signup-name"
-                    type="text"
-                    placeholder="John Doe"
-                    value={signupFullName}
-                    onChange={(e) => setSignupFullName(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-email">Email</Label>
-                  <Input
-                    id="signup-email"
-                    type="email"
-                    placeholder="you@company.com"
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                    required
-                    autoComplete="email"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-password">Password</Label>
-                  <Input
-                    id="signup-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signupPassword}
-                    onChange={(e) => setSignupPassword(e.target.value)}
-                    required
-                    autoComplete="new-password"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="signup-confirm">Confirm Password</Label>
-                  <Input
-                    id="signup-confirm"
-                    type="password"
-                    placeholder="••••••••"
-                    value={signupConfirmPassword}
-                    onChange={(e) => setSignupConfirmPassword(e.target.value)}
-                    required
-                    autoComplete="new-password"
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create Account'}
-                </Button>
-              </form>
-              <p className="mt-4 text-center text-sm text-muted-foreground">
-                Contact your admin to get access after signing up.
-              </p>
-            </TabsContent>
-          </CardContent>
-        </Tabs>
+            <div className="text-center">
+              <button 
+                type="button"
+                className="text-prime-gold hover:text-prime-gold/80 text-sm font-medium"
+                onClick={() => toast.info('Please contact your administrator to reset your password.')}
+              >
+                Forgot your password?
+              </button>
+            </div>
+          </div>
         )}
-      </Card>
+      </div>
     </div>
   );
 }

@@ -489,9 +489,8 @@ export default function RepMap() {
     try {
       // Create new pin
       const response = await pinsApi.create({
-        ...pinForm,
-        latitude: longPressCoords.current?.lat || 0,
-        longitude: longPressCoords.current?.lng || 0,
+        lat: longPressCoords.current?.lat || 0,
+        lng: longPressCoords.current?.lng || 0,
         status: 'lead',
         homeowner_name: pinForm.homeowner_name.trim(),
         address: pinForm.address.trim(),
@@ -500,7 +499,6 @@ export default function RepMap() {
         appointment_end_date: appointmentDateTimeUtc,
         appointment_all_day: false,
         assigned_closer_id: null,
-        rep_id: user?.sub,
       });
       if (response.error) throw new Error(response.error);
 
@@ -514,7 +512,7 @@ export default function RepMap() {
         appointment_date: '',
         appointment_time: '',
       });
-      queryClient.invalidateQueries(["rep-pins"]);
+      queryClient.invalidateQueries({ queryKey: ["rep-pins"] });
     } catch (error) {
       toast.error(`Error adding pin: ${(error as Error).message}`);
     }
@@ -577,13 +575,23 @@ export default function RepMap() {
       const [lng, lat] = feature.center;
 
       // Prepare pin data
-      const pinData: Omit<AwsPin, 'id' | 'created_at' | 'rep_id'> = {
+      const pinData: Partial<AwsPin> = {
         lat,
         lng,
-        status: formData.status,
+        status: formData.status as AwsPin['status'],
         address: formData.address,
         homeowner_name: formData.homeowner_name,
-        notes: formData.notes,
+        notes: formData.notes || null,
+        deal_id: null,
+        homeowner_phone: null,
+        homeowner_email: null,
+        city: null,
+        state: null,
+        zip_code: null,
+        appointment_date: null,
+        appointment_end_date: null,
+        appointment_all_day: null,
+        assigned_closer_id: null,
       };
 
       // Add appointment fields if status is appointment
