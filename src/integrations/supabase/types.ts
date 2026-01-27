@@ -762,7 +762,6 @@ export type Database = {
         | "install_scheduled"
         | "installed"
         | "complete"
-        | "pending"
         | "paid"
         | "cancelled"
       pin_status: "lead" | "followup" | "installed" | "appointment"
@@ -903,7 +902,6 @@ export const Constants = {
         "install_scheduled",
         "installed",
         "complete",
-        "pending",
         "paid",
         "cancelled",
       ],
