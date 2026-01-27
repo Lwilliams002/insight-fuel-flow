@@ -21,9 +21,9 @@ export default defineConfig(({ mode }) => ({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'pwa-192x192.png', 'pwa-512x512.png'],
       manifest: {
-        name: 'Titan Prime Solutions',
-        short_name: 'Titan Prime',
-        description: 'Titan Prime Solutions - Sales and commission tracking',
+        name: 'Prime Pros - Titan Prime Solutions',
+        short_name: 'Prime Pros',
+        description: 'Prime Pros - Sales and commission tracking',
         theme_color: '#0F1E2E',
         background_color: '#0F1E2E',
         display: 'standalone',

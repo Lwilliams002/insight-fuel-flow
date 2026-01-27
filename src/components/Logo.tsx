@@ -32,10 +32,10 @@ export function Logo({ className, size = 'md', showText = false }: LogoProps) {
       
       {showText && (
         <div className="flex flex-col">
-          <span className={cn('font-bold text-foreground leading-tight', textSizes[size])}>
-            Titan Prime
+          <span className={cn('font-bold leading-tight', textSizes[size])}>
+            <span className="text-prime-gold">PRIME</span>{' '}
+            <span className="text-foreground">PROS</span>
           </span>
-          <span className="text-xs text-primary font-medium tracking-wider">SOLUTIONS</span>
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, ReactNode, useCallback,
 import {
   CognitoUserPool,
   CognitoUser,
+  CognitoUserAttribute,
   AuthenticationDetails,
   CognitoUserSession,
 } from 'amazon-cognito-identity-js';
@@ -173,8 +174,8 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         [
-          { Name: 'email', Value: email },
-          { Name: 'name', Value: fullName },
+          new CognitoUserAttribute({ Name: 'email', Value: email }),
+          new CognitoUserAttribute({ Name: 'name', Value: fullName }),
         ],
         [],
         (err) => {
