@@ -89,9 +89,9 @@ export default function Auth() {
         <img
           src={logoImage}
           alt="Prime Pros"
-          className="h-40 w-40 mb-6"
+          className="h-[180px] w-[260px] object-contain mb-4"
         />
-        <h1 className="text-2xl font-bold text-foreground">
+        <h1 className="text-[2.5rem] font-bold text-foreground">
           <span className="text-prime-gold">PRIME</span>{' '}
           <span className="text-prime-white">PROS</span>
         </h1>

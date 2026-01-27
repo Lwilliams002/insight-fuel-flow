@@ -9,10 +9,10 @@ interface LogoProps {
 
 export function Logo({ className, size = 'md', showText = false }: LogoProps) {
   const sizes = {
-    sm: 'h-6 w-6',
-    md: 'h-8 w-8',
-    lg: 'h-10 w-10',
-    xl: 'h-12 w-12',
+    sm: 'h-6 w-auto max-w-6',
+    md: 'h-8 w-auto max-w-8',
+    lg: 'h-10 w-auto max-w-10',
+    xl: 'h-12 w-auto max-w-12',
   };
 
   const textSizes = {
@@ -27,7 +27,7 @@ export function Logo({ className, size = 'md', showText = false }: LogoProps) {
       <img
         src={logoImage}
         alt="Titan Prime Solutions"
-        className={cn(sizes[size], 'flex-shrink-0 rounded')}
+        className={cn(sizes[size], 'flex-shrink-0 object-contain rounded')}
       />
       
       {showText && (
