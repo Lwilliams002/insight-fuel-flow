@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Logo } from '@/components/Logo';
 import { LogOut } from 'lucide-react';
 import { BottomNav } from './BottomNav';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 
 interface RepLayoutProps {
   children: ReactNode;
@@ -22,9 +23,12 @@ export function RepLayout({ children, title }: RepLayoutProps) {
             <h1 className="text-lg font-semibold text-foreground">{title}</h1>
           </div>
 
-          <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
-            <LogOut className="h-5 w-5" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out">
+              <LogOut className="h-5 w-5" />
+            </Button>
+          </div>
         </div>
       </header>
 

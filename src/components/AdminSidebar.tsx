@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AwsAuthContext';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import {
   Users,
   Home,
@@ -52,6 +53,7 @@ export function AdminSidebar() {
             <span className="font-semibold text-foreground whitespace-nowrap">Titan Prime</span>
           )}
         </div>
+        {!collapsed && <ThemeToggle />}
       </div>
 
       {/* Navigation */}

@@ -2,6 +2,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AwsAuthContext';
 import { Logo } from '@/components/Logo';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import {
   Sheet,
   SheetContent,
@@ -46,49 +47,52 @@ export function AdminMobileNav() {
           <Logo size="sm" />
           <span className="font-semibold text-foreground">RoofCommission</span>
         </div>
-        <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger asChild>
-            <Button variant="ghost" size="icon">
-              <Menu className="h-5 w-5" />
-            </Button>
-          </SheetTrigger>
-          <SheetContent side="right" className="w-72 p-0">
-            <div className="flex flex-col h-full">
-              <div className="p-4 border-b border-border">
-                <div className="flex items-center gap-3">
-                  <Logo size="sm" />
-                  <span className="font-semibold text-foreground">RoofCommission</span>
+        <div className="flex items-center gap-2">
+          <ThemeToggle />
+          <Sheet open={open} onOpenChange={setOpen}>
+            <SheetTrigger asChild>
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-72 p-0">
+              <div className="flex flex-col h-full">
+                <div className="p-4 border-b border-border">
+                  <div className="flex items-center gap-3">
+                    <Logo size="sm" />
+                    <span className="font-semibold text-foreground">RoofCommission</span>
+                  </div>
+                </div>
+                <nav className="flex-1 p-3 space-y-1">
+                  {navItems.map((item) => (
+                    <Link key={item.href} to={item.href} onClick={() => setOpen(false)}>
+                      <Button
+                        variant={isActive(item.href) ? 'secondary' : 'ghost'}
+                        className={cn(
+                          'w-full justify-start gap-3 h-12',
+                          isActive(item.href) && 'bg-primary/10 text-primary border border-primary/20'
+                        )}
+                      >
+                        <item.icon className={cn('h-5 w-5', isActive(item.href) && 'text-primary')} />
+                        <span>{item.label}</span>
+                      </Button>
+                    </Link>
+                  ))}
+                </nav>
+                <div className="p-3 border-t border-border">
+                  <Button
+                    variant="ghost"
+                    className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={signOut}
+                  >
+                    <LogOut className="h-5 w-5" />
+                    <span>Sign Out</span>
+                  </Button>
                 </div>
               </div>
-              <nav className="flex-1 p-3 space-y-1">
-                {navItems.map((item) => (
-                  <Link key={item.href} to={item.href} onClick={() => setOpen(false)}>
-                    <Button
-                      variant={isActive(item.href) ? 'secondary' : 'ghost'}
-                      className={cn(
-                        'w-full justify-start gap-3 h-12',
-                        isActive(item.href) && 'bg-primary/10 text-primary border border-primary/20'
-                      )}
-                    >
-                      <item.icon className={cn('h-5 w-5', isActive(item.href) && 'text-primary')} />
-                      <span>{item.label}</span>
-                    </Button>
-                  </Link>
-                ))}
-              </nav>
-              <div className="p-3 border-t border-border">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start gap-3 h-12 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={signOut}
-                >
-                  <LogOut className="h-5 w-5" />
-                  <span>Sign Out</span>
-                </Button>
-              </div>
-            </div>
-          </SheetContent>
-        </Sheet>
+            </SheetContent>
+          </Sheet>
+        </div>
       </header>
 
       {/* Bottom Navigation */}
