@@ -113,9 +113,14 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
         onSuccess: (cognitoSession) => {
           console.log('Sign in successful!', cognitoSession);
           setSession(cognitoSession);
-          setUser(extractUserFromSession(cognitoSession));
+          const userData = extractUserFromSession(cognitoSession);
+          setUser(userData);
           setRole(extractRoleFromSession(cognitoSession));
           setNewPasswordRequired(false);
+
+          // Store auth data for service worker
+          storeAuthDataForServiceWorker(cognitoSession, userData);
+
           resolve({ error: null });
         },
         onFailure: (err) => {
@@ -209,6 +214,34 @@ export function AwsAuthProvider({ children }: { children: ReactNode }) {
     }
 
     return session.getIdToken().getJwtToken();
+  };
+
+  // Store auth data for service worker background notifications
+  const storeAuthDataForServiceWorker = async (cognitoSession: CognitoUserSession, userData: User) => {
+    try {
+      const token = cognitoSession.getIdToken().getJwtToken();
+
+      // Store auth data
+      const authCache = await caches.open('auth-cache');
+      await authCache.put('/auth-data', new Response(JSON.stringify({
+        token,
+        expires: cognitoSession.getIdToken().getExpiration() * 1000 // Convert to milliseconds
+      })));
+
+      // Store user data
+      const userCache = await caches.open('user-cache');
+      await userCache.put('/user-data', new Response(JSON.stringify(userData)));
+
+      // Store API config
+      const apiCache = await caches.open('api-cache');
+      await apiCache.put('/api-config', new Response(JSON.stringify({
+        baseUrl: awsConfig.api.baseUrl
+      })));
+
+      console.log('Auth data stored for service worker');
+    } catch (error) {
+      console.error('Failed to store auth data for service worker:', error);
+    }
   };
 
   return (

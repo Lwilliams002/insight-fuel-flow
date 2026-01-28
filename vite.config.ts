@@ -48,6 +48,13 @@ export default defineConfig(({ mode }) => ({
             purpose: 'any maskable'
           }
         ]
+
+      },
+      srcDir: 'public',
+      filename: 'sw.js',
+      strategies: 'injectManifest',
+      injectManifest: {
+        maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5 MB
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
