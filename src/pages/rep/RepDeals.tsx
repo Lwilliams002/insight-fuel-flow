@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { dealsApi, Deal } from '@/integrations/aws/api';
 import { RepLayout } from '@/components/RepLayout';
 import { DealsTable } from '@/components/crm/DealsTable';
-import { DealWizard } from '@/components/crm/DealWizard';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
@@ -19,7 +18,6 @@ type ViewMode = 'pipeline' | 'table' | 'kanban';
 export default function RepDeals() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
-  const [wizardOpen, setWizardOpen] = useState(false);
 
   // Fetch deals for this rep (via deal_commissions)
   const { data: deals, isLoading } = useQuery({
@@ -76,7 +74,7 @@ export default function RepDeals() {
               </TabsList>
             </Tabs>
 
-            <Button onClick={() => setWizardOpen(true)} className="gap-2">
+            <Button onClick={() => navigate('/deals/new')} className="gap-2">
               <Plus className="w-4 h-4" />
               New Deal
             </Button>
@@ -162,7 +160,7 @@ export default function RepDeals() {
               {(!deals || deals.length === 0) && (
                 <div className="text-center py-12 text-muted-foreground">
                   <p>No deals yet</p>
-                  <Button onClick={() => setWizardOpen(true)} className="mt-4">
+                  <Button onClick={() => navigate('/deals/new')} className="mt-4">
                     Create Your First Deal
                   </Button>
                 </div>
@@ -173,9 +171,6 @@ export default function RepDeals() {
           )}
         </div>
       </div>
-
-      {/* Deal Wizard */}
-      <DealWizard open={wizardOpen} onOpenChange={setWizardOpen} />
     </RepLayout>
   );
 }

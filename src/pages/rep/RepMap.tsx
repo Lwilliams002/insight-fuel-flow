@@ -26,10 +26,7 @@ import {
   Calendar as CalendarIcon,
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
@@ -112,18 +109,6 @@ export default function RepMap() {
   const [isFollowing, setIsFollowing] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Add pin dialog
-  const [isAddPinOpen, setIsAddPinOpen] = useState(false);
-  const [pinForm, setPinForm] = useState({
-    status: 'lead' as PinStatus,
-    homeowner_name: '',
-    address: '',
-    notes: '',
-    appointment_date: '',
-    appointment_time: '',
-  });
-  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
   // Dynamically load mapbox-gl only when needed (on map view)
   useEffect(() => {
@@ -200,25 +185,16 @@ export default function RepMap() {
       .then(data => {
         console.log("Geocoding response:", data);
         const address = data.features?.[0]?.place_name || `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
-        console.log("Setting address to:", address);
-        setPinForm(prev => ({
-          ...prev,
-          address,
-        }));
-        console.log("Opening appointment dialog");
-        setIsAddPinOpen(true);
+        console.log("Navigating to new pin page with address:", address);
+        // Navigate to new pin page with coordinates and address
+        navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(address)}&from=map`);
       })
       .catch(error => {
         console.error("Error reverse geocoding:", error);
         // Fallback to coordinates if geocoding fails
         const fallbackAddress = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
         console.log("Using fallback address:", fallbackAddress);
-        setPinForm(prev => ({
-          ...prev,
-          address: fallbackAddress,
-        }));
-        console.log("Opening appointment dialog (fallback)");
-        setIsAddPinOpen(true);
+        navigate(`/map/pin/new?lat=${lat}&lng=${lng}&address=${encodeURIComponent(fallbackAddress)}&from=map`);
       });
   };
 
@@ -470,202 +446,6 @@ export default function RepMap() {
     return searchedPins.filter(pin => statusFilter === "all" || pin.status === statusFilter);
   }, [searchedPins, statusFilter]);
 
-  const handleAddPinSubmit = async () => {
-    // Validate form data
-    if (!pinForm.address || !pinForm.homeowner_name) {
-      toast.error("Address and homeowner name are required.");
-      return;
-    }
-
-    // Convert appointment date and time to UTC ISO string
-    let appointmentDateTimeUtc: string | null = null;
-    if (pinForm.appointment_date && pinForm.appointment_time) {
-      const date = new Date(pinForm.appointment_date);
-      const time = pinForm.appointment_time.split(":");
-      date.setHours(parseInt(time[0]), parseInt(time[1]), 0, 0);
-      appointmentDateTimeUtc = date.toISOString();
-    }
-
-    try {
-      // Create new pin
-      const response = await pinsApi.create({
-        lat: longPressCoords.current?.lat || 0,
-        lng: longPressCoords.current?.lng || 0,
-        status: 'lead',
-        homeowner_name: pinForm.homeowner_name.trim(),
-        address: pinForm.address.trim(),
-        notes: pinForm.notes?.trim() || "",
-        appointment_date: appointmentDateTimeUtc,
-        appointment_end_date: appointmentDateTimeUtc,
-        appointment_all_day: false,
-        assigned_closer_id: null,
-      });
-      if (response.error) throw new Error(response.error);
-
-      toast.success("Pin added successfully.");
-      setIsAddPinOpen(false);
-      setPinForm({
-        status: 'lead' as PinStatus,
-        homeowner_name: '',
-        address: '',
-        notes: '',
-        appointment_date: '',
-        appointment_time: '',
-      });
-      queryClient.invalidateQueries({ queryKey: ["rep-pins"] });
-    } catch (error) {
-      toast.error(`Error adding pin: ${(error as Error).message}`);
-    }
-  };
-
-  const handleAddressChange = (value: string) => {
-    setPinForm(prev => ({ ...prev, address: value }));
-    if (value.length > 2) {
-      searchAddresses(value);
-    } else {
-      setAddressSuggestions([]);
-    }
-  };
-
-  const handleAddressSelect = (address: string) => {
-    setPinForm(prev => ({ ...prev, address }));
-    setAddressSuggestions([]);
-  };
-
-  const searchAddresses = async (query: string) => {
-    if (!MAPBOX_TOKEN_ENV || query.length < 3) {
-      setAddressSuggestions([]);
-      return;
-    }
-
-    setIsSearchingAddress(true);
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=5&types=address`,
-      );
-      const data = await response.json();
-      const suggestions = data.features?.map((feature: { place_name: string }) => feature.place_name) || [];
-      setAddressSuggestions(suggestions);
-    } catch (error) {
-      console.error("Error searching addresses:", error);
-      setAddressSuggestions([]);
-    } finally {
-      setIsSearchingAddress(false);
-    }
-  };
-
-  // Create pin mutation
-  const createPinMutation = useMutation({
-    mutationFn: async (formData: typeof pinForm) => {
-      if (!MAPBOX_TOKEN_ENV) {
-        throw new Error("Mapbox token missing");
-      }
-
-      // Geocode the address to get coordinates
-      const geocodeResponse = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(formData.address)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=1`,
-      );
-      const geocodeData = await geocodeResponse.json();
-      const feature = geocodeData.features?.[0];
-
-      if (!feature) {
-        throw new Error("Could not find coordinates for this address");
-      }
-
-      const [lng, lat] = feature.center;
-
-      // Prepare pin data
-      const pinData: Partial<AwsPin> = {
-        lat,
-        lng,
-        status: formData.status as AwsPin['status'],
-        address: formData.address,
-        homeowner_name: formData.homeowner_name,
-        notes: formData.notes || null,
-        deal_id: null,
-        homeowner_phone: null,
-        homeowner_email: null,
-        city: null,
-        state: null,
-        zip_code: null,
-        appointment_date: null,
-        appointment_end_date: null,
-        appointment_all_day: null,
-        assigned_closer_id: null,
-      };
-
-      // Add appointment fields if status is appointment
-      if (formData.status === "appointment") {
-        const appointmentDateTime = new Date(`${formData.appointment_date}T${formData.appointment_time}`).toISOString();
-        pinData.appointment_date = appointmentDateTime;
-        pinData.appointment_all_day = false;
-      }
-
-      const response = await pinsApi.create(pinData);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      toast.success("Pin created successfully!");
-      setIsAddPinOpen(false);
-      setPinForm({
-        status: 'lead' as PinStatus,
-        homeowner_name: '',
-        address: '',
-        notes: '',
-        appointment_date: '',
-        appointment_time: '',
-      });
-      setAddressSuggestions([]);
-      // Invalidate queries to refresh the data
-      queryClient.invalidateQueries({ queryKey: ["rep-pins"] });
-      queryClient.invalidateQueries({ queryKey: ["closer-appointments"] });
-    },
-    onError: (error) => {
-      console.error("Error creating pin:", error);
-      toast.error(error.message || "Failed to create pin");
-    },
-  });
-
-  const handleAddPin = () => {
-    if (!pinForm.homeowner_name || !pinForm.address) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-    if (pinForm.status === "appointment" && (!pinForm.appointment_date || !pinForm.appointment_time)) {
-      toast.error('Please fill in appointment date and time');
-      return;
-    }
-
-    createPinMutation.mutate(pinForm);
-  };
-
-  // Debounced address search for autocomplete
-  useEffect(() => {
-    if (!pinForm.address) {
-      setAddressSuggestions([]);
-      return;
-    }
-    setIsSearchingAddress(true);
-    const handler = setTimeout(() => {
-      fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places?access_token=${MAPBOX_TOKEN_ENV}&limit=5&autocomplete=true&proximity=${userLocation?.[1]},${userLocation?.[0]}&country=us&q=${encodeURIComponent(pinForm.address)}`)
-        .then(response => response.json())
-        .then(data => {
-          const suggestions = data.features?.map((feature: { place_name: string }) => feature.place_name) || [];
-          setAddressSuggestions(suggestions);
-          setIsSearchingAddress(false);
-        })
-        .catch(error => {
-          console.error("Error fetching address suggestions:", error);
-          setIsSearchingAddress(false);
-        });
-    }, 300);
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [pinForm.address, userLocation]);
 
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
@@ -921,129 +701,6 @@ export default function RepMap() {
 
       {/* Bottom Navigation */}
       <BottomNav />
-
-      {/* Add Pin Dialog */}
-      <Dialog open={isAddPinOpen} onOpenChange={setIsAddPinOpen}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add New Pin</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="status" className="text-right">
-                Type
-              </Label>
-              <div className="col-span-3">
-                <select
-                  id="status"
-                  value={pinForm.status}
-                  onChange={(e) => setPinForm(prev => ({ ...prev, status: e.target.value as PinStatus }))}
-                  className="w-full h-10 bg-muted rounded-md border border-border focus:ring-1 focus:ring-primary focus:outline-none"
-                >
-                  {(Object.keys(statusConfig) as PinStatus[]).map((status) => (
-                    <option key={status} value={status} className="text-sm">
-                      {statusConfig[status].label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="homeowner_name" className="text-right">
-                Name
-              </Label>
-              <Input
-                id="homeowner_name"
-                value={pinForm.homeowner_name}
-                onChange={(e) => setPinForm(prev => ({ ...prev, homeowner_name: e.target.value }))}
-                className="col-span-3"
-                placeholder="Homeowner name"
-              />
-            </div>
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="address" className="text-right">
-                Address
-              </Label>
-              <div className="col-span-3 relative">
-                <Input
-                  id="address"
-                  value={pinForm.address}
-                  onChange={(e) => handleAddressChange(e.target.value)}
-                  placeholder="Address"
-                  className="w-full"
-                />
-                {isSearchingAddress && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                  </div>
-                )}
-                {addressSuggestions.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 bg-card border border-border rounded-lg shadow-lg z-50 max-h-40 overflow-y-auto">
-                    {addressSuggestions.map((suggestion, index) => (
-                      <button
-                        key={index}
-                        onClick={() => handleAddressSelect(suggestion)}
-                        className="w-full px-3 py-2 text-left hover:bg-muted transition-colors text-sm"
-                      >
-                        {suggestion}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-            {pinForm.status === "appointment" && (
-              <>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="appointment_date" className="text-right">
-                    Date
-                  </Label>
-                  <Input
-                    id="appointment_date"
-                    type="date"
-                    value={pinForm.appointment_date}
-                    onChange={(e) => setPinForm(prev => ({ ...prev, appointment_date: e.target.value }))}
-                    className="col-span-3"
-                  />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="appointment_time" className="text-right">
-                    Time
-                  </Label>
-                  <Input
-                    id="appointment_time"
-                    type="time"
-                    value={pinForm.appointment_time}
-                    onChange={(e) => setPinForm(prev => ({ ...prev, appointment_time: e.target.value }))}
-                    className="col-span-3"
-                  />
-                </div>
-              </>
-            )}
-            <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="notes" className="text-right">
-                Notes
-              </Label>
-              <Textarea
-                id="notes"
-                value={pinForm.notes}
-                onChange={(e) => setPinForm(prev => ({ ...prev, notes: e.target.value }))}
-                className="col-span-3"
-                placeholder="Additional notes"
-                rows={3}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => setIsAddPinOpen(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddPin} disabled={createPinMutation.isPending}>
-              {createPinMutation.isPending ? "Creating..." : "Create Pin"}
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
