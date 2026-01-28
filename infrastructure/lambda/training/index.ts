@@ -107,8 +107,9 @@ async function submitExam(user: any, event: APIGatewayProxyEvent) {
     [rep.id]
   );
 
-  // Define required courses (all 5 must be passed)
+  // Define required courses (all 6 must be passed)
   const requiredCourses = [
+    'titan-prime-standard',
     'roof-types-components',
     'measuring-estimating',
     'sales-door-knocking',
@@ -139,6 +140,18 @@ async function submitExam(user: any, event: APIGatewayProxyEvent) {
 function calculateScore(courseId: string, answers: Record<string, any>): number {
   // Define correct answers for each course (10 questions each)
   const correctAnswers: Record<string, Record<string, string>> = {
+    'titan-prime-standard': {
+      'q1': 'b',  // Act like a professional, perform like a winner, protect the brand
+      'q2': 'b',  // Never argue — escalate issues professionally
+      'q3': 'b',  // Manipulating contracts or pricing
+      'q4': 'b',  // Taking responsibility for your results and solving problems
+      'q5': 'b',  // W-9, company email, onboarding training, and required quizzes
+      'q6': 'b',  // Driven, coachable, competitive, reliable, and growth-focused
+      'q7': 'b',  // Substance use while working or at job sites
+      'q8': 'b',  // Trust, not just roofs
+      'q9': 'b',  // Misuse may result in termination
+      'q10': 'b', // Uphold company values, protect the brand, and operate with integrity
+    },
     'roof-types-components': {
       'q1': 'b',  // 100 square feet
       'q2': 'c',  // 15% waste for hip roofs
