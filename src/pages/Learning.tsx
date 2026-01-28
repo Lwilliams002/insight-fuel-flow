@@ -252,7 +252,7 @@ export default function Learning() {
     return (
       <div className="min-h-screen bg-background pb-8">
         {/* Hero Header */}
-        <div className="bg-gradient-to-br from-prime-navy to-[#1a2d42] text-white px-4 py-8 sm:py-12">
+        <div className="bg-gradient-to-br from-prime-navy to-[#1a2d42] text-white px-4 py-8 sm:py-12" style={{ paddingTop: 'max(2rem, env(safe-area-inset-top) + 2rem)' }}>
           <div className="container mx-auto max-w-4xl">
             {/* Header with Logout */}
             <div className="flex items-center justify-between mb-4">
@@ -394,7 +394,7 @@ export default function Learning() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-background border-b border-border">
+        <div className="sticky top-0 z-10 bg-background border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center justify-between p-4">
             <button
               onClick={handleBackToList}
@@ -582,7 +582,7 @@ export default function Learning() {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-background border-b border-border">
+        <div className="sticky top-0 z-10 bg-background border-b border-border" style={{ paddingTop: 'env(safe-area-inset-top)' }}>
           <div className="flex items-center justify-between p-4">
             <button
               onClick={() => setViewMode('course')}
