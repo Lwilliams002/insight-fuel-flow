@@ -37,13 +37,13 @@ const milestones: { status: DealStatus; icon: React.ElementType; label: string; 
   { status: 'lead', icon: User, label: 'Lead', phase: 'sign' },
   { status: 'inspection_scheduled', icon: Search, label: 'Inspection', phase: 'sign' },
   { status: 'claim_filed', icon: FileText, label: 'Claim Filed', phase: 'sign' },
-  { status: 'adjuster_scheduled', icon: Calendar, label: 'Adjuster Scheduled', phase: 'sign' },
-  { status: 'adjuster_met', icon: Clock, label: 'Awaiting Approval', phase: 'sign' },
+  { status: 'adjuster_scheduled', icon: Calendar, label: 'Adj. Sched.', phase: 'sign' },
+  { status: 'adjuster_met', icon: Clock, label: 'Awaiting Appr.', phase: 'sign' },
   { status: 'approved', icon: CheckCircle2, label: 'Approved', phase: 'sign' },
   { status: 'signed', icon: FileSignature, label: 'Signed', phase: 'sign' },
-  { status: 'materials_ordered', icon: Package, label: 'Materials Ordered', phase: 'build' },
+  { status: 'materials_ordered', icon: Package, label: 'Mat. Ordered', phase: 'build' },
   { status: 'materials_delivered', icon: Truck, label: 'Delivered', phase: 'build' },
-  { status: 'install_scheduled', icon: Calendar, label: 'Install Scheduled', phase: 'build' },
+  { status: 'install_scheduled', icon: Calendar, label: 'Inst. Sched.', phase: 'build' },
   { status: 'installed', icon: Home, label: 'Installed', phase: 'build' },
   { status: 'invoice_sent', icon: Send, label: 'Invoice Sent', phase: 'collect' },
   { status: 'depreciation_collected', icon: DollarSign, label: 'Depreciation', phase: 'collect' },
@@ -105,7 +105,7 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
         {/* Horizontal scrollable milestone track */}
         <div className="relative">
           <ScrollArea className="w-full" ref={scrollRef}>
-            <div className="flex items-end gap-0 pb-4 pt-14 px-4 min-w-max">
+            <div className="flex items-end gap-0 pb-8 pt-14 px-4 min-w-max">
               {milestones.map((milestone, index) => {
                 const isComplete = index < currentIndex;
                 const isCurrent = index === currentIndex;
@@ -121,7 +121,7 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
                     {/* Phase label at start of each phase */}
                     {isPhaseStart && (
                       <div 
-                        className="absolute -top-10 left-0 text-[10px] font-bold tracking-wider whitespace-nowrap"
+                        className="absolute top-12 left-0 text-[10px] font-bold tracking-wider whitespace-nowrap"
                         style={{ color: PRIME_NAVY }}
                       >
                         {phaseLabels[milestone.phase]}
@@ -131,7 +131,7 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
                     {/* Angled label above node */}
                     <div 
                       className={cn(
-                        "absolute -top-1 left-1/2 text-[10px] whitespace-nowrap origin-bottom-left",
+                        "absolute -top-6 left-1/2 text-[10px] whitespace-nowrap origin-bottom-left",
                         isCurrent ? "font-semibold" : "font-normal"
                       )}
                       style={{ 

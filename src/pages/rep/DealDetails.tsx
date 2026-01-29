@@ -311,27 +311,9 @@ export default function DealDetails() {
   const config = dealStatusConfig[currentStatus];
 
   return (
-    <RepLayout title="Deal Details">
+    <RepLayout title="Deal Details" showBackButton onBack={() => navigate('/deals')}>
       <div className="p-4 pb-24 space-y-4">
-        {/* Back Button & Title */}
-        <div className="flex items-center gap-3">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => navigate('/deals')}
-          >
-            <ChevronLeft className="h-5 w-5" />
-          </Button>
-          <div className="flex-1">
-            <h1 className="font-semibold text-lg">{deal.homeowner_name}</h1>
-            <p className="text-sm text-muted-foreground">{deal.address}</p>
-          </div>
-          <Badge style={{ backgroundColor: config.color, color: 'white' }}>
-            {config.label}
-          </Badge>
-        </div>
-
-        {/* Milestone Progress Tracker - new horizontal tracker */}
+        {/* Milestone Progress Tracker - moved to top for better visibility */}
         <MilestoneProgressTracker currentStatus={currentStatus} />
 
         {/* Tabs for different sections - removed Timeline tab */}
@@ -492,20 +474,6 @@ export default function DealDetails() {
                     <div>
                       <p className="text-xs text-muted-foreground">Address</p>
                       <p className="font-medium">{deal.address}</p>
-                    </div>
-                    <div className="grid grid-cols-3 gap-4">
-                      <div>
-                        <p className="text-xs text-muted-foreground">City</p>
-                        <p className="font-medium">{deal.city || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">State</p>
-                        <p className="font-medium">{deal.state || '-'}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">ZIP</p>
-                        <p className="font-medium">{deal.zip_code || '-'}</p>
-                      </div>
                     </div>
                     {deal.roof_type && (
                       <div className="grid grid-cols-2 gap-4 pt-2">
