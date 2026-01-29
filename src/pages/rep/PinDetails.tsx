@@ -110,6 +110,7 @@ export default function PinDetails() {
   const [isUploadingContract, setIsUploadingContract] = useState(false);
   const [showContractDialog, setShowContractDialog] = useState(false);
   const [contractFile, setContractFile] = useState<File | null>(null);
+  const [uploadLater, setUploadLater] = useState(false);
   
   const isNew = pinId === 'new';
   const lat = searchParams.get('lat');
@@ -284,9 +285,20 @@ export default function PinDetails() {
     }
   };
 
-  // Convert to deal with contract upload
+  // Convert to deal with optional contract upload
   const handleConvertToDeal = async () => {
-    if (!pin || !contractFile) return;
+    if (!pin) return;
+
+    // If uploading later, just convert directly
+    if (uploadLater) {
+      convertToDealMutation.mutate(pin);
+      setShowContractDialog(false);
+      setUploadLater(false);
+      return;
+    }
+
+    // Otherwise require contract upload
+    if (!contractFile) return;
 
     setIsUploadingContract(true);
     try {
@@ -315,6 +327,7 @@ export default function PinDetails() {
       setIsUploadingContract(false);
       setShowContractDialog(false);
       setContractFile(null);
+      setUploadLater(false);
       if (contractInputRef.current) contractInputRef.current.value = '';
     }
   };
@@ -880,52 +893,80 @@ export default function PinDetails() {
           )}
 
           {/* Agreement Contract Dialog */}
-          <Dialog open={showContractDialog} onOpenChange={setShowContractDialog}>
+          <Dialog open={showContractDialog} onOpenChange={(open) => {
+            setShowContractDialog(open);
+            if (!open) {
+              setContractFile(null);
+              setUploadLater(false);
+            }
+          }}>
             <DialogContent className="sm:max-w-md">
               <DialogHeader>
                 <DialogTitle>Upload Agreement Contract</DialogTitle>
                 <DialogDescription>
-                  Please upload the signed agreement contract to convert this pin into a deal.
+                  Upload the signed agreement contract to convert this pin into a deal.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-4">
-                <input
-                  ref={contractInputRef}
-                  type="file"
-                  className="hidden"
-                  onChange={handleContractFileSelect}
-                  accept=".pdf,.jpg,.jpeg,.png"
-                />
-                {contractFile ? (
-                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                    <FileText className="w-5 h-5 text-primary shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-medium text-foreground truncate block">
-                        {contractFile.name}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {(contractFile.size / 1024).toFixed(1)} KB
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        setContractFile(null);
-                        if (contractInputRef.current) contractInputRef.current.value = '';
-                      }}
-                      className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+                {/* Upload Later Toggle */}
+                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="upload-later" className="text-sm font-medium">
+                      Upload Agreement Later
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Convert to deal now, upload contract in Deal Details
+                    </p>
                   </div>
-                ) : (
-                  <button
-                    onClick={() => contractInputRef.current?.click()}
-                    className="w-full p-6 border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-muted/50 transition-colors"
-                  >
-                    <Upload className="w-8 h-8 text-muted-foreground" />
-                    <span className="text-sm text-muted-foreground">Tap to select contract file</span>
-                    <span className="text-xs text-muted-foreground">PDF, JPG, or PNG</span>
-                  </button>
+                  <Switch
+                    id="upload-later"
+                    checked={uploadLater}
+                    onCheckedChange={setUploadLater}
+                  />
+                </div>
+
+                {/* Contract upload section - hidden when upload later is checked */}
+                {!uploadLater && (
+                  <>
+                    <input
+                      ref={contractInputRef}
+                      type="file"
+                      className="hidden"
+                      onChange={handleContractFileSelect}
+                      accept=".pdf,.jpg,.jpeg,.png"
+                    />
+                    {contractFile ? (
+                      <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                        <FileText className="w-5 h-5 text-primary shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-foreground truncate block">
+                            {contractFile.name}
+                          </span>
+                          <span className="text-xs text-muted-foreground">
+                            {(contractFile.size / 1024).toFixed(1)} KB
+                          </span>
+                        </div>
+                        <button
+                          onClick={() => {
+                            setContractFile(null);
+                            if (contractInputRef.current) contractInputRef.current.value = '';
+                          }}
+                          className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => contractInputRef.current?.click()}
+                        className="w-full p-6 border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                      >
+                        <Upload className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-sm text-muted-foreground">Tap to select contract file</span>
+                        <span className="text-xs text-muted-foreground">PDF, JPG, or PNG</span>
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
               <DialogFooter className="gap-2 sm:gap-0">
@@ -934,13 +975,14 @@ export default function PinDetails() {
                   onClick={() => {
                     setShowContractDialog(false);
                     setContractFile(null);
+                    setUploadLater(false);
                   }}
                 >
                   Cancel
                 </Button>
                 <Button
                   onClick={handleConvertToDeal}
-                  disabled={!contractFile || isUploadingContract || convertToDealMutation.isPending}
+                  disabled={(!contractFile && !uploadLater) || isUploadingContract || convertToDealMutation.isPending}
                 >
                   {isUploadingContract || convertToDealMutation.isPending ? (
                     <>
@@ -950,7 +992,7 @@ export default function PinDetails() {
                   ) : (
                     <>
                       <Briefcase className="w-4 h-4 mr-2" />
-                      Convert to Deal
+                      {uploadLater ? 'Convert to Deal' : 'Upload & Convert'}
                     </>
                   )}
                 </Button>
