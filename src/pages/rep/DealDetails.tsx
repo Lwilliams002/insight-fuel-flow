@@ -3,7 +3,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi } from '@/integrations/aws/api';
 import { RepLayout } from '@/components/RepLayout';
-import { DealPipeline, InsuranceCard, StatusTimeline } from '@/components/DealCRMComponents';
+import { DealPipeline, InsuranceCard } from '@/components/DealCRMComponents';
+import { MilestoneProgressTracker } from '@/components/crm/MilestoneProgressTracker';
 import { DealStatus, dealStatusConfig, adjusterMeetingChecklist } from '@/lib/crmProcess';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -330,20 +331,15 @@ export default function DealDetails() {
           </Badge>
         </div>
 
-        {/* Deal Pipeline Progress */}
-        <DealPipeline
-          currentStatus={currentStatus}
-          onStatusChange={handleStatusChange}
-          deal={deal}
-        />
+        {/* Milestone Progress Tracker - new horizontal tracker */}
+        <MilestoneProgressTracker currentStatus={currentStatus} />
 
-        {/* Tabs for different sections */}
+        {/* Tabs for different sections - removed Timeline tab */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="insurance">Insurance</TabsTrigger>
             <TabsTrigger value="docs">Docs</TabsTrigger>
-            <TabsTrigger value="timeline">Timeline</TabsTrigger>
           </TabsList>
 
           {/* Overview Tab */}
@@ -1056,11 +1052,6 @@ export default function DealDetails() {
                 </div>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          {/* Timeline Tab */}
-          <TabsContent value="timeline" className="mt-4">
-            <StatusTimeline currentStatus={currentStatus} />
           </TabsContent>
         </Tabs>
       </div>
