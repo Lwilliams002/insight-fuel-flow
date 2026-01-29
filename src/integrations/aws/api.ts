@@ -246,6 +246,9 @@ export interface Pin {
   appointment_end_date: string | null;
   appointment_all_day: boolean | null;
   document_url: string | null;
+  image_url: string | null;
+  utility_url: string | null;
+  contract_url: string | null;
   assigned_closer_id: string | null;
   outcome: string | null;
   outcome_notes: string | null;

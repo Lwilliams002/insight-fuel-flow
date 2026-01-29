@@ -16,9 +16,17 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
   ChevronLeft, User, Phone, Mail, Trash2, Briefcase,
-  CalendarIcon, Clock, X, Upload, FileText, Loader2, Users
+  CalendarIcon, Clock, X, Upload, FileText, Loader2, Users, Image, Zap
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AwsAuthContext';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type PinStatus = 'lead' | 'followup' | 'installed' | 'appointment' | 'renter' | 'not_interested';
 
@@ -41,6 +49,9 @@ interface Pin {
   assigned_closer_id: string | null;
   rep_id: string;
   document_url: string | null;
+  image_url: string | null;
+  utility_url: string | null;
+  contract_url: string | null;
 }
 
 // Convert AWS Pin to local format
@@ -63,6 +74,9 @@ function mapAwsPinToPin(awsPin: AwsPin): Pin {
     assigned_closer_id: awsPin.assigned_closer_id,
     rep_id: awsPin.rep_id,
     document_url: awsPin.document_url,
+    image_url: awsPin.image_url,
+    utility_url: awsPin.utility_url,
+    contract_url: awsPin.contract_url,
   };
 }
 
@@ -88,8 +102,14 @@ export default function PinDetails() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { user } = useAuth();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [isUploading, setIsUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const utilityInputRef = useRef<HTMLInputElement>(null);
+  const contractInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingUtility, setIsUploadingUtility] = useState(false);
+  const [isUploadingContract, setIsUploadingContract] = useState(false);
+  const [showContractDialog, setShowContractDialog] = useState(false);
+  const [contractFile, setContractFile] = useState<File | null>(null);
   
   const isNew = pinId === 'new';
   const lat = searchParams.get('lat');
@@ -164,58 +184,138 @@ export default function PinDetails() {
     },
   });
 
-  // Upload document handler
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Upload image handler
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !pinId || isNew) return;
 
-    setIsUploading(true);
+    setIsUploadingImage(true);
     try {
-      // Get presigned upload URL from AWS
-      const urlResponse = await uploadApi.getUploadUrl(file.name, file.type, `pins/${pinId}`);
+      const urlResponse = await uploadApi.getUploadUrl(file.name, file.type, `pins/${pinId}/images`);
       if (urlResponse.error) throw new Error(urlResponse.error);
 
       const { url, key } = urlResponse.data!;
 
-      // Upload file directly to S3
       const uploadResponse = await fetch(url, {
         method: 'PUT',
         body: file,
-        headers: {
-          'Content-Type': file.type,
-        },
+        headers: { 'Content-Type': file.type },
       });
 
-      if (!uploadResponse.ok) throw new Error('Failed to upload file');
+      if (!uploadResponse.ok) throw new Error('Failed to upload image');
 
-      // Update pin with document URL
-      const updateResponse = await pinsApi.update(pinId, { document_url: key });
+      const updateResponse = await pinsApi.update(pinId, { image_url: key });
       if (updateResponse.error) throw new Error(updateResponse.error);
 
-      toast.success('Document uploaded');
+      toast.success('Image uploaded');
       queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
     } catch (error) {
       toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
-      setIsUploading(false);
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      setIsUploadingImage(false);
+      if (imageInputRef.current) imageInputRef.current.value = '';
     }
   };
 
-  // Delete document handler
-  const handleDeleteDocument = async () => {
+  // Upload utility bill handler
+  const handleUtilityUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !pinId || isNew) return;
+
+    setIsUploadingUtility(true);
+    try {
+      const urlResponse = await uploadApi.getUploadUrl(file.name, file.type, `pins/${pinId}/utility`);
+      if (urlResponse.error) throw new Error(urlResponse.error);
+
+      const { url, key } = urlResponse.data!;
+
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: file,
+        headers: { 'Content-Type': file.type },
+      });
+
+      if (!uploadResponse.ok) throw new Error('Failed to upload utility bill');
+
+      const updateResponse = await pinsApi.update(pinId, { utility_url: key });
+      if (updateResponse.error) throw new Error(updateResponse.error);
+
+      toast.success('Utility bill uploaded');
+      queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
+    } catch (error) {
+      toast.error('Upload failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsUploadingUtility(false);
+      if (utilityInputRef.current) utilityInputRef.current.value = '';
+    }
+  };
+
+  // Delete image handler
+  const handleDeleteImage = async () => {
     if (!pinId) return;
     try {
-      // Update pin to remove document URL
-      const response = await pinsApi.update(pinId, { document_url: null });
+      const response = await pinsApi.update(pinId, { image_url: null });
       if (response.error) throw new Error(response.error);
-
-      toast.success('Document deleted');
+      toast.success('Image deleted');
       queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
     } catch (error) {
       toast.error('Delete failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // Delete utility bill handler
+  const handleDeleteUtility = async () => {
+    if (!pinId) return;
+    try {
+      const response = await pinsApi.update(pinId, { utility_url: null });
+      if (response.error) throw new Error(response.error);
+      toast.success('Utility bill deleted');
+      queryClient.invalidateQueries({ queryKey: ['pin', pinId] });
+    } catch (error) {
+      toast.error('Delete failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // Handle contract file selection for Turn into Deal
+  const handleContractFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setContractFile(file);
+    }
+  };
+
+  // Convert to deal with contract upload
+  const handleConvertToDeal = async () => {
+    if (!pin || !contractFile) return;
+
+    setIsUploadingContract(true);
+    try {
+      // Upload contract first
+      const urlResponse = await uploadApi.getUploadUrl(contractFile.name, contractFile.type, `pins/${pin.id}/contract`);
+      if (urlResponse.error) throw new Error(urlResponse.error);
+
+      const { url, key } = urlResponse.data!;
+
+      const uploadResponse = await fetch(url, {
+        method: 'PUT',
+        body: contractFile,
+        headers: { 'Content-Type': contractFile.type },
+      });
+
+      if (!uploadResponse.ok) throw new Error('Failed to upload contract');
+
+      // Update pin with contract URL
+      await pinsApi.update(pin.id, { contract_url: key });
+
+      // Now convert to deal
+      convertToDealMutation.mutate(pin);
+    } catch (error) {
+      toast.error('Failed: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setIsUploadingContract(false);
+      setShowContractDialog(false);
+      setContractFile(null);
+      if (contractInputRef.current) contractInputRef.current.value = '';
     }
   };
 
@@ -563,13 +663,13 @@ export default function PinDetails() {
               <div className="space-y-1 pt-2 border-t border-primary/20">
                 <Label className="text-muted-foreground text-[10px] flex items-center gap-1.5">
                   <Users className="w-3 h-3" />
-                  Assign Closer {isJuniorRep ? <span className="text-red-500">*</span> : '(optional)'}
+                  Assign Closer {isJuniorRep ? <span className="text-destructive">*</span> : '(optional)'}
                 </Label>
                 <Select 
                   value={formData.assigned_closer_id} 
                   onValueChange={(value) => setFormData({ ...formData, assigned_closer_id: value === 'none' ? '' : value })}
                 >
-                  <SelectTrigger className={`bg-muted border-0 h-9 text-sm ${isJuniorRep && !formData.assigned_closer_id ? 'border border-red-500/50' : ''}`}>
+                  <SelectTrigger className={`bg-muted border-0 h-9 text-sm ${isJuniorRep && !formData.assigned_closer_id ? 'border border-destructive/50' : ''}`}>
                     <SelectValue placeholder="Select a closer..." />
                   </SelectTrigger>
                   <SelectContent>
@@ -650,63 +750,99 @@ export default function PinDetails() {
             </div>
           </div>
 
-          {/* Documents Section (only for existing pins) */}
+          {/* Uploads Section (only for existing pins) */}
           {!isNew && pinId && (
-            <div className="space-y-3 pt-4 border-t border-border">
-              <div className="flex items-center justify-between">
-                <Label className="text-muted-foreground text-xs">Documents</Label>
-                <span className="text-xs text-muted-foreground">
-                  {pin?.document_url ? '1 file' : '0 files'}
-                </span>
+            <div className="space-y-4 pt-4 border-t border-border">
+              {/* Image Upload Box */}
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Property Image</Label>
+                <input
+                  ref={imageInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                  accept="image/*"
+                />
+                {pin?.image_url ? (
+                  <div className="relative rounded-lg overflow-hidden bg-muted">
+                    <div className="aspect-video flex items-center justify-center bg-muted">
+                      <Image className="w-12 h-12 text-muted-foreground/50" />
+                    </div>
+                    <div className="absolute bottom-0 left-0 right-0 bg-background/80 backdrop-blur-sm p-2 flex items-center justify-between">
+                      <span className="text-xs text-foreground truncate">Image uploaded</span>
+                      <button
+                        onClick={handleDeleteImage}
+                        className="p-1 text-muted-foreground hover:text-destructive transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={isUploadingImage}
+                    className="w-full aspect-video border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                  >
+                    {isUploadingImage ? (
+                      <Loader2 className="w-8 h-8 text-muted-foreground animate-spin" />
+                    ) : (
+                      <>
+                        <Image className="w-8 h-8 text-muted-foreground" />
+                        <span className="text-xs text-muted-foreground">Tap to upload image</span>
+                      </>
+                    )}
+                  </button>
+                )}
               </div>
 
-              {/* Upload Button */}
-              <input
-                ref={fileInputRef}
-                type="file"
-                className="hidden"
-                onChange={handleFileUpload}
-                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.gif"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                className="w-full h-10 border-dashed"
-                onClick={() => fileInputRef.current?.click()}
-                disabled={isUploading || !!pin?.document_url}
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="w-4 h-4 mr-2" />
-                    {pin?.document_url ? 'Document Already Uploaded' : 'Upload Document'}
-                  </>
-                )}
-              </Button>
-
-              {/* Document Display */}
-              {pin?.document_url && (
-                <div className="space-y-2">
+              {/* Utility Bill Upload Button */}
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs">Utility Bill</Label>
+                <input
+                  ref={utilityInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleUtilityUpload}
+                  accept=".pdf,.jpg,.jpeg,.png,.gif"
+                />
+                {pin?.utility_url ? (
                   <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
-                    <FileText className="w-5 h-5 text-primary shrink-0" />
+                    <Zap className="w-5 h-5 text-primary shrink-0" />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-foreground truncate block">
-                        Uploaded Document
+                        Utility Bill Uploaded
                       </span>
                     </div>
                     <button
-                      onClick={() => handleDeleteDocument()}
+                      onClick={handleDeleteUtility}
                       className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
-                </div>
-              )}
+                ) : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full h-10"
+                    onClick={() => utilityInputRef.current?.click()}
+                    disabled={isUploadingUtility}
+                  >
+                    {isUploadingUtility ? (
+                      <>
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4 mr-2" />
+                        Upload Utility Bill
+                      </>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
           )}
 
@@ -717,11 +853,11 @@ export default function PinDetails() {
                 <Button
                   variant="default"
                   className="w-full h-10"
-                  onClick={() => convertToDealMutation.mutate(pin)}
+                  onClick={() => setShowContractDialog(true)}
                   disabled={convertToDealMutation.isPending}
                 >
                   <Briefcase className="w-4 h-4 mr-2" />
-                  {convertToDealMutation.isPending ? 'Creating Deal...' : 'Turn into Deal'}
+                  Turn into Deal
                 </Button>
               )}
 
@@ -742,6 +878,85 @@ export default function PinDetails() {
               </Button>
             </div>
           )}
+
+          {/* Agreement Contract Dialog */}
+          <Dialog open={showContractDialog} onOpenChange={setShowContractDialog}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Upload Agreement Contract</DialogTitle>
+                <DialogDescription>
+                  Please upload the signed agreement contract to convert this pin into a deal.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <input
+                  ref={contractInputRef}
+                  type="file"
+                  className="hidden"
+                  onChange={handleContractFileSelect}
+                  accept=".pdf,.jpg,.jpeg,.png"
+                />
+                {contractFile ? (
+                  <div className="flex items-center gap-3 p-3 bg-muted rounded-lg">
+                    <FileText className="w-5 h-5 text-primary shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-foreground truncate block">
+                        {contractFile.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {(contractFile.size / 1024).toFixed(1)} KB
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setContractFile(null);
+                        if (contractInputRef.current) contractInputRef.current.value = '';
+                      }}
+                      className="p-1.5 text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => contractInputRef.current?.click()}
+                    className="w-full p-6 border-2 border-dashed border-muted-foreground/30 rounded-lg flex flex-col items-center justify-center gap-2 hover:border-primary/50 hover:bg-muted/50 transition-colors"
+                  >
+                    <Upload className="w-8 h-8 text-muted-foreground" />
+                    <span className="text-sm text-muted-foreground">Tap to select contract file</span>
+                    <span className="text-xs text-muted-foreground">PDF, JPG, or PNG</span>
+                  </button>
+                )}
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowContractDialog(false);
+                    setContractFile(null);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleConvertToDeal}
+                  disabled={!contractFile || isUploadingContract || convertToDealMutation.isPending}
+                >
+                  {isUploadingContract || convertToDealMutation.isPending ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Creating Deal...
+                    </>
+                  ) : (
+                    <>
+                      <Briefcase className="w-4 h-4 mr-2" />
+                      Convert to Deal
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
 
