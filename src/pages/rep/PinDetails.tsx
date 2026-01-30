@@ -809,7 +809,7 @@ export default function PinDetails() {
                             appointment_end_time: addOneHour(newStartTime)
                           }));
                         }}
-                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 text-base touch-manipulation"
                       />
                       <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
                     </div>
@@ -822,7 +822,7 @@ export default function PinDetails() {
                         type="time"
                         value={formData.appointment_end_time}
                         onChange={(e) => setFormData({ ...formData, appointment_end_time: e.target.value })}
-                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
+                        className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0 h-12 text-base touch-manipulation"
                       />
                       <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />
                     </div>

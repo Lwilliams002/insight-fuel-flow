@@ -268,6 +268,7 @@ export default function AddAppointment() {
                 value={formData.appointment_date}
                 onChange={(e) => setFormData(prev => ({ ...prev, appointment_date: e.target.value }))}
                 required
+                className="h-12 text-base touch-manipulation"
               />
             </div>
 
@@ -296,6 +297,7 @@ export default function AddAppointment() {
                         appointment_end_time: addOneHour(newStartTime)
                       }));
                     }}
+                    className="h-12 text-base touch-manipulation"
                   />
                 </div>
                 <div>
@@ -305,6 +307,7 @@ export default function AddAppointment() {
                     type="time"
                     value={formData.appointment_end_time}
                     onChange={(e) => setFormData(prev => ({ ...prev, appointment_end_time: e.target.value }))}
+                    className="h-12 text-base touch-manipulation"
                   />
                 </div>
               </div>
