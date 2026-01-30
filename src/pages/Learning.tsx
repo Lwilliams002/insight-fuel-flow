@@ -359,11 +359,6 @@ export default function Learning() {
 
               return (
                 <Card key={course.id} className={cn("border-2 transition-all duration-200 active:scale-[0.99] overflow-hidden", isPassed ? "border-green-500/30 bg-green-500/5" : "border-border hover:border-primary/30")}>
-                  {course.headerImage && (
-                    <div className="h-32 overflow-hidden">
-                      <img src={course.headerImage} alt={course.title} className="w-full h-full object-cover" />
-                    </div>
-                  )}
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
                       <div className={cn("flex-shrink-0 w-14 h-14 rounded-xl flex items-center justify-center", isPassed ? "bg-green-500/20 text-green-600" : "bg-primary/10 text-primary")}>
