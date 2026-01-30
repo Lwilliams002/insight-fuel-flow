@@ -993,6 +993,22 @@ export default function DealDetails() {
                   </Button>
                 </div>
 
+                {/* Receipt */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium text-sm">Receipt</p>
+                      <p className="text-xs text-muted-foreground">
+                        {deal.receipt_file_url ? 'Uploaded' : 'Not uploaded'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    {deal.receipt_file_url ? 'View' : 'Upload'}
+                  </Button>
+                </div>
+
                 <Separator />
 
                 {/* Photos */}
@@ -1002,6 +1018,13 @@ export default function DealDetails() {
                     Photos
                   </h3>
                   <div className="grid grid-cols-2 gap-2">
+                    <Button variant="outline" className="h-20 flex-col gap-1">
+                      <Camera className="h-5 w-5" />
+                      <span className="text-xs">Inspection Photos</span>
+                      <span className="text-xs text-muted-foreground">
+                        {deal.inspection_images?.length || 0} photos
+                      </span>
+                    </Button>
                     <Button variant="outline" className="h-20 flex-col gap-1">
                       <Camera className="h-5 w-5" />
                       <span className="text-xs">Install Photos</span>

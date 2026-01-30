@@ -84,8 +84,8 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
         {/* Header: Title + Status Badge + Progress % */}
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-3">
-            <h2 className="font-semibold text-lg" style={{ color: CHARCOAL }}>Deal Progress</h2>
-            <Badge 
+            <h2 className="font-semibold text-lg text-black dark:text-white">Deal Progress</h2>
+            <Badge
               className="text-xs font-medium"
               style={{ backgroundColor: PRIME_GOLD, color: PRIME_NAVY }}
             >
@@ -136,7 +136,7 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
                       )}
                       style={{ 
                         transform: 'translateX(-50%) rotate(-45deg)',
-                        color: isFuture ? '#9CA3AF' : CHARCOAL,
+                        color: isFuture ? '#9CA3AF' : (isCurrent ? PRIME_GOLD : CHARCOAL),
                       }}
                     >
                       {milestone.label}
