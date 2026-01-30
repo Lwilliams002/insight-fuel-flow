@@ -12,7 +12,6 @@ import Learning from "./pages/Learning";
 import RepDashboard from "./pages/RepDashboard";
 import RepDeals from "./pages/rep/RepDeals";
 import DealDetails from "./pages/rep/DealDetails";
-import NewDeal from "./pages/rep/NewDeal";
 import RepMap from "./pages/rep/RepMap";
 import PinDetails from "./pages/rep/PinDetails";
 import CalendarDateDetails from "./pages/rep/CalendarDateDetails";
@@ -70,14 +69,6 @@ const App = () => (
                 element={
                   <ProtectedRoute allowedRoles={['rep']}>
                     <RepDeals />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/deals/new"
-                element={
-                  <ProtectedRoute allowedRoles={['rep']}>
-                    <NewDeal />
                   </ProtectedRoute>
                 }
               />
