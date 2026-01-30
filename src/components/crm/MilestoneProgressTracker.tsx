@@ -36,11 +36,11 @@ interface MilestoneProgressTrackerProps {
 const milestones: { status: DealStatus; icon: React.ElementType; label: string; phase: CRMPhase }[] = [
   { status: 'lead', icon: User, label: 'Lead', phase: 'sign' },
   { status: 'inspection_scheduled', icon: Search, label: 'Inspection', phase: 'sign' },
+  { status: 'signed', icon: FileSignature, label: 'Signed', phase: 'sign' },
   { status: 'claim_filed', icon: FileText, label: 'Claim Filed', phase: 'sign' },
   { status: 'adjuster_scheduled', icon: Calendar, label: 'Adj. Sched.', phase: 'sign' },
   { status: 'adjuster_met', icon: Clock, label: 'Awaiting Appr.', phase: 'sign' },
   { status: 'approved', icon: CheckCircle2, label: 'Approved', phase: 'sign' },
-  { status: 'signed', icon: FileSignature, label: 'Signed', phase: 'sign' },
   { status: 'materials_ordered', icon: Package, label: 'Mat. Ordered', phase: 'build' },
   { status: 'materials_delivered', icon: Truck, label: 'Delivered', phase: 'build' },
   { status: 'install_scheduled', icon: Calendar, label: 'Inst. Sched.', phase: 'build' },
@@ -121,8 +121,7 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
                     {/* Phase label at start of each phase */}
                     {isPhaseStart && (
                       <div 
-                        className="absolute top-12 left-0 text-[10px] font-bold tracking-wider whitespace-nowrap"
-                        style={{ color: PRIME_NAVY }}
+                        className="absolute top-12 left-0 text-[10px] font-bold tracking-wider whitespace-nowrap text-black dark:text-white"
                       >
                         {phaseLabels[milestone.phase]}
                       </div>
@@ -204,6 +203,18 @@ export function MilestoneProgressTracker({ currentStatus, timestamps }: Mileston
                         />
                       )}
                     </div>
+
+                    {/* Timestamp below node for completed/current milestones */}
+                    {(isComplete || isCurrent) && timestamp && (
+                      <div className="absolute top-16 left-1/2 text-[8px] whitespace-nowrap text-black dark:text-white font-medium"
+                           style={{ transform: 'translateX(-50%)' }}>
+                        {new Date(timestamp).toLocaleDateString('en-US', {
+                          month: '2-digit',
+                          day: '2-digit',
+                          year: 'numeric'
+                        })}
+                      </div>
+                    )}
                   </div>
                 );
               })}
