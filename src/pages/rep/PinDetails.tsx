@@ -464,6 +464,21 @@ export default function PinDetails() {
     }
   }, [pin]);
 
+  // Initialize appointment times when status changes to appointment
+  useEffect(() => {
+    if (formData.status === 'appointment' && !formData.appointment_date) {
+      const now = new Date();
+      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000); // Add 1 hour
+
+      setFormData(prev => ({
+        ...prev,
+        appointment_date: now,
+        appointment_time: now.toTimeString().slice(0, 5), // HH:MM format
+        appointment_end_time: oneHourLater.toTimeString().slice(0, 5), // HH:MM format
+      }));
+    }
+  }, [formData.status]);
+
   const createPinMutation = useMutation({
     mutationFn: async (data: { 
       lat: number; 
@@ -551,6 +566,16 @@ export default function PinDetails() {
       toast.error('Failed to create deal: ' + error.message);
     },
   });
+
+  // Helper function to add 1 hour to a time string
+  const addOneHour = (timeString: string): string => {
+    if (!timeString) return '';
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes + 60; // Add 1 hour (60 minutes)
+    const newHours = Math.floor(totalMinutes / 60) % 24; // Wrap around 24 hours
+    const newMinutes = totalMinutes % 60;
+    return `${newHours.toString().padStart(2, '0')}:${newMinutes.toString().padStart(2, '0')}`;
+  };
 
   const getAppointmentDateTime = (): string | null => {
     if (formData.status !== 'appointment' || !formData.appointment_date) return null;
@@ -776,7 +801,14 @@ export default function PinDetails() {
                       <Input
                         type="time"
                         value={formData.appointment_time}
-                        onChange={(e) => setFormData({ ...formData, appointment_time: e.target.value })}
+                        onChange={(e) => {
+                          const newStartTime = e.target.value;
+                          setFormData(prev => ({
+                            ...prev,
+                            appointment_time: newStartTime,
+                            appointment_end_time: addOneHour(newStartTime)
+                          }));
+                        }}
                         className="bg-transparent border-0 h-9 text-sm p-0 focus-visible:ring-0 focus-visible:ring-offset-0"
                       />
                       <Clock className="w-3.5 h-3.5 text-muted-foreground pointer-events-none ml-auto shrink-0" />

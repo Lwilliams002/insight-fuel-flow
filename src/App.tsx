@@ -25,6 +25,8 @@ import AdminJotForm from "./pages/admin/AdminJotForm";
 import AdminSettings from "./pages/admin/AdminSettings";
 import NotFound from "./pages/NotFound";
 import RepCalendar from "./pages/rep/RepCalendar";
+import AddAppointment from "./pages/rep/AddAppointment";
+import AddEvent from "./pages/rep/AddEvent";
 
 const queryClient = new QueryClient();
 
@@ -109,6 +111,22 @@ const App = () => (
                 element={
                   <ProtectedRoute allowedRoles={['rep']}>
                     <RepCalendar />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/add-appointment"
+                element={
+                  <ProtectedRoute allowedRoles={['rep']}>
+                    <AddAppointment />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/add-event"
+                element={
+                  <ProtectedRoute allowedRoles={['rep']}>
+                    <AddEvent />
                   </ProtectedRoute>
                 }
               />

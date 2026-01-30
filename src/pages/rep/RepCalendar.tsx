@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { pinsApi, Pin as AwsPin } from "@/integrations/aws/api";
 import { useAuth } from "@/contexts/AwsAuthContext";
 import { BottomNav } from "@/components/BottomNav";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import {
   format,
   isSameDay,
@@ -29,10 +28,6 @@ import {
   CheckCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 const MAPBOX_TOKEN_ENV = import.meta.env.VITE_MAPBOX_ACCESS_TOKEN as string | undefined;
 
@@ -98,34 +93,10 @@ interface CalendarEvent {
 export default function RepCalendar() {
   const navigate = useNavigate();
   const { user, getIdToken } = useAuth();
-  const queryClient = useQueryClient();
 
   // Calendar
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
-
-  // Add appointment dialog
-  const [isAddAppointmentOpen, setIsAddAppointmentOpen] = useState(false);
-  const [appointmentForm, setAppointmentForm] = useState({
-    homeowner_name: '',
-    address: '',
-    notes: '',
-    appointment_date: '',
-    appointment_time: '',
-    appointment_end_time: '',
-  });
-  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
-  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
-
-  // Add event dialog (calendar events without pins)
-  const [isAddEventOpen, setIsAddEventOpen] = useState(false);
-  const [eventForm, setEventForm] = useState({
-    title: '',
-    notes: '',
-    event_date: '',
-    event_time: '',
-    all_day: false,
-  });
 
   // Calendar events stored in localStorage
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
@@ -146,21 +117,6 @@ export default function RepCalendar() {
   useEffect(() => {
     localStorage.setItem('calendar-events', JSON.stringify(calendarEvents));
   }, [calendarEvents]);
-
-  // Initialize appointment form with current time when dialog opens
-  useEffect(() => {
-    if (isAddAppointmentOpen) {
-      const now = new Date();
-      const oneHourLater = new Date(now.getTime() + 60 * 60 * 1000); // Add 1 hour
-
-      setAppointmentForm(prev => ({
-        ...prev,
-        appointment_date: now.toISOString().split('T')[0], // YYYY-MM-DD format
-        appointment_time: now.toTimeString().slice(0, 5), // HH:MM format
-        appointment_end_time: oneHourLater.toTimeString().slice(0, 5), // HH:MM format
-      }));
-    }
-  }, [isAddAppointmentOpen]);
 
   // Fallback: fetch token from backend if env var isn't present
   useEffect(() => {
@@ -311,142 +267,6 @@ export default function RepCalendar() {
     navigate(`/map/pin/${pin.id}?from=calendar`);
   };
 
-  const handleAddAppointment = () => {
-    if (!appointmentForm.homeowner_name || !appointmentForm.address || !appointmentForm.appointment_date || !appointmentForm.appointment_time) {
-      toast.error('Please fill in all required fields');
-      return;
-    }
-
-    createAppointmentMutation.mutate(appointmentForm);
-  };
-
-  const handleAddressChange = (value: string) => {
-    setAppointmentForm(prev => ({ ...prev, address: value }));
-    if (value.length > 2) {
-      searchAddresses(value);
-    } else {
-      setAddressSuggestions([]);
-    }
-  };
-
-  const handleAddressSelect = (address: string) => {
-    setAppointmentForm(prev => ({ ...prev, address }));
-    setAddressSuggestions([]);
-  };
-
-  const handleAddEvent = () => {
-    if (!eventForm.title || !eventForm.event_date) {
-      toast.error('Please fill in title and date');
-      return;
-    }
-
-    const newEvent = {
-      id: Date.now().toString(),
-      title: eventForm.title,
-      notes: eventForm.notes,
-      date: eventForm.event_date,
-      time: eventForm.all_day ? null : eventForm.event_time,
-      all_day: eventForm.all_day,
-      created_at: new Date().toISOString(),
-    };
-
-    setCalendarEvents(prev => [...prev, newEvent]);
-    setIsAddEventOpen(false);
-    setEventForm({
-      title: '',
-      notes: '',
-      event_date: '',
-      event_time: '',
-      all_day: false,
-    });
-    toast.success('Event added successfully!');
-  };
-
-  const searchAddresses = async (query: string) => {
-    if (!MAPBOX_TOKEN_ENV || query.length < 3) {
-      setAddressSuggestions([]);
-      return;
-    }
-
-    setIsSearchingAddress(true);
-    try {
-      const response = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=5&types=address`,
-      );
-      const data = await response.json();
-      const suggestions = data.features?.map((feature: { place_name: string }) => feature.place_name) || [];
-      setAddressSuggestions(suggestions);
-    } catch (error) {
-      console.error("Error searching addresses:", error);
-      setAddressSuggestions([]);
-    } finally {
-      setIsSearchingAddress(false);
-    }
-  };
-
-  // Create appointment mutation
-  const createAppointmentMutation = useMutation({
-    mutationFn: async (formData: typeof appointmentForm) => {
-      if (!MAPBOX_TOKEN_ENV) {
-        throw new Error("Mapbox token missing");
-      }
-
-      // Geocode the address to get coordinates
-      const geocodeResponse = await fetch(
-        `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(formData.address)}.json?access_token=${MAPBOX_TOKEN_ENV}&limit=1`,
-      );
-      const geocodeData = await geocodeResponse.json();
-      const feature = geocodeData.features?.[0];
-
-      if (!feature) {
-        throw new Error("Could not find coordinates for this address");
-      }
-
-      const [lng, lat] = feature.center;
-
-      // Combine date and time into ISO string
-      const appointmentDateTime = new Date(`${formData.appointment_date}T${formData.appointment_time}`).toISOString();
-
-      // Create the pin
-      const pinData = {
-        lat,
-        lng,
-        status: "appointment" as const,
-        address: formData.address,
-        homeowner_name: formData.homeowner_name,
-        notes: formData.notes,
-        appointment_date: appointmentDateTime,
-        appointment_all_day: false,
-      };
-
-      const response = await pinsApi.create(pinData);
-      if (response.error) {
-        throw new Error(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      toast.success("Appointment created successfully!");
-      setIsAddAppointmentOpen(false);
-      setAppointmentForm({
-        homeowner_name: '',
-        address: '',
-        notes: '',
-        appointment_date: '',
-        appointment_time: '',
-        appointment_end_time: '',
-      });
-      setAddressSuggestions([]);
-      // Invalidate queries to refresh the data
-      queryClient.invalidateQueries({ queryKey: ["rep-pins"] });
-      queryClient.invalidateQueries({ queryKey: ["closer-appointments"] });
-    },
-    onError: (error) => {
-      console.error("Error creating appointment:", error);
-      toast.error(error.message || "Failed to create appointment");
-    },
-  });
-
   return (
     <div className="flex min-h-[100dvh] flex-col bg-background">
       <main className="relative flex-1 overflow-hidden">
@@ -516,207 +336,26 @@ export default function RepCalendar() {
 
           {/* Action Buttons */}
           <div className="flex justify-center gap-1 sm:gap-2 px-2">
-            <Dialog open={isAddAppointmentOpen} onOpenChange={setIsAddAppointmentOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9">
-                  <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                  <span className="hidden xs:inline sm:inline">Add Appointment</span>
-                  <span className="xs:hidden sm:hidden">Appt</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add New Appointment</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="homeowner_name">Homeowner Name *</Label>
-                    <Input
-                      id="homeowner_name"
-                      value={appointmentForm.homeowner_name}
-                      onChange={(e) => setAppointmentForm(prev => ({ ...prev, homeowner_name: e.target.value }))}
-                      placeholder="Enter homeowner name"
-                    />
-                  </div>
+            <Button
+              size="sm"
+              className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9"
+              onClick={() => navigate('/add-appointment')}
+            >
+              <Plus className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden xs:inline sm:inline">Add Appointment</span>
+              <span className="xs:hidden sm:hidden">Appt</span>
+            </Button>
 
-                  <div className="relative">
-                    <Label htmlFor="address">Address *</Label>
-                    <Input
-                      id="address"
-                      value={appointmentForm.address}
-                      onChange={(e) => handleAddressChange(e.target.value)}
-                      placeholder="Enter full address"
-                      className="pr-8"
-                    />
-                    {isSearchingAddress && (
-                      <div className="absolute right-3 top-8 w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                    )}
-                    {addressSuggestions.length > 0 && (
-                      <div className="absolute top-full left-0 right-0 z-50 bg-card border border-border rounded-lg shadow-lg max-h-48 overflow-auto mt-1">
-                        {addressSuggestions.map((suggestion, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleAddressSelect(suggestion)}
-                            className="w-full px-3 py-2 text-left hover:bg-muted transition-colors text-sm"
-                          >
-                            {suggestion}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    <p className="text-xs text-muted-foreground mt-1">
-                      This will automatically create a pin on the map
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="appointment_date">Date *</Label>
-                      <Input
-                        id="appointment_date"
-                        type="date"
-                        value={appointmentForm.appointment_date}
-                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, appointment_date: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="appointment_time">From Time *</Label>
-                      <Input
-                        id="appointment_time"
-                        type="time"
-                        value={appointmentForm.appointment_time}
-                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, appointment_time: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="appointment_end_time">To Time</Label>
-                      <Input
-                        id="appointment_end_time"
-                        type="time"
-                        value={appointmentForm.appointment_end_time}
-                        onChange={(e) => setAppointmentForm(prev => ({ ...prev, appointment_end_time: e.target.value }))}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="notes">Notes</Label>
-                    <Textarea
-                      id="notes"
-                      value={appointmentForm.notes}
-                      onChange={(e) => setAppointmentForm(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Additional notes..."
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsAddAppointmentOpen(false)}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddAppointment}
-                      disabled={createAppointmentMutation.isPending}
-                      className="flex-1"
-                    >
-                      {createAppointmentMutation.isPending ? 'Creating...' : 'Create Appointment'}
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
-
-            <Dialog open={isAddEventOpen} onOpenChange={setIsAddEventOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" size="sm" className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9">
-                  <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
-                  <span className="hidden xs:inline sm:inline">Add Event</span>
-                  <span className="xs:hidden sm:hidden">Event</span>
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                  <DialogTitle>Add New Event</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4">
-                  <div>
-                    <Label htmlFor="event_title">Event Title *</Label>
-                    <Input
-                      id="event_title"
-                      value={eventForm.title}
-                      onChange={(e) => setEventForm(prev => ({ ...prev, title: e.target.value }))}
-                      placeholder="Enter event title"
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label htmlFor="event_date">Date *</Label>
-                      <Input
-                        id="event_date"
-                        type="date"
-                        value={eventForm.event_date}
-                        onChange={(e) => setEventForm(prev => ({ ...prev, event_date: e.target.value }))}
-                      />
-                    </div>
-                    <div>
-                      <Label htmlFor="event_time">Time</Label>
-                      <Input
-                        id="event_time"
-                        type="time"
-                        value={eventForm.event_time}
-                        onChange={(e) => setEventForm(prev => ({ ...prev, event_time: e.target.value }))}
-                        disabled={eventForm.all_day}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center space-x-2">
-                    <input
-                      type="checkbox"
-                      id="all_day"
-                      checked={eventForm.all_day}
-                      onChange={(e) => setEventForm(prev => ({ ...prev, all_day: e.target.checked }))}
-                      className="rounded"
-                    />
-                    <Label htmlFor="all_day">All day event</Label>
-                  </div>
-
-                  <div>
-                    <Label htmlFor="event_notes">Notes</Label>
-                    <Textarea
-                      id="event_notes"
-                      value={eventForm.notes}
-                      onChange={(e) => setEventForm(prev => ({ ...prev, notes: e.target.value }))}
-                      placeholder="Additional notes..."
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="flex gap-2 pt-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => setIsAddEventOpen(false)}
-                      className="flex-1"
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      onClick={handleAddEvent}
-                      className="flex-1"
-                    >
-                      Add Event
-                    </Button>
-                  </div>
-                </div>
-              </DialogContent>
-            </Dialog>
+            <Button
+              variant="outline"
+              size="sm"
+              className="text-xs sm:text-sm px-2 sm:px-4 h-8 sm:h-9"
+              onClick={() => navigate('/add-event')}
+            >
+              <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 sm:mr-2" />
+              <span className="hidden xs:inline sm:inline">Add Event</span>
+              <span className="xs:hidden sm:hidden">Event</span>
+            </Button>
           </div>
         </div>
 
