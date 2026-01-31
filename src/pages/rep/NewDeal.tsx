@@ -56,6 +56,8 @@ export default function NewDeal() {
 
   const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
+  const [propertyOwners, setPropertyOwners] = useState<string[]>([]);
+  const [isSearchingOwners, setIsSearchingOwners] = useState(false);
 
   const createDealMutation = useMutation({
     mutationFn: async () => {
@@ -223,6 +225,38 @@ export default function NewDeal() {
                     placeholder="John Doe"
                   />
                 </div>
+
+                {/* Property Owners Search Results */}
+                {(isSearchingOwners || propertyOwners.length > 0) && (
+                  <div className="space-y-2">
+                    <Label className="text-sm font-medium">On Title</Label>
+                    <div className="relative">
+                      {isSearchingOwners && (
+                        <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                          <span className="text-sm text-muted-foreground">Searching property records...</span>
+                        </div>
+                      )}
+                      {propertyOwners.length > 0 && (
+                        <div className="bg-muted/50 border border-border rounded-lg p-3">
+                          <p className="text-xs text-muted-foreground mb-2">Click a name to auto-fill homeowner field:</p>
+                          <div className="flex flex-wrap gap-2">
+                            {propertyOwners.map((owner, index) => (
+                              <button
+                                key={index}
+                                onClick={() => handleOwnerSelect(owner)}
+                                className="px-3 py-1 bg-primary/10 hover:bg-primary/20 text-primary text-sm rounded-full transition-colors border border-primary/20 hover:border-primary/40"
+                              >
+                                {owner}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label>Phone Number</Label>
                   <Input

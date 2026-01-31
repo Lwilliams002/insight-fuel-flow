@@ -4,7 +4,7 @@ import { LayoutDashboard, Home, MapPin, Calendar } from 'lucide-react';
 
 const navItems = [
 	{ href: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-	{ href: '/deals', icon: Home, label: 'My Deals' },
+	{ href: '/deals', icon: Home, label: 'My Pipeline' },
 	{ href: '/map', icon: MapPin, label: 'My Map' },
 	{ href: '/calendar', icon: Calendar, label: 'Calendar' },
 ];

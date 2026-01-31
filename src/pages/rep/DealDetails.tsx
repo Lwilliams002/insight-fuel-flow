@@ -993,22 +993,6 @@ export default function DealDetails() {
                   </Button>
                 </div>
 
-                {/* Receipt */}
-                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
-                  <div className="flex items-center gap-3">
-                    <FileText className="h-5 w-5 text-muted-foreground" />
-                    <div>
-                      <p className="font-medium text-sm">Receipt</p>
-                      <p className="text-xs text-muted-foreground">
-                        {deal.receipt_file_url ? 'Uploaded' : 'Not uploaded'}
-                      </p>
-                    </div>
-                  </div>
-                  <Button variant="outline" size="sm">
-                    {deal.receipt_file_url ? 'View' : 'Upload'}
-                  </Button>
-                </div>
-
                 <Separator />
 
                 {/* Photos */}
@@ -1041,6 +1025,24 @@ export default function DealDetails() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Receipt */}
+                <div className="flex items-center justify-between p-3 rounded-lg bg-muted">
+                  <div className="flex items-center gap-3">
+                    <FileText className="h-5 w-5 text-muted-foreground" />
+                    <div>
+                      <p className="font-medium text-sm">Receipt</p>
+                      <p className="text-xs text-muted-foreground">
+                        {deal.receipt_file_url ? 'Uploaded' : 'Not uploaded'}
+                      </p>
+                    </div>
+                  </div>
+                  <Button variant="outline" size="sm">
+                    {deal.receipt_file_url ? 'View' : 'Upload'}
+                  </Button>
+                </div>
+
+                <Separator />
               </CardContent>
             </Card>
           </TabsContent>

@@ -13,7 +13,7 @@ import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react';
 import { dealStatusConfig, phaseConfig, DealStatus, getProgressPercentage } from '@/lib/crmProcess';
 import { cn } from '@/lib/utils';
 
-type ViewMode = 'pipeline' | 'table' | 'kanban';
+type ViewMode = 'pipeline' | 'leads';
 
 export default function RepDeals() {
   const navigate = useNavigate();
@@ -35,27 +35,35 @@ export default function RepDeals() {
 
   // Group deals by phase
   const dealsByPhase = {
-    sign: deals?.filter(d => ['lead', 'inspection_scheduled', 'claim_filed', 'adjuster_scheduled', 'adjuster_met', 'approved', 'signed'].includes(d.status)) || [],
+    sign: deals?.filter(d => ['inspection_scheduled', 'claim_filed', 'adjuster_scheduled', 'adjuster_met', 'approved', 'signed'].includes(d.status)) || [],
     build: deals?.filter(d => ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed'].includes(d.status)) || [],
-    collect: deals?.filter(d => ['invoice_sent', 'depreciation_collected', 'complete'].includes(d.status)) || [],
+    finalizing: deals?.filter(d => ['invoice_sent', 'depreciation_collected'].includes(d.status)) || [],
+    complete: deals?.filter(d => d.status === 'complete') || [],
   };
+
+  // Filter leads separately
+  const leads = deals?.filter(d => d.status === 'lead') || [];
 
   // Calculate phase values
   const phaseValues = {
     sign: dealsByPhase.sign.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
     build: dealsByPhase.build.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
-    collect: dealsByPhase.collect.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
+    finalizing: dealsByPhase.finalizing.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
+    complete: dealsByPhase.complete.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
   };
 
   return (
-    <RepLayout title="My Deals">
+    <RepLayout title="My Pipeline">
       <div className="flex flex-col h-full p-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className="text-2xl font-bold">My Deals</h1>
+            <h1 className="text-2xl font-bold">My Pipeline</h1>
             <p className="text-muted-foreground text-sm">
-              {deals?.length || 0} total deals
+              {viewMode === 'leads' 
+                ? `${leads.length} leads`
+                : `${deals?.filter(deal => deal.status !== 'lead').length || 0} deals in pipeline`
+              }
             </p>
           </div>
 
@@ -67,9 +75,9 @@ export default function RepDeals() {
                   <Columns3 className="w-4 h-4" />
                   <span className="hidden sm:inline">Pipeline</span>
                 </TabsTrigger>
-                <TabsTrigger value="table" className="gap-1.5">
+                <TabsTrigger value="leads" className="gap-1.5">
                   <LayoutList className="w-4 h-4" />
-                  <span className="hidden sm:inline">Table</span>
+                  <span className="hidden sm:inline">Leads</span>
                 </TabsTrigger>
               </TabsList>
             </Tabs>
@@ -83,13 +91,14 @@ export default function RepDeals() {
 
         {/* Phase Summary Cards */}
         {viewMode === 'pipeline' && (
-          <div className="grid grid-cols-3 gap-3 mb-6">
-            {(['sign', 'build', 'collect'] as const).map((phase) => (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+            {(['sign', 'build', 'finalizing', 'complete'] as const).map((phase) => (
               <Card key={phase} className={cn(
                 "border-l-4",
                 phase === 'sign' && "border-l-blue-500",
                 phase === 'build' && "border-l-orange-500",
-                phase === 'collect' && "border-l-green-500"
+                phase === 'finalizing' && "border-l-yellow-500",
+                phase === 'complete' && "border-l-green-500"
               )}>
                 <CardContent className="p-3">
                   <div className="flex items-center gap-2 mb-1">
@@ -117,7 +126,7 @@ export default function RepDeals() {
             </div>
           ) : viewMode === 'pipeline' ? (
             <div className="space-y-3">
-              {deals?.map((deal) => {
+              {deals?.filter(deal => deal.status !== 'lead').map((deal) => {
                 const config = dealStatusConfig[deal.status as DealStatus] || dealStatusConfig.lead;
                 const progress = getProgressPercentage(deal.status as DealStatus);
 
@@ -157,9 +166,9 @@ export default function RepDeals() {
                   </Card>
                 );
               })}
-              {(!deals || deals.length === 0) && (
+              {(!deals || deals.filter(deal => deal.status !== 'lead').length === 0) && (
                 <div className="text-center py-12 text-muted-foreground">
-                  <p>No deals yet</p>
+                  <p>No deals in pipeline yet</p>
                   <Button onClick={() => navigate('/deals/new')} className="mt-4">
                     Create Your First Deal
                   </Button>
@@ -167,7 +176,7 @@ export default function RepDeals() {
               )}
             </div>
           ) : (
-            <DealsTable deals={deals || []} onViewDeal={handleViewDeal} />
+            <DealsTable deals={leads} onViewDeal={handleViewDeal} />
           )}
         </div>
       </div>

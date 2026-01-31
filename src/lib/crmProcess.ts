@@ -33,7 +33,7 @@ export type DealStatus =
   | 'pending'
   | 'paid';
 
-export type CRMPhase = 'sign' | 'build' | 'collect' | 'other';
+export type CRMPhase = 'sign' | 'build' | 'finalizing' | 'complete' | 'other';
 
 export interface StatusConfig {
   label: string;
@@ -183,7 +183,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
   // ==========================================
   invoice_sent: {
     label: 'Invoice Sent',
-    phase: 'collect',
+    phase: 'finalizing',
     color: '#5C6BC0', // Indigo
     description: 'Invoice sent to insurance for depreciation release',
     nextStatus: 'depreciation_collected',
@@ -194,7 +194,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
   },
   depreciation_collected: {
     label: 'Depreciation Collected',
-    phase: 'collect',
+    phase: 'finalizing',
     color: '#26A69A', // Teal
     description: 'Depreciation check collected - ready to close job',
     nextStatus: 'complete',
@@ -205,7 +205,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
   },
   complete: {
     label: 'Complete',
-    phase: 'collect',
+    phase: 'complete',
     color: '#2E7D32', // Dark Green
     description: 'Job complete! Commissions paid.',
     nextStatus: null,
@@ -297,7 +297,8 @@ export function getProgressPercentage(status: DealStatus): number {
 export const phaseConfig: Record<CRMPhase, { label: string; color: string; icon: string }> = {
   sign: { label: 'Sign', color: '#4A6FA5', icon: '✍️' },
   build: { label: 'Build', color: '#FF7043', icon: '🔨' },
-  collect: { label: 'Collect', color: '#2E7D32', icon: '💰' },
+  finalizing: { label: 'Finalizing', color: '#2E7D32', icon: '💰' },
+  complete: { label: 'Complete', color: '#1B5E20', icon: '✅' },
   other: { label: 'Other', color: '#757575', icon: '📋' },
 };
 
