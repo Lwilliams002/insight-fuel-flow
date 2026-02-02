@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AwsAuthContext";
 import { RepLayout } from "@/components/RepLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
-import { CalendarIcon, Clock, FileText } from "lucide-react";
+import { CalendarIcon, FileText } from "lucide-react";
 
 interface CalendarEvent {
   id: string;
@@ -23,6 +24,10 @@ interface CalendarEvent {
 export default function AddEvent() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  // User-specific storage key
+  const calendarStorageKey = user?.sub ? `calendar-events-${user.sub}` : 'calendar-events';
 
   const [formData, setFormData] = useState({
     title: "",
@@ -47,9 +52,9 @@ export default function AddEvent() {
 
   const createEventMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
-      // For now, we'll store events locally in localStorage
-      // In a real app, this would be an API call
-      const events = JSON.parse(localStorage.getItem('calendar_events') || '[]');
+      if (!user?.sub) throw new Error('User not authenticated');
+      // Store events in user-specific localStorage
+      const events = JSON.parse(localStorage.getItem(calendarStorageKey) || '[]');
       const newEvent: CalendarEvent = {
         id: Date.now().toString(),
         title: data.title,
@@ -60,7 +65,7 @@ export default function AddEvent() {
         created_at: new Date().toISOString(),
       };
       events.push(newEvent);
-      localStorage.setItem('calendar_events', JSON.stringify(events));
+      localStorage.setItem(calendarStorageKey, JSON.stringify(events));
       return newEvent;
     },
     onSuccess: () => {

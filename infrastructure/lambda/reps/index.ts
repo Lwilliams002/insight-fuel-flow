@@ -111,13 +111,24 @@ async function createRep(user: any, event: APIGatewayProxyEvent) {
     return badRequest('Request body required');
   }
 
+  // Commission level percentages
+  const commissionLevelPercentages: Record<string, number> = {
+    'junior': 5,
+    'senior': 10,
+    'manager': 13,
+  };
+
+  const commissionLevel = body.commission_level || 'junior';
+  const defaultCommissionPercent = body.default_commission_percent || commissionLevelPercentages[commissionLevel] || 5;
+
   const result = await queryOne(
-    `INSERT INTO reps (user_id, commission_level, can_self_gen, manager_id)
-     VALUES ($1, $2, $3, $4)
+    `INSERT INTO reps (user_id, commission_level, default_commission_percent, can_self_gen, manager_id)
+     VALUES ($1, $2, $3, $4, $5)
      RETURNING *`,
     [
       body.user_id,
-      body.commission_level || 'junior',
+      commissionLevel,
+      defaultCommissionPercent,
       body.can_self_gen ?? true,
       body.manager_id,
     ]
@@ -136,11 +147,23 @@ async function updateRep(repId: string, user: any, event: APIGatewayProxyEvent) 
     return badRequest('Request body required');
   }
 
+  // Commission level percentages
+  const commissionLevelPercentages: Record<string, number> = {
+    'junior': 5,
+    'senior': 10,
+    'manager': 13,
+  };
+
+  // If commission_level is being updated, also update default_commission_percent
+  if (body.commission_level && !body.default_commission_percent) {
+    body.default_commission_percent = commissionLevelPercentages[body.commission_level] || 5;
+  }
+
   const updates: string[] = [];
   const values: any[] = [];
   let paramIndex = 1;
 
-  const allowedFields = ['commission_level', 'can_self_gen', 'manager_id', 'active'];
+  const allowedFields = ['commission_level', 'default_commission_percent', 'can_self_gen', 'manager_id', 'active'];
 
   for (const field of allowedFields) {
     if (body[field] !== undefined) {

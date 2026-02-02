@@ -121,12 +121,19 @@ async function createRep(event: APIGatewayProxyEvent) {
       [cognitoUserId]
     );
 
-    // Create rep record
+    // Create rep record with commission percentage
+    const commissionLevelPercentages: Record<string, number> = {
+      'junior': 5,
+      'senior': 10,
+      'manager': 13,
+    };
+    const defaultCommissionPercent = commissionLevelPercentages[commissionLevel] || 5;
+
     const rep = await queryOne(
-      `INSERT INTO reps (user_id, commission_level, can_self_gen, manager_id)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO reps (user_id, commission_level, default_commission_percent, can_self_gen, manager_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING *`,
-      [cognitoUserId, commissionLevel, canSelfGen, managerId]
+      [cognitoUserId, commissionLevel, defaultCommissionPercent, canSelfGen, managerId]
     );
 
     return created({

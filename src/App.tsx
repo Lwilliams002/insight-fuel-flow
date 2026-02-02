@@ -27,6 +27,7 @@ import NotFound from "./pages/NotFound";
 import RepCalendar from "./pages/rep/RepCalendar";
 import AddAppointment from "./pages/rep/AddAppointment";
 import AddEvent from "./pages/rep/AddEvent";
+import ReceiptPage from "./pages/ReceiptPage";
 
 const queryClient = new QueryClient();
 
@@ -135,6 +136,14 @@ const App = () => (
                 element={
                   <ProtectedRoute allowedRoles={['rep']}>
                     <RepJotForm />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/deals/:dealId/receipts"
+                element={
+                  <ProtectedRoute allowedRoles={['rep', 'admin']}>
+                    <ReceiptPage />
                   </ProtectedRoute>
                 }
               />

@@ -71,15 +71,6 @@ function mapAwsPinToPin(awsPin: AwsPin): Pin {
   };
 }
 
-const statusConfig: Record<PinStatus, { color: string; label: string }> = {
-  lead: { color: "#4A6FA5", label: "Not Home" },           // Prime Steel Blue
-  followup: { color: "#C9A24D", label: "Needs Follow-up" }, // Prime Gold
-  installed: { color: "#2E7D32", label: "Installed" },      // Professional Green
-  appointment: { color: "#C9A24D", label: "Appointment" },  // Prime Gold
-  renter: { color: "#78909C", label: "Renter" },            // Gray Blue
-  not_interested: { color: "#B71C1C", label: "Not Interested" }, // Dark Red
-};
-
 interface CalendarEvent {
   id: string;
   title: string;
@@ -98,25 +89,33 @@ export default function RepCalendar() {
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date());
   const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | undefined>(undefined);
 
-  // Calendar events stored in localStorage
+  // Calendar events stored in localStorage (per user)
   const [calendarEvents, setCalendarEvents] = useState<CalendarEvent[]>([]);
+
+  // Create user-specific storage key
+  const calendarStorageKey = user?.sub ? `calendar-events-${user.sub}` : 'calendar-events';
 
   // Load calendar events from localStorage on mount
   useEffect(() => {
-    const savedEvents = localStorage.getItem('calendar-events');
+    if (!user?.sub) return;
+    const savedEvents = localStorage.getItem(calendarStorageKey);
     if (savedEvents) {
       try {
         setCalendarEvents(JSON.parse(savedEvents));
       } catch (error) {
         console.error('Error loading calendar events:', error);
       }
+    } else {
+      // Clear events if no saved data for this user
+      setCalendarEvents([]);
     }
-  }, []);
+  }, [user?.sub, calendarStorageKey]);
 
   // Save calendar events to localStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('calendar-events', JSON.stringify(calendarEvents));
-  }, [calendarEvents]);
+    if (!user?.sub) return;
+    localStorage.setItem(calendarStorageKey, JSON.stringify(calendarEvents));
+  }, [calendarEvents, user?.sub, calendarStorageKey]);
 
   // Fallback: fetch token from backend if env var isn't present
   useEffect(() => {
