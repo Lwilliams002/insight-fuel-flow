@@ -331,8 +331,13 @@ export default function ReceiptPage() {
 
     return (
       <div className="min-h-screen bg-background">
-        <div className="sticky top-0 z-10 bg-background border-b p-4 flex items-center justify-between safe-top">
-          <Button variant="ghost" size="sm" onClick={() => setViewingReceipt(null)}>
+        <div className="sticky top-0 z-10 bg-background border-b p-4 pt-safe flex items-center justify-between">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setViewingReceipt(null)}
+            className="flex-shrink-0"
+          >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back
           </Button>
@@ -357,13 +362,18 @@ export default function ReceiptPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <div className="sticky top-0 z-10 bg-background border-b p-4 flex items-center gap-4 safe-top">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="w-5 h-5" />
+      <div className="sticky top-0 z-10 bg-background border-b p-4 pt-safe flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => navigate(-1)}
+          className="flex-shrink-0"
+        >
+          <ArrowLeft className="w-4 h-4" />
         </Button>
-        <div>
-          <h1 className="text-lg font-semibold">Payment Receipts</h1>
-          <p className="text-sm text-muted-foreground">{deal.homeowner_name}</p>
+        <div className="flex-1">
+          <h1 className="text-xl font-bold">Payment Receipts</h1>
+          <p className="text-xs text-muted-foreground">{deal?.homeowner_name}</p>
         </div>
       </div>
 

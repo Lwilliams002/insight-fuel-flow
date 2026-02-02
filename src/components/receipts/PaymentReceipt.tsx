@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { SignaturePad } from '@/components/crm/SignaturePad';
 import { Printer, Download, Check } from 'lucide-react';
 import { Deal } from '@/integrations/aws/api';
@@ -429,24 +430,25 @@ export function PaymentReceipt({ deal, repName, type, onSave }: PaymentReceiptPr
                 type="date"
                 value={datePaid}
                 onChange={(e) => setDatePaid(e.target.value)}
+                className="h-10"
               />
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div>
               <Label htmlFor="paymentMethod">Payment Method</Label>
-              <select
-                id="paymentMethod"
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="w-full h-10 px-3 rounded-md border border-input bg-background"
-              >
-                <option value="Check">Check</option>
-                <option value="Cash">Cash</option>
-                <option value="Credit Card">Credit Card</option>
-                <option value="Bank Transfer">Bank Transfer</option>
-                <option value="Money Order">Money Order</option>
-              </select>
+              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                <SelectTrigger id="paymentMethod">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Check">Check</SelectItem>
+                  <SelectItem value="Cash">Cash</SelectItem>
+                  <SelectItem value="Credit Card">Credit Card</SelectItem>
+                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                  <SelectItem value="Money Order">Money Order</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label htmlFor="checkNumber">Check/Reference #</Label>
