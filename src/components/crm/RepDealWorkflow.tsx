@@ -70,15 +70,21 @@ const workflowSteps: {
     ],
   },
   {
-    status: 'adjuster_scheduled',
-    label: 'Collect ACV & Deductible',
-    description: 'Enter insurance amounts and collect ACV check',
+    status: 'collect_acv',
+    label: 'Collect ACV',
+    description: 'Collect ACV check from insurance',
     icon: Building2,
     requiredFields: [
-      { field: 'rcv', label: 'RCV (Replacement Cost Value)', type: 'number' },
       { field: 'acv', label: 'ACV (Actual Cash Value)', type: 'number' },
+    ],
+  },
+  {
+    status: 'collect_deductible',
+    label: 'Collect Deductible',
+    description: 'Collect deductible from homeowner',
+    icon: Building2,
+    requiredFields: [
       { field: 'deductible', label: 'Deductible', type: 'number' },
-      { field: 'depreciation', label: 'Depreciation Amount', type: 'number' },
     ],
   },
   {
@@ -88,22 +94,6 @@ const workflowSteps: {
     icon: User,
     requiredFields: [],
     adminOnly: true, // Admin takes over for install
-  },
-  {
-    status: 'materials_ordered',
-    label: 'Materials Ordered',
-    description: 'Admin has ordered materials',
-    icon: Lock,
-    requiredFields: [],
-    adminOnly: true,
-  },
-  {
-    status: 'materials_delivered',
-    label: 'Materials Delivered',
-    description: 'Materials delivered to site',
-    icon: Lock,
-    requiredFields: [],
-    adminOnly: true,
   },
   {
     status: 'install_scheduled',
@@ -247,12 +237,11 @@ export function RepDealWorkflow({ deal, onUpdate }: RepDealWorkflowProps) {
     lead: { label: 'Lead' },
     inspection_scheduled: { label: 'Inspection Scheduled' },
     claim_filed: { label: 'Claim Filed' },
-    adjuster_scheduled: { label: 'Adjuster Scheduled' },
     adjuster_met: { label: 'Awaiting Approval' },
     approved: { label: 'Approved' },
     signed: { label: 'Signed' },
-    materials_ordered: { label: 'Materials Ordered' },
-    materials_delivered: { label: 'Materials Delivered' },
+    collect_acv: { label: 'Collect ACV' },
+    collect_deductible: { label: 'Collect Deductible' },
     install_scheduled: { label: 'Install Scheduled' },
     installed: { label: 'Installed' },
   };

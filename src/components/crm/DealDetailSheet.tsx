@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -8,6 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { SignaturePad } from './SignaturePad';
+import { InvoiceGenerator, InspectionReportGenerator } from '@/components/receipts';
+import { DocumentUpload, ImageUpload } from '@/components/uploads';
+import { SecureImage, SecureDocumentLink } from '@/components/ui/SecureImage';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
@@ -25,13 +28,25 @@ import {
   Package,
   Truck,
   Wrench,
-  CheckCircle2
+  CheckCircle2,
+  Receipt,
+  ChevronRight,
+  UserPlus
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { Deal, DealStatus, dealsApi } from '@/integrations/aws/api';
+import { Deal, DealStatus, dealsApi, repsApi, Rep } from '@/integrations/aws/api';
+import { calculateDealStatus, getProgressionRequirements, dealStatusConfig } from '@/lib/crmProcess';
 import { RepDealWorkflow } from './RepDealWorkflow';
 import { AdminDealWorkflow } from './AdminDealWorkflow';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface DealDetailSheetProps {
   deal: Deal | null;
@@ -45,13 +60,12 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: 'bg-slate-500' },
   inspection_scheduled: { label: 'Inspection Scheduled', color: 'bg-indigo-500' },
   claim_filed: { label: 'Claim Filed', color: 'bg-purple-500' },
-  adjuster_scheduled: { label: 'Adjuster Scheduled', color: 'bg-pink-500' },
   adjuster_met: { label: 'Awaiting Approval', color: 'bg-rose-500' },
   approved: { label: 'Approved', color: 'bg-teal-500' },
   signed: { label: 'Signed', color: 'bg-blue-500' },
   // BUILD PHASE
-  materials_ordered: { label: 'Materials Ordered', color: 'bg-orange-400' },
-  materials_delivered: { label: 'Materials Delivered', color: 'bg-orange-500' },
+  collect_acv: { label: 'Collect ACV', color: 'bg-orange-400' },
+  collect_deductible: { label: 'Collect Deductible', color: 'bg-orange-500' },
   install_scheduled: { label: 'Scheduled', color: 'bg-amber-500' },
   installed: { label: 'Installed', color: 'bg-teal-500' },
   // COLLECT PHASE
@@ -65,6 +79,9 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   permit: { label: 'Permit', color: 'bg-yellow-500' },
   pending: { label: 'Payment Pending', color: 'bg-amber-500' },
   paid: { label: 'Paid', color: 'bg-emerald-600' },
+  materials_ordered: { label: 'Materials Ordered', color: 'bg-orange-400' },
+  materials_delivered: { label: 'Materials Delivered', color: 'bg-orange-500' },
+  adjuster_scheduled: { label: 'Adjuster Scheduled', color: 'bg-pink-500' },
 };
 
 export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: DealDetailSheetProps) {
@@ -74,10 +91,22 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
   const [uploadingPermit, setUploadingPermit] = useState(false);
   const [uploadingInstall, setUploadingInstall] = useState(false);
   const [uploadingCompletion, setUploadingCompletion] = useState(false);
-  
+  const [showReassignDialog, setShowReassignDialog] = useState(false);
+  const [selectedRepId, setSelectedRepId] = useState<string>('');
+
   const permitInputRef = useRef<HTMLInputElement>(null);
   const installInputRef = useRef<HTMLInputElement>(null);
   const completionInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch reps list for reassignment (only for admin)
+  const { data: repsData } = useQuery({
+    queryKey: ['reps'],
+    queryFn: async () => {
+      const response = await repsApi.list();
+      return response.data || [];
+    },
+    enabled: isAdmin && isOpen,
+  });
 
   const [formData, setFormData] = useState({
     homeowner_name: '',
@@ -139,41 +168,100 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
         dealUpdates.signed_date = new Date().toISOString().split('T')[0];
       }
 
-      // Filter out any status values not in the database enum
-      const validStatuses = ['lead', 'signed', 'permit', 'install_scheduled', 'installed', 'complete', 'paid', 'cancelled'];
-      const updateData: Record<string, unknown> = { ...dealUpdates };
-      if (updateData.status && !validStatuses.includes(updateData.status as string)) {
-        delete updateData.status;
-      }
-      
-      // Remove any extended properties that don't exist in the database schema
-      const dbFields = ['address', 'city', 'completion_date', 'completion_images', 'contract_signed', 'created_at', 
-        'homeowner_email', 'homeowner_name', 'homeowner_phone', 'id', 'install_date', 'install_images', 'notes',
-        'payment_requested', 'payment_requested_at', 'permit_file_url', 'signature_date', 'signature_url', 
-        'signed_date', 'state', 'status', 'total_price', 'updated_at', 'zip_code'];
-      
-      const cleanedData: Record<string, unknown> = {};
-      for (const key of Object.keys(updateData)) {
-        if (dbFields.includes(key)) {
-          cleanedData[key] = updateData[key];
+      // Merge updates with current deal data for status calculation
+      const mergedDeal = { ...deal, ...dealUpdates };
+
+      // Auto-calculate the status based on the deal's data
+      const calculatedStatus = calculateDealStatus(mergedDeal);
+
+      // Only update status if it would progress forward (not go backwards)
+      const currentStepNumber = dealStatusConfig[deal!.status]?.stepNumber || 0;
+      const newStepNumber = dealStatusConfig[calculatedStatus]?.stepNumber || 0;
+
+      if (newStepNumber > currentStepNumber) {
+        dealUpdates.status = calculatedStatus;
+
+        // Set timestamp for the new milestone
+        const timestampField = `${calculatedStatus.replace(/-/g, '_')}_date`;
+        if (!mergedDeal[timestampField as keyof typeof mergedDeal]) {
+          (dealUpdates as Record<string, unknown>)[timestampField] = new Date().toISOString();
         }
       }
-      
-      const { error } = await supabase
-        .from('deals')
-        .update(cleanedData)
-        .eq('id', deal!.id);
-      
-      if (error) throw error;
+
+      // Use the AWS API to update
+      const response = await dealsApi.update(deal!.id, dealUpdates);
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      return response.data;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deal', deal?.id] });
       toast.success('Deal updated successfully');
       setIsEditing(false);
       setSignatureDataUrl(null);
     },
     onError: (error) => {
       toast.error('Failed to update deal: ' + error.message);
+    },
+  });
+
+  // Mutation to reassign deal to another rep
+  const reassignDealMutation = useMutation({
+    mutationFn: async (newRepId: string) => {
+      if (!deal) throw new Error('No deal selected');
+
+      // Get the new rep's details
+      const repResponse = await repsApi.get(newRepId);
+      if (repResponse.error) throw new Error(repResponse.error);
+      const newRep = repResponse.data;
+
+      // Update deal_commissions - remove existing and add new
+      // First, we need to update the commission record in the database
+      const { data: existingCommissions, error: fetchError } = await supabase
+        .from('deal_commissions')
+        .select('*')
+        .eq('deal_id', deal.id);
+
+      if (fetchError) throw fetchError;
+
+      // If there are existing commissions, update the first one
+      if (existingCommissions && existingCommissions.length > 0) {
+        const { error: updateError } = await supabase
+          .from('deal_commissions')
+          .update({ rep_id: newRepId })
+          .eq('deal_id', deal.id);
+
+        if (updateError) throw updateError;
+      } else {
+        // Create a new commission record
+        const { error: insertError } = await supabase
+          .from('deal_commissions')
+          .insert({
+            deal_id: deal.id,
+            rep_id: newRepId,
+            commission_type: 'closer',
+            commission_percent: newRep?.default_commission_percent || 10,
+            commission_amount: 0,
+            paid: false
+          });
+
+        if (insertError) throw insertError;
+      }
+
+      return newRep;
+    },
+    onSuccess: (newRep) => {
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deal', deal?.id] });
+      toast.success(`Deal reassigned to ${newRep?.full_name || 'new rep'}`);
+      setShowReassignDialog(false);
+      setSelectedRepId('');
+    },
+    onError: (error) => {
+      toast.error('Failed to reassign deal: ' + error.message);
     },
   });
 
@@ -213,8 +301,8 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
       await supabase.from('deals').update({ permit_file_url: publicUrlData.publicUrl }).eq('id', deal.id);
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('Permit uploaded successfully');
-    } catch (error: any) {
-      toast.error('Failed to upload permit: ' + error.message);
+    } catch (error: unknown) {
+      toast.error('Failed to upload permit: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setUploadingPermit(false);
     }
@@ -254,8 +342,8 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
       await supabase.from('deals').update({ [columnName]: allImages }).eq('id', deal.id);
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success(`${type === 'install' ? 'Installation' : 'Completion'} images uploaded`);
-    } catch (error: any) {
-      toast.error('Failed to upload images: ' + error.message);
+    } catch (error: unknown) {
+      toast.error('Failed to upload images: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setUploading(false);
     }
@@ -273,8 +361,8 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
       
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('Payment request sent to admin');
-    } catch (error: any) {
-      toast.error('Failed to request payment: ' + error.message);
+    } catch (error: unknown) {
+      toast.error('Failed to request payment: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
 
@@ -289,7 +377,7 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
       await supabase.from('deals').update({ [columnName]: updatedImages }).eq('id', deal.id);
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       toast.success('Image removed');
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast.error('Failed to remove image');
     }
   };
@@ -330,6 +418,28 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
               </Badge>
             )}
           </div>
+
+          {/* Admin: Reassign to Rep Button */}
+          {isAdmin && (
+            <div className="space-y-2">
+              {deal.deal_commissions && deal.deal_commissions.length > 0 && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span>Currently assigned to:</span>
+                  <Badge variant="secondary">
+                    {deal.deal_commissions[0].rep_name || 'Unknown Rep'}
+                  </Badge>
+                </div>
+              )}
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={() => setShowReassignDialog(true)}
+              >
+                <UserPlus className="w-4 h-4" />
+                Reassign to Another Rep
+              </Button>
+            </div>
+          )}
 
           {/* Rep Workflow - Show guided steps for non-admins */}
           {!isAdmin && (
@@ -379,13 +489,258 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
                   Signed on {format(new Date(deal.signature_date), 'MMMM d, yyyy')}
                 </p>
               )}
-              <img
+              <SecureImage
                 src={deal.signature_url}
                 alt="Signature"
                 className="mt-2 max-h-20 border bg-background rounded"
               />
             </div>
           )}
+
+          {/* Insurance Agreement Upload */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Insurance Agreement
+              </h3>
+            </div>
+            {deal.insurance_agreement_url ? (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <FileText className="w-5 h-5 text-primary" />
+                <SecureDocumentLink
+                  src={deal.insurance_agreement_url}
+                  className="text-sm text-primary hover:underline flex-1 truncate"
+                >
+                  View Insurance Agreement
+                </SecureDocumentLink>
+                <Check className="w-4 h-4 text-primary" />
+              </div>
+            ) : (
+              <DocumentUpload
+                category="insurance-agreements"
+                dealId={deal.id}
+                label="Upload Insurance Agreement"
+                onUpload={(url) => {
+                  updateDealMutation.mutate({ insurance_agreement_url: url });
+                }}
+              />
+            )}
+          </div>
+
+          {/* Approval Type Section - Show when awaiting approval */}
+          {(deal.status === 'adjuster_met' || deal.status === 'claim_filed' ||
+            (deal.contract_signed && !deal.approval_type && !deal.approved_date)) && (
+            <div className="space-y-3 p-4 border border-amber-500 bg-amber-500/10 rounded-lg">
+              <div className="flex items-center gap-2">
+                <CheckCircle2 className="w-5 h-5 text-amber-600" />
+                <h3 className="font-semibold">Approval Status</h3>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Select the approval type once insurance approves the claim.
+              </p>
+              <Select
+                value={deal.approval_type || ''}
+                onValueChange={(value) => {
+                  updateDealMutation.mutate({
+                    approval_type: value,
+                    approved_date: new Date().toISOString()
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select approval type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">Full Approval</SelectItem>
+                  <SelectItem value="partial">Partial Approval</SelectItem>
+                  <SelectItem value="supplement_needed">Supplement Needed (Cannot Progress)</SelectItem>
+                  <SelectItem value="sale">Sale (Homeowner Pays)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Show Approval Type if already set - Green for approved types */}
+          {deal.approval_type && deal.approval_type !== 'supplement_needed' && (
+            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+              <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-600 dark:text-green-400">
+                  {deal.approval_type === 'full' ? 'Full Approval' :
+                    deal.approval_type === 'partial' ? 'Partial Approval' :
+                    deal.approval_type === 'sale' ? 'Sale (Homeowner Pays)' : deal.approval_type}
+                </p>
+                {deal.approved_date && (
+                  <p className="text-xs text-muted-foreground">
+                    {format(new Date(deal.approved_date), 'MMM d, yyyy')}
+                  </p>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => updateDealMutation.mutate({ approval_type: null, approved_date: null })}
+              >
+                Change
+              </Button>
+            </div>
+          )}
+
+          {/* Show Supplement Needed warning */}
+          {deal.approval_type === 'supplement_needed' && (
+            <div className="space-y-3 p-4 border border-amber-500 bg-amber-500/10 rounded-lg">
+              <div className="flex items-center gap-2">
+                <AlertCircle className="w-5 h-5 text-amber-600" />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-amber-600">Supplement Needed</h3>
+                  <p className="text-xs text-muted-foreground">
+                    Cannot progress until supplement is approved
+                  </p>
+                </div>
+              </div>
+              <Select
+                value=""
+                onValueChange={(value) => {
+                  updateDealMutation.mutate({
+                    approval_type: value,
+                    approved_date: new Date().toISOString()
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Supplement approved? Update status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="full">Full Approval</SelectItem>
+                  <SelectItem value="partial">Partial Approval</SelectItem>
+                  <SelectItem value="sale">Sale (Homeowner Pays)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Next Steps Guide */}
+          <div className="space-y-2 p-3 bg-muted rounded-lg">
+            <div className="flex items-center gap-2">
+              <ChevronRight className="w-4 h-4 text-primary" />
+              <h3 className="font-semibold text-sm">Next Step</h3>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              {getProgressionRequirements(deal.status as DealStatus)[0] || 'Complete current step'}
+            </p>
+          </div>
+
+          {/* Material Specifications Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Package className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Material Specifications
+              </h3>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Material Category</Label>
+                <Select
+                  value={deal.material_category || ''}
+                  onValueChange={(value) => updateDealMutation.mutate({ material_category: value })}
+                >
+                  <SelectTrigger className="h-9">
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Single">Single</SelectItem>
+                    <SelectItem value="Metal">Metal</SelectItem>
+                    <SelectItem value="Architectural">Architectural</SelectItem>
+                    <SelectItem value="Architectural Metal">Architectural Metal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              {(deal.material_category === 'Metal' || deal.material_category === 'Architectural Metal') && (
+                <div className="space-y-1">
+                  <Label className="text-xs">Metal Type</Label>
+                  <Input
+                    placeholder="Enter metal type"
+                    value={deal.material_type || ''}
+                    onChange={(e) => updateDealMutation.mutate({ material_type: e.target.value })}
+                    className="h-9"
+                  />
+                </div>
+              )}
+              <div className="space-y-1">
+                <Label className="text-xs">Material Color</Label>
+                <Input
+                  placeholder="Enter color"
+                  value={deal.material_color || ''}
+                  onChange={(e) => updateDealMutation.mutate({ material_color: e.target.value })}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Drip Edge</Label>
+                <Input
+                  placeholder="Enter drip edge"
+                  value={deal.drip_edge || ''}
+                  onChange={(e) => updateDealMutation.mutate({ drip_edge: e.target.value })}
+                  className="h-9"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Vent Color</Label>
+                <Input
+                  placeholder="Enter vent color"
+                  value={deal.vent_color || ''}
+                  onChange={(e) => updateDealMutation.mutate({ vent_color: e.target.value })}
+                  className="h-9"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Lost Statement Upload - Required for Full Approval */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <FileText className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Lost Statement
+              </h3>
+              {deal.approval_type === 'full' && !deal.lost_statement_url && (
+                <Badge variant="outline" className="text-xs gap-1 text-amber-600 border-amber-600">
+                  <AlertCircle className="w-3 h-3" />
+                  Required for Full Approval
+                </Badge>
+              )}
+            </div>
+            {deal.lost_statement_url ? (
+              <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
+                <FileText className="w-5 h-5 text-primary" />
+                <SecureDocumentLink
+                  src={deal.lost_statement_url}
+                  className="text-sm text-primary hover:underline flex-1 truncate"
+                >
+                  View Lost Statement
+                </SecureDocumentLink>
+                <Check className="w-4 h-4 text-primary" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateDealMutation.mutate({ lost_statement_url: null })}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            ) : (
+              <DocumentUpload
+                category="lost-statements"
+                dealId={deal.id}
+                label="Upload Lost Statement"
+                onUpload={(url) => {
+                  updateDealMutation.mutate({ lost_statement_url: url });
+                }}
+              />
+            )}
+          </div>
 
           <Separator />
 
@@ -467,6 +822,79 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
             )}
           </div>
 
+          {/* Payment Receipts Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Payment Receipts
+              </h3>
+            </div>
+            <Button
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => window.location.href = `/deals/${deal.id}/receipts`}
+            >
+              <Receipt className="w-4 h-4" />
+              Create Payment Receipt
+            </Button>
+            <p className="text-xs text-muted-foreground text-center">
+              Generate ACV, Deductible, or Depreciation receipts
+            </p>
+          </div>
+
+          {/* Invoice Section - Admin Only, Show after install photos */}
+          {isAdmin && (deal.status === 'installed' || deal.status === 'invoice_sent' ||
+            deal.status === 'depreciation_collected' || deal.status === 'complete' ||
+            (deal.install_images && deal.install_images.length > 0)) && (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <FileText className="w-4 h-4 text-muted-foreground" />
+                <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                  Invoice
+                </h3>
+                <Badge variant="outline" className="text-xs">Admin Only</Badge>
+              </div>
+              <InvoiceGenerator
+                deal={deal}
+                onSave={() => {
+                  queryClient.invalidateQueries({ queryKey: ['deals'] });
+                }}
+              />
+            </div>
+          )}
+
+          {/* Inspection Photos Section */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <Camera className="w-4 h-4 text-muted-foreground" />
+              <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
+                Inspection Photos
+              </h3>
+            </div>
+            <ImageUpload
+              category="inspection-photos"
+              dealId={deal.id}
+              existingFiles={deal.inspection_images || []}
+              label="Add Inspection Photos"
+              onUpload={(url) => {
+                const currentImages = deal.inspection_images || [];
+                updateDealMutation.mutate({ inspection_images: [...currentImages, url] });
+              }}
+              onRemove={(url) => {
+                const currentImages = deal.inspection_images || [];
+                updateDealMutation.mutate({ inspection_images: currentImages.filter(u => u !== url) });
+              }}
+            />
+          </div>
+
+          {/* Inspection Report Generator - Show when inspection photos exist */}
+          {deal.inspection_images && deal.inspection_images.length > 0 && (
+            <div className="space-y-3">
+              <InspectionReportGenerator deal={deal} />
+            </div>
+          )}
+
           {/* Install Images Section */}
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -481,42 +909,20 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
                 </Badge>
               )}
             </div>
-            {deal.install_images && deal.install_images.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {deal.install_images.map((url, idx) => (
-                  <div key={idx} className="relative group">
-                    <img src={url} alt={`Install ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
-                    <button
-                      onClick={() => removeImage('install', url)}
-                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input
-              ref={installInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleImagesUpload(e, 'install')}
+            <ImageUpload
+              category="install-photos"
+              dealId={deal.id}
+              existingFiles={deal.install_images || []}
+              label="Add Installation Photos"
+              onUpload={(url) => {
+                const currentImages = deal.install_images || [];
+                updateDealMutation.mutate({ install_images: [...currentImages, url] });
+              }}
+              onRemove={(url) => {
+                const currentImages = deal.install_images || [];
+                updateDealMutation.mutate({ install_images: currentImages.filter(u => u !== url) });
+              }}
             />
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => installInputRef.current?.click()}
-              disabled={uploadingInstall}
-            >
-              {uploadingInstall ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Camera className="w-4 h-4" />
-              )}
-              Add Installation Photos
-            </Button>
           </div>
 
           {/* Completion Images Section */}
@@ -533,42 +939,20 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
                 </Badge>
               )}
             </div>
-            {deal.completion_images && deal.completion_images.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {deal.completion_images.map((url, idx) => (
-                  <div key={idx} className="relative group">
-                    <img src={url} alt={`Completion ${idx + 1}`} className="w-full h-20 object-cover rounded-lg" />
-                    <button
-                      onClick={() => removeImage('completion', url)}
-                      className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <input
-              ref={completionInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => handleImagesUpload(e, 'completion')}
+            <ImageUpload
+              category="completion-photos"
+              dealId={deal.id}
+              existingFiles={deal.completion_images || []}
+              label="Add Completion Photos"
+              onUpload={(url) => {
+                const currentImages = deal.completion_images || [];
+                updateDealMutation.mutate({ completion_images: [...currentImages, url] });
+              }}
+              onRemove={(url) => {
+                const currentImages = deal.completion_images || [];
+                updateDealMutation.mutate({ completion_images: currentImages.filter(u => u !== url) });
+              }}
             />
-            <Button
-              variant="outline"
-              className="w-full gap-2"
-              onClick={() => completionInputRef.current?.click()}
-              disabled={uploadingCompletion}
-            >
-              {uploadingCompletion ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Camera className="w-4 h-4" />
-              )}
-              Add Completion Photos
-            </Button>
           </div>
 
           {/* Request Payment Button */}
@@ -826,6 +1210,49 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
           )}
         </div>
       </SheetContent>
+
+      {/* Reassign Rep Dialog */}
+      <Dialog open={showReassignDialog} onOpenChange={setShowReassignDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reassign Deal to Rep</DialogTitle>
+            <DialogDescription>
+              Select a rep to reassign this deal to. The new rep will be able to manage the deal and receive commissions.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label>Select Rep</Label>
+            <Select value={selectedRepId} onValueChange={setSelectedRepId}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Select a rep..." />
+              </SelectTrigger>
+              <SelectContent>
+                {repsData?.filter(rep => rep.active).map((rep) => (
+                  <SelectItem key={rep.id} value={rep.id}>
+                    {rep.full_name} ({rep.email})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReassignDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => reassignDealMutation.mutate(selectedRepId)}
+              disabled={!selectedRepId || reassignDealMutation.isPending}
+            >
+              {reassignDealMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : (
+                <UserPlus className="w-4 h-4 mr-2" />
+              )}
+              Reassign Deal
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Sheet>
   );
 }

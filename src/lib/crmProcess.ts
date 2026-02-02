@@ -12,13 +12,12 @@ export type DealStatus =
   | 'lead'
   | 'inspection_scheduled'
   | 'claim_filed'
-  | 'adjuster_scheduled'
   | 'adjuster_met'
   | 'approved'
   | 'signed'
   // BUILD PHASE
-  | 'materials_ordered'
-  | 'materials_delivered'
+  | 'collect_acv'
+  | 'collect_deductible'
   | 'install_scheduled'
   | 'installed'
   // COLLECT PHASE
@@ -31,7 +30,10 @@ export type DealStatus =
   // Legacy
   | 'permit'
   | 'pending'
-  | 'paid';
+  | 'paid'
+  | 'materials_ordered'
+  | 'materials_delivered'
+  | 'adjuster_scheduled';
 
 export type CRMPhase = 'sign' | 'build' | 'finalizing' | 'complete' | 'other';
 
@@ -80,22 +82,11 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     phase: 'sign',
     color: '#7E57C2', // Purple
     description: 'Homeowner filed claim with insurance company',
-    nextStatus: 'adjuster_scheduled',
+    nextStatus: 'signed',
     prevStatus: 'inspection_scheduled',
     stepNumber: 3,
-    actionLabel: 'Schedule Adjuster',
+    actionLabel: 'Get Signature',
     requiredFields: ['insurance_company', 'claim_number'],
-  },
-  adjuster_scheduled: {
-    label: 'Adjuster Scheduled',
-    phase: 'sign',
-    color: '#AB47BC', // Pink Purple
-    description: 'Adjuster meeting scheduled - prepare your packet!',
-    nextStatus: 'adjuster_met',
-    prevStatus: 'claim_filed',
-    stepNumber: 4,
-    actionLabel: 'Meet Adjuster',
-    requiredFields: ['adjuster_name', 'adjuster_meeting_date'],
   },
   adjuster_met: {
     label: 'Awaiting Approval',
@@ -103,7 +94,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     color: '#EC407A', // Pink
     description: 'Met with adjuster, waiting for insurance approval',
     nextStatus: 'approved',
-    prevStatus: 'adjuster_scheduled',
+    prevStatus: 'signed',
     stepNumber: 5,
     actionLabel: 'Mark Approved',
   },
@@ -111,49 +102,49 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     label: 'Approved',
     phase: 'sign',
     color: '#26A69A', // Teal
-    description: 'Insurance approved claim - get paperwork signed!',
-    nextStatus: 'signed',
+    description: 'Insurance approved claim - ready for ACV collection',
+    nextStatus: 'collect_acv',
     prevStatus: 'adjuster_met',
     stepNumber: 6,
-    actionLabel: 'Get Signature',
+    actionLabel: 'Collect ACV',
     requiredFields: ['rcv', 'acv', 'depreciation', 'deductible'],
   },
   signed: {
     label: 'Signed',
     phase: 'sign',
     color: '#66BB6A', // Green
-    description: 'Agreement signed, ACV check collected as deposit',
-    nextStatus: 'materials_ordered',
-    prevStatus: 'approved',
-    stepNumber: 7,
-    actionLabel: 'Order Materials',
-    requiredFields: ['signed_date', 'acv_check_collected'],
+    description: 'Agreement signed with homeowner',
+    nextStatus: 'adjuster_met',
+    prevStatus: 'claim_filed',
+    stepNumber: 4,
+    actionLabel: 'Meet Adjuster',
+    requiredFields: ['signed_date'],
   },
 
   // ==========================================
-  // BUILD PHASE (Steps 8-11)
+  // BUILD PHASE (Steps 7-10)
   // ==========================================
-  materials_ordered: {
-    label: 'Materials Ordered',
+  collect_acv: {
+    label: 'Collect ACV',
     phase: 'build',
     color: '#FFA726', // Orange
-    description: 'Materials have been ordered from supplier',
-    nextStatus: 'materials_delivered',
-    prevStatus: 'signed',
-    stepNumber: 8,
-    actionLabel: 'Mark Delivered',
-    requiredFields: ['materials_ordered_date'],
+    description: 'Collect ACV check from insurance',
+    nextStatus: 'collect_deductible',
+    prevStatus: 'approved',
+    stepNumber: 7,
+    actionLabel: 'Collect Deductible',
+    requiredFields: ['acv'],
   },
-  materials_delivered: {
-    label: 'Materials Delivered',
+  collect_deductible: {
+    label: 'Collect Deductible',
     phase: 'build',
     color: '#FF7043', // Deep Orange
-    description: 'Materials delivered to property, ready to schedule install',
+    description: 'Collect deductible from homeowner',
     nextStatus: 'install_scheduled',
-    prevStatus: 'materials_ordered',
-    stepNumber: 9,
+    prevStatus: 'collect_acv',
+    stepNumber: 8,
     actionLabel: 'Schedule Install',
-    requiredFields: ['materials_delivered_date'],
+    requiredFields: ['deductible'],
   },
   install_scheduled: {
     label: 'Install Scheduled',
@@ -161,8 +152,8 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     color: '#8D6E63', // Brown
     description: 'Installation date is set',
     nextStatus: 'installed',
-    prevStatus: 'materials_delivered',
-    stepNumber: 10,
+    prevStatus: 'collect_deductible',
+    stepNumber: 9,
     actionLabel: 'Mark Installed',
     requiredFields: ['install_date'],
   },
@@ -173,13 +164,13 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     description: 'Construction completed - take completion photos!',
     nextStatus: 'invoice_sent',
     prevStatus: 'install_scheduled',
-    stepNumber: 11,
+    stepNumber: 10,
     actionLabel: 'Send Invoice',
     requiredFields: ['completion_date'],
   },
 
   // ==========================================
-  // COLLECT PHASE (Steps 12-14)
+  // COLLECT PHASE (Steps 11-13)
   // ==========================================
   invoice_sent: {
     label: 'Invoice Sent',
@@ -188,7 +179,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     description: 'Invoice sent to insurance for depreciation release',
     nextStatus: 'depreciation_collected',
     prevStatus: 'installed',
-    stepNumber: 12,
+    stepNumber: 11,
     actionLabel: 'Collect Depreciation',
     requiredFields: ['invoice_sent_date', 'invoice_amount'],
   },
@@ -199,7 +190,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     description: 'Depreciation check collected - ready to close job',
     nextStatus: 'complete',
     prevStatus: 'invoice_sent',
-    stepNumber: 13,
+    stepNumber: 12,
     actionLabel: 'Complete Job',
     requiredFields: ['depreciation_check_collected', 'depreciation_check_amount'],
   },
@@ -210,7 +201,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
     description: 'Job complete! Commissions paid.',
     nextStatus: null,
     prevStatus: 'depreciation_collected',
-    stepNumber: 14,
+    stepNumber: 13,
     actionLabel: null,
   },
 
@@ -256,12 +247,40 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
   },
   paid: {
     label: 'Paid',
-    phase: 'collect',
+    phase: 'finalizing',
     color: '#2E7D32',
     description: 'Legacy: Paid status',
     nextStatus: null,
     prevStatus: 'complete',
     stepNumber: 14,
+  },
+  // Legacy materials statuses (mapped to new collect flow)
+  materials_ordered: {
+    label: 'Materials Ordered',
+    phase: 'build',
+    color: '#FFA726',
+    description: 'Legacy: Materials ordered status',
+    nextStatus: 'install_scheduled',
+    prevStatus: 'signed',
+    stepNumber: 8,
+  },
+  materials_delivered: {
+    label: 'Materials Delivered',
+    phase: 'build',
+    color: '#FF7043',
+    description: 'Legacy: Materials delivered status',
+    nextStatus: 'install_scheduled',
+    prevStatus: 'signed',
+    stepNumber: 9,
+  },
+  adjuster_scheduled: {
+    label: 'Adjuster Scheduled',
+    phase: 'sign',
+    color: '#AB47BC',
+    description: 'Legacy: Adjuster scheduled status',
+    nextStatus: 'adjuster_met',
+    prevStatus: 'claim_filed',
+    stepNumber: 4,
   },
 };
 
@@ -288,15 +307,15 @@ export function getPhaseForStatus(status: DealStatus): CRMPhase {
 export function getProgressPercentage(status: DealStatus): number {
   const config = dealStatusConfig[status];
   if (!config || config.stepNumber === 0) return 0;
-  return Math.round((config.stepNumber / 14) * 100);
+  return Math.round((config.stepNumber / 12) * 100);
 }
 
 /**
  * Phase summary with colors and labels
  */
 export const phaseConfig: Record<CRMPhase, { label: string; color: string; icon: string }> = {
-  sign: { label: 'Sign', color: '#4A6FA5', icon: '✍️' },
-  build: { label: 'Build', color: '#FF7043', icon: '🔨' },
+  sign: { label: 'Signed', color: '#4A6FA5', icon: '✍️' },
+  build: { label: 'Install Review', color: '#FF7043', icon: '🔨' },
   finalizing: { label: 'Finalizing', color: '#2E7D32', icon: '💰' },
   complete: { label: 'Complete', color: '#1B5E20', icon: '✅' },
   other: { label: 'Other', color: '#757575', icon: '📋' },
@@ -352,9 +371,9 @@ export const jobCycleSteps = [
   { step: 12, description: '1st check collected as material deposit', phase: 'build' },
   { step: 13, description: 'Materials ordered and delivered', phase: 'build' },
   { step: 14, description: 'Construction completed', phase: 'build' },
-  { step: 15, description: 'Invoice sent to insurance company for release of depreciation', phase: 'collect' },
-  { step: 16, description: 'Depreciation check collected', phase: 'collect' },
-  { step: 17, description: 'Job capped out & commissions paid', phase: 'collect' },
+  { step: 15, description: 'Invoice sent to insurance company for release of depreciation', phase: 'finalizing' },
+  { step: 16, description: 'Depreciation check collected', phase: 'finalizing' },
+  { step: 17, description: 'Job capped out & commissions paid', phase: 'finalizing' },
 ];
 
 /**
@@ -370,3 +389,165 @@ export const adjusterMeetingChecklist = [
   { id: 'circle_hits', label: 'Circle 5-7 hail hits on roof', required: true },
   { id: 'highlight_damage', label: 'Highlight soft metal damages', required: false },
 ];
+
+/**
+ * Determine what the deal's status should be based on its data
+ * This is the auto-progression logic
+ */
+export interface DealForProgression {
+  status?: string;
+  // Inspection phase
+  inspection_images?: string[] | null;
+  // Claim filed phase
+  insurance_company?: string | null;
+  policy_number?: string | null;
+  claim_number?: string | null;
+  // Signed phase
+  contract_signed?: boolean | null;
+  insurance_agreement_url?: string | null;
+  signature_url?: string | null;
+  // Approval phase
+  approval_type?: string | null;
+  approved_date?: string | null;
+  lost_statement_url?: string | null;  // Required for full approval
+  // ACV phase
+  acv_receipt_url?: string | null;
+  acv_check_collected?: boolean | null;
+  // Deductible phase
+  deductible_receipt_url?: string | null;
+  collect_deductible_date?: string | null;
+  // Install phase
+  install_date?: string | null;
+  install_images?: string[] | null;
+  // Invoice phase
+  invoice_url?: string | null;
+  invoice_sent_date?: string | null;
+  // Depreciation phase
+  depreciation_receipt_url?: string | null;
+  depreciation_check_collected?: boolean | null;
+}
+
+/**
+ * Calculate the appropriate status based on deal data
+ * Returns the status the deal should be at given its current data
+ */
+export function calculateDealStatus(deal: DealForProgression): DealStatus {
+  // Check from the end of the workflow backwards
+
+  // Complete - depreciation receipt generated
+  if (deal.depreciation_receipt_url && deal.depreciation_check_collected) {
+    return 'complete';
+  }
+
+  // Depreciation Collected - invoice sent
+  if (deal.invoice_url || deal.invoice_sent_date) {
+    if (deal.depreciation_receipt_url) {
+      return 'depreciation_collected';
+    }
+    return 'invoice_sent';
+  }
+
+  // Installed - install photos uploaded
+  if (deal.install_images && deal.install_images.length > 0) {
+    return 'installed';
+  }
+
+  // Install Scheduled - install date set
+  if (deal.install_date) {
+    return 'install_scheduled';
+  }
+
+  // Collect Deductible - deductible receipt generated
+  if (deal.deductible_receipt_url || deal.collect_deductible_date) {
+    return 'collect_deductible';
+  }
+
+  // Collect ACV - ACV receipt generated
+  if (deal.acv_receipt_url || deal.acv_check_collected) {
+    return 'collect_acv';
+  }
+
+  // Check if approved and signed
+  const hasAgreement = deal.contract_signed || deal.insurance_agreement_url || deal.signature_url;
+  const hasApproval = deal.approval_type && ['full', 'partial', 'sale'].includes(deal.approval_type);
+
+  // Signed - agreement signed/uploaded AND approved
+  if (hasAgreement && hasApproval) {
+    // For full approval, require lost statement to progress to signed
+    if (deal.approval_type === 'full' && !deal.lost_statement_url) {
+      return 'approved'; // Stay at approved until lost statement uploaded
+    }
+    return 'signed';
+  }
+
+  // Approved - approval type set but not yet signed, OR signed but supplement needed
+  if (hasApproval) {
+    // For full approval, require lost statement
+    if (deal.approval_type === 'full' && !deal.lost_statement_url) {
+      return 'approved'; // Approved but need lost statement
+    }
+    // If approved but no agreement yet
+    if (!hasAgreement) {
+      return 'approved';
+    }
+    return 'signed';
+  }
+
+  // If agreement is signed but no approval yet - awaiting approval
+  if (hasAgreement) {
+    // Legacy support: if approved_date is set, consider it approved
+    if (deal.approved_date) {
+      return 'signed';
+    }
+    return 'adjuster_met'; // Awaiting approval
+  }
+
+  // Claim Filed - insurance details filled
+  if (deal.insurance_company && deal.claim_number) {
+    return 'claim_filed';
+  }
+
+  // Inspection Scheduled - inspection photos uploaded
+  if (deal.inspection_images && deal.inspection_images.length > 0) {
+    return 'inspection_scheduled';
+  }
+
+  // Default to lead
+  return 'lead';
+}
+
+/**
+ * Get what's needed to progress to the next status
+ */
+export function getProgressionRequirements(status: DealStatus): string[] {
+  switch (status) {
+    case 'lead':
+      return ['Upload inspection photos'];
+    case 'inspection_scheduled':
+      return ['Fill insurance details (company, policy number, claim number)'];
+    case 'claim_filed':
+      return ['Sign agreement or upload insurance agreement'];
+    case 'adjuster_met':
+      return ['Select approval type and mark as approved', 'Upload Lost Statement (required for Full Approval)'];
+    case 'approved':
+      return ['Agreement already signed - move to collect ACV'];
+    case 'signed':
+      return ['Generate ACV receipt'];
+    case 'collect_acv':
+      return ['Generate Deductible receipt'];
+    case 'collect_deductible':
+      return ['Schedule install date'];
+    case 'install_scheduled':
+      return ['Upload install photos'];
+    case 'installed':
+      return ['Generate and send invoice (Admin only)'];
+    case 'invoice_sent':
+      return ['Generate Depreciation receipt'];
+    case 'depreciation_collected':
+      return ['Mark job as complete'];
+    case 'complete':
+      return ['Job complete!'];
+    default:
+      return [];
+  }
+}

@@ -36,6 +36,36 @@ async function fetchApi<T>(
   }
 }
 
+// ============ FILE/UPLOAD API ============
+
+// Get a signed download URL for a file stored in Wasabi
+// Use this to view files that were uploaded (images, documents, etc.)
+export async function getSignedFileUrl(key: string): Promise<string | null> {
+  if (!key) return null;
+
+  // If it's already a signed URL or data URL, return as-is
+  if (key.startsWith('data:') || key.includes('X-Amz-Signature')) {
+    return key;
+  }
+
+  // If it's a Wasabi public URL, extract the key
+  let fileKey = key;
+  if (key.includes('wasabisys.com')) {
+    const match = key.match(/titanprime\/(.+)$/);
+    if (match) {
+      fileKey = match[1];
+    }
+  }
+
+  try {
+    const response = await fetchApi<{ url: string }>(`/upload/download?key=${encodeURIComponent(fileKey)}`);
+    return response.data?.url || null;
+  } catch (error) {
+    console.error('Error getting signed URL:', error);
+    return null;
+  }
+}
+
 // ============ DEALS API ============
 
 // Deal status follows the Sign → Build → Collect workflow from training
@@ -44,13 +74,12 @@ export type DealStatus =
   | 'lead'
   | 'inspection_scheduled'
   | 'claim_filed'
-  | 'adjuster_scheduled'
   | 'adjuster_met'
   | 'approved'
   | 'signed'
   // BUILD PHASE
-  | 'materials_ordered'
-  | 'materials_delivered'
+  | 'collect_acv'
+  | 'collect_deductible'
   | 'install_scheduled'
   | 'installed'
   // COLLECT PHASE
@@ -63,6 +92,9 @@ export type DealStatus =
   // Legacy (for backwards compatibility)
   | 'permit'
   | 'pending'
+  | 'materials_ordered'
+  | 'materials_delivered'
+  | 'adjuster_scheduled'
   | 'paid';
 
 export interface Deal {
@@ -84,6 +116,16 @@ export interface Deal {
   roof_squares: number | null;
   roof_squares_with_waste: number | null;
   stories: number | null;
+
+  // Material details for ACV receipt
+  material_category: string | null;  // Single, Metal, Architectural, Architectural Metal
+  material_type: string | null;      // Type of metal (only for metal materials)
+  material_color: string | null;     // Free-text field
+  drip_edge: string | null;          // Free-text field
+  vent_color: string | null;         // Free-text field
+
+  // Lost statement (required for full approval)
+  lost_statement_url: string | null;
 
   // Insurance info
   insurance_company: string | null;
@@ -112,6 +154,7 @@ export interface Deal {
   signature_url: string | null;
   signature_date: string | null;
   agreement_document_url: string | null;
+  insurance_agreement_url: string | null;  // Uploaded insurance agreement document
 
   // Payment tracking - SIGN phase
   acv_check_collected: boolean | null;
@@ -124,12 +167,19 @@ export interface Deal {
   install_date: string | null;
   completion_date: string | null;
   permit_file_url: string | null;
+  inspection_images: string[] | null;  // Inspection photos (from pin or uploaded)
   install_images: string[] | null;
   completion_images: string[] | null;
+
+  // Receipts
+  acv_receipt_url: string | null;
+  deductible_receipt_url: string | null;
+  depreciation_receipt_url: string | null;
 
   // COLLECT phase
   invoice_sent_date: string | null;
   invoice_amount: number | null;
+  invoice_work_items: string | null;  // Work items text for invoice
   depreciation_check_collected: boolean | null;
   depreciation_check_amount: number | null;
   depreciation_check_date: string | null;
@@ -142,7 +192,25 @@ export interface Deal {
   // Totals
   total_contract_value: number | null;
   total_price: number;  // Legacy field
-  payment_requested: boolean | null;  // Legacy field
+  payment_requested: boolean | null;
+  payment_request_date: string | null;
+  sales_tax: number | null;
+
+  // Milestone timestamps (for tracking when each milestone was reached)
+  lead_date: string | null;
+  inspection_scheduled_date: string | null;
+  claim_filed_date: string | null;
+  adjuster_met_date: string | null;
+  approved_date: string | null;
+  approval_type: string | null;  // Type of approval (full, partial, supplement needed)
+  collect_acv_date: string | null;
+  collect_deductible_date: string | null;
+  install_scheduled_date: string | null;
+  installed_date: string | null;
+  invoice_sent_at: string | null;
+  invoice_url: string | null;  // Invoice document URL
+  depreciation_collected_date: string | null;
+  complete_date: string | null;
 
   // Commissions
   deal_commissions?: DealCommission[];
@@ -184,7 +252,38 @@ export const dealsApi = {
 
   delete: (id: string) =>
     fetchApi<void>(`/deals/${id}`, { method: 'DELETE' }),
+
+  // Document management
+  listDocuments: (dealId: string) =>
+    fetchApi<DealDocument[]>(`/deals/${dealId}/documents`),
+
+  addDocument: (dealId: string, document: Omit<DealDocument, 'id' | 'deal_id' | 'uploaded_by' | 'created_at' | 'updated_at'>) =>
+    fetchApi<DealDocument>(`/deals/${dealId}/documents`, {
+      method: 'POST',
+      body: JSON.stringify(document),
+    }),
+
+  deleteDocument: (dealId: string, documentId: string) =>
+    fetchApi<void>(`/deals/${dealId}/documents`, {
+      method: 'DELETE',
+      body: JSON.stringify({ document_id: documentId }),
+    }),
 };
+
+// Document interface
+export interface DealDocument {
+  id: string;
+  deal_id: string;
+  document_type: 'insurance_agreement' | 'permit' | 'receipt_acv' | 'receipt_deductible' | 'receipt_depreciation' | 'contract' | 'other';
+  file_name: string;
+  file_url: string;
+  file_type?: string;
+  file_size?: number;
+  description?: string;
+  uploaded_by?: string;
+  created_at: string;
+  updated_at: string;
+}
 
 // ============ REPS API ============
 
@@ -249,6 +348,7 @@ export interface Pin {
   image_url: string | null;
   utility_url: string | null;
   contract_url: string | null;
+  inspection_images: string[] | null;  // Inspection photos uploaded for this pin
   assigned_closer_id: string | null;
   outcome: string | null;
   outcome_notes: string | null;
@@ -380,6 +480,12 @@ export const adminApi = {
     fetchApi<{ message: string; rep_id: string; courses_completed: number }>('/admin/complete-training', {
       method: 'POST',
       body: JSON.stringify({ email }),
+    }),
+
+  // Run database migrations (uses init-db which includes migrations)
+  runMigration: () =>
+    fetchApi<{ success: boolean; message: string }>('/admin/init-db', {
+      method: 'POST',
     }),
 };
 

@@ -22,13 +22,12 @@ const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'se
   lead: { label: 'Lead', variant: 'secondary' },
   inspection_scheduled: { label: 'Inspection Scheduled', variant: 'outline' },
   claim_filed: { label: 'Claim Filed', variant: 'outline' },
-  adjuster_scheduled: { label: 'Adjuster Scheduled', variant: 'outline' },
   adjuster_met: { label: 'Awaiting Approval', variant: 'outline' },
   approved: { label: 'Approved', variant: 'default' },
   signed: { label: 'Signed', variant: 'default' },
   // BUILD PHASE
-  materials_ordered: { label: 'Materials Ordered', variant: 'outline' },
-  materials_delivered: { label: 'Materials Delivered', variant: 'outline' },
+  collect_acv: { label: 'Collect ACV', variant: 'outline' },
+  collect_deductible: { label: 'Collect Deductible', variant: 'outline' },
   install_scheduled: { label: 'Scheduled', variant: 'outline' },
   installed: { label: 'Installed', variant: 'default' },
   // COLLECT PHASE
@@ -42,13 +41,16 @@ const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'se
   permit: { label: 'Permit', variant: 'outline' },
   pending: { label: 'Payment Pending', variant: 'outline' },
   paid: { label: 'Paid', variant: 'default' },
+  materials_ordered: { label: 'Materials Ordered', variant: 'outline' },
+  materials_delivered: { label: 'Materials Delivered', variant: 'outline' },
+  adjuster_scheduled: { label: 'Adjuster Scheduled', variant: 'outline' },
 };
 
 type SortField = 'homeowner_name' | 'address' | 'status' | 'total_price' | 'created_at';
 type SortDirection = 'asc' | 'desc';
 
-// Build phase statuses that only admins can set (materials ordering and beyond)
-const adminOnlyStatuses: DealStatus[] = ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
+// Build phase statuses that only admins can set
+const adminOnlyStatuses: DealStatus[] = ['collect_acv', 'collect_deductible', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
 
 // Status requirements - what's needed to move to each status
 const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdmin?: boolean) => boolean; message: string }>> = {
@@ -60,13 +62,13 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdm
     check: (deal) => !!deal.permit_file_url,
     message: 'Permit document must be uploaded before moving to Permit',
   },
-  materials_ordered: {
+  collect_acv: {
     check: (deal, isAdmin) => isAdmin === true,
-    message: 'Only admins can order materials and advance to build phase',
+    message: 'Only admins can collect ACV and advance to build phase',
   },
-  materials_delivered: {
+  collect_deductible: {
     check: (deal, isAdmin) => isAdmin === true,
-    message: 'Only admins can mark materials as delivered',
+    message: 'Only admins can collect deductible',
   },
   install_scheduled: {
     check: (deal, isAdmin) => isAdmin === true && !!deal.install_date,

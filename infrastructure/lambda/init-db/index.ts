@@ -347,6 +347,207 @@ END $$;
 -- Add trigger for training_progress updated_at
 DROP TRIGGER IF EXISTS update_training_progress_updated_at ON training_progress;
 CREATE TRIGGER update_training_progress_updated_at BEFORE UPDATE ON training_progress FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ==========================================
+-- MIGRATION: Add all new columns (2026-02)
+-- ==========================================
+
+-- Deals table new columns
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS signature_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS signature_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS insurance_agreement_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS inspection_images TEXT[]; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv_receipt_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS deductible_receipt_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_receipt_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Insurance info columns
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS insurance_company TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS policy_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS claim_number TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS date_of_loss DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS deductible NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS inspection_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS rcv NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Property details
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS roof_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS roof_squares DECIMAL(10,2); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS roof_squares_with_waste DECIMAL(10,2); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS stories INTEGER DEFAULT 1; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Adjuster info
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS adjuster_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS adjuster_phone TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS adjuster_email TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS adjuster_meeting_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Contract & payments
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS agreement_document_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv_check_collected BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv_check_amount NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv_check_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Build phase
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS materials_ordered_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS materials_delivered_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Collect phase
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_sent_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_amount NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_check_collected BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_check_amount NUMERIC; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_check_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Supplements
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS supplement_amount NUMERIC DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS supplement_approved BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS supplement_notes TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS total_contract_value NUMERIC DEFAULT 0; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Milestone timestamps
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS lead_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS inspection_scheduled_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS claim_filed_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS signed_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS adjuster_met_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS approved_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS collect_acv_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS collect_deductible_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS install_scheduled_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS installed_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_sent_at TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_collected_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS complete_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Fix signed_date column type from DATE to TIMESTAMP WITH TIME ZONE if needed
+DO $$
+BEGIN
+    -- Check if signed_date is DATE type and convert to TIMESTAMP
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name = 'deals' AND column_name = 'signed_date' AND data_type = 'date'
+    ) THEN
+        ALTER TABLE deals ALTER COLUMN signed_date TYPE TIMESTAMP WITH TIME ZONE USING signed_date::timestamp with time zone;
+    END IF;
+END $$;
+
+-- Rep pins new columns
+DO $$ BEGIN ALTER TABLE rep_pins ADD COLUMN IF NOT EXISTS inspection_images TEXT[]; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE rep_pins ADD COLUMN IF NOT EXISTS image_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE rep_pins ADD COLUMN IF NOT EXISTS utility_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE rep_pins ADD COLUMN IF NOT EXISTS contract_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Create deal_documents table if not exists
+CREATE TABLE IF NOT EXISTS deal_documents (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    deal_id UUID NOT NULL REFERENCES deals(id) ON DELETE CASCADE,
+    document_type TEXT NOT NULL,
+    file_name TEXT NOT NULL,
+    file_url TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER,
+    description TEXT,
+    uploaded_by UUID REFERENCES profiles(id),
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Create indexes
+CREATE INDEX IF NOT EXISTS idx_deal_documents_deal_id ON deal_documents(deal_id);
+CREATE INDEX IF NOT EXISTS idx_deal_documents_type ON deal_documents(document_type);
+CREATE INDEX IF NOT EXISTS idx_deals_status ON deals(status);
+
+-- Add new enum values for deal_status
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'inspection_scheduled'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'claim_filed'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'adjuster_scheduled'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'adjuster_met'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'approved'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'collect_acv'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'collect_deductible'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'materials_ordered'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'materials_delivered'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'invoice_sent'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'depreciation_collected'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'on_hold'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- Add new enum values for pin_status
+DO $$ BEGIN ALTER TYPE pin_status ADD VALUE IF NOT EXISTS 'renter'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN ALTER TYPE pin_status ADD VALUE IF NOT EXISTS 'not_interested'; EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ==========================================
+-- MIGRATION: Update commission levels and sync (2026-02)
+-- ==========================================
+
+-- Update commission percentages based on level for existing reps
+UPDATE reps 
+SET default_commission_percent = 5 
+WHERE commission_level = 'junior' 
+AND (default_commission_percent IS NULL OR default_commission_percent = 10.00);
+
+UPDATE reps 
+SET default_commission_percent = 10 
+WHERE commission_level = 'senior' 
+AND (default_commission_percent IS NULL OR default_commission_percent = 10.00);
+
+UPDATE reps 
+SET default_commission_percent = 13 
+WHERE commission_level = 'manager' 
+AND (default_commission_percent IS NULL OR default_commission_percent = 10.00);
+
+-- Ensure default_commission_percent has a value for all reps
+UPDATE reps 
+SET default_commission_percent = 5 
+WHERE default_commission_percent IS NULL;
+
+-- Invoice fields for deals
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_items TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_total DECIMAL(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_created_at TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Material specification fields for ACV receipt
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_category TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS drip_edge_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS vent_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Lost statement field (required for full approval)
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS lost_statement_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Payment request fields
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS payment_requested BOOLEAN DEFAULT false; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS payment_request_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Approval type field
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS approval_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Sales tax field
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS sales_tax DECIMAL(12,2); EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Install scheduling fields
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS install_scheduled_by UUID; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Calendar events table for server-side storage
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    rep_id UUID NOT NULL REFERENCES reps(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    notes TEXT,
+    event_date DATE NOT NULL,
+    event_time TIME,
+    event_end_time TIME,
+    all_day BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_calendar_events_rep_id ON calendar_events(rep_id);
+CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON calendar_events(event_date);
 `;
 
 export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> {

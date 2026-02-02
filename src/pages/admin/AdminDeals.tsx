@@ -16,10 +16,10 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   lead: { label: 'Lead', color: 'text-slate-600', bgColor: 'bg-slate-100' },
   inspection_scheduled: { label: 'Inspected', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   claim_filed: { label: 'Claim Filed', color: 'text-purple-600', bgColor: 'bg-purple-100' },
-  adjuster_scheduled: { label: 'Adjuster Met', color: 'text-pink-600', bgColor: 'bg-pink-100' },
+  adjuster_met: { label: 'Adjuster Met', color: 'text-pink-600', bgColor: 'bg-pink-100' },
   signed: { label: 'Ready', color: 'text-green-600', bgColor: 'bg-green-100' },
-  materials_ordered: { label: 'Ordered', color: 'text-orange-600', bgColor: 'bg-orange-100' },
-  materials_delivered: { label: 'Delivered', color: 'text-amber-600', bgColor: 'bg-amber-100' },
+  collect_acv: { label: 'Collect ACV', color: 'text-orange-600', bgColor: 'bg-orange-100' },
+  collect_deductible: { label: 'Collect Ded.', color: 'text-amber-600', bgColor: 'bg-amber-100' },
   install_scheduled: { label: 'Scheduled', color: 'text-cyan-600', bgColor: 'bg-cyan-100' },
   installed: { label: 'Installed', color: 'text-teal-600', bgColor: 'bg-teal-100' },
   complete: { label: 'Complete', color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
@@ -67,13 +67,13 @@ export default function AdminDeals() {
   // Stats
   const stats = {
     total: filteredDeals.length,
-    readyForAction: filteredDeals.filter(d => ['signed', 'materials_ordered', 'materials_delivered', 'install_scheduled', 'installed'].includes(d.status)).length,
+    readyForAction: filteredDeals.filter(d => ['signed', 'collect_acv', 'collect_deductible', 'install_scheduled', 'installed'].includes(d.status)).length,
     totalValue: filteredDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
   };
 
   // Group deals by status for quick view
   const needsAction = filteredDeals.filter(d =>
-    ['signed', 'materials_ordered', 'materials_delivered', 'install_scheduled'].includes(d.status)
+    ['signed', 'collect_acv', 'collect_deductible', 'install_scheduled'].includes(d.status)
   );
 
   return (
@@ -146,8 +146,8 @@ export default function AdminDeals() {
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
                 <SelectItem value="signed">Ready for Install</SelectItem>
-                <SelectItem value="materials_ordered">Materials Ordered</SelectItem>
-                <SelectItem value="materials_delivered">Delivered</SelectItem>
+                <SelectItem value="collect_acv">Collect ACV</SelectItem>
+                <SelectItem value="collect_deductible">Collect Deductible</SelectItem>
                 <SelectItem value="install_scheduled">Scheduled</SelectItem>
                 <SelectItem value="installed">Installed</SelectItem>
                 <SelectItem value="complete">Complete</SelectItem>
@@ -186,15 +186,15 @@ export default function AdminDeals() {
                     <div className="mt-2 flex items-center gap-3 text-xs text-muted-foreground">
                       {deal.status === 'signed' && (
                         <span className="flex items-center gap-1 text-primary font-medium">
-                          <Package className="w-3 h-3" /> Order Materials
+                          <Package className="w-3 h-3" /> Collect ACV
                         </span>
                       )}
-                      {deal.status === 'materials_ordered' && (
+                      {deal.status === 'collect_acv' && (
                         <span className="flex items-center gap-1 text-primary font-medium">
-                          <Truck className="w-3 h-3" /> Mark Delivered
+                          <Truck className="w-3 h-3" /> Collect Deductible
                         </span>
                       )}
-                      {deal.status === 'materials_delivered' && (
+                      {deal.status === 'collect_deductible' && (
                         <span className="flex items-center gap-1 text-primary font-medium">
                           <Clock className="w-3 h-3" /> Schedule Install
                         </span>

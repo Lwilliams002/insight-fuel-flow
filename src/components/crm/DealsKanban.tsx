@@ -12,12 +12,12 @@ interface DealsKanbanProps {
   isAdmin?: boolean;
 }
 
-// Full admin columns including materials ordering stages
+// Full admin columns including collection stages
 const adminColumns: { id: DealStatus; title: string; color: string }[] = [
   { id: 'lead', title: 'Lead', color: 'bg-slate-500' },
   { id: 'signed', title: 'Signed', color: 'bg-blue-500' },
-  { id: 'materials_ordered', title: 'Materials Ordered', color: 'bg-orange-400' },
-  { id: 'materials_delivered', title: 'Materials Delivered', color: 'bg-orange-500' },
+  { id: 'collect_acv', title: 'Collect ACV', color: 'bg-orange-400' },
+  { id: 'collect_deductible', title: 'Collect Deductible', color: 'bg-orange-500' },
   { id: 'install_scheduled', title: 'Scheduled', color: 'bg-amber-500' },
   { id: 'installed', title: 'Installed', color: 'bg-teal-500' },
   { id: 'complete', title: 'Complete', color: 'bg-green-500' },
@@ -33,8 +33,8 @@ const repColumns: { id: DealStatus; title: string; color: string }[] = [
   { id: 'pending', title: 'Payment Pending', color: 'bg-amber-500' },
 ];
 
-// Build phase statuses that only admins can set (materials ordering and beyond)
-const adminOnlyStatuses: DealStatus[] = ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
+// Build phase statuses that only admins can set
+const adminOnlyStatuses: DealStatus[] = ['collect_acv', 'collect_deductible', 'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'];
 
 // Status requirements - what's needed to move to each status
 const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdmin?: boolean) => boolean; message: string }>> = {
@@ -46,13 +46,13 @@ const statusRequirements: Partial<Record<DealStatus, { check: (deal: Deal, isAdm
     check: (deal) => !!deal.permit_file_url,
     message: 'Permit document must be uploaded before moving to Permit',
   },
-  materials_ordered: {
+  collect_acv: {
     check: (deal, isAdmin) => isAdmin === true,
-    message: 'Only admins can order materials and advance to build phase',
+    message: 'Only admins can collect ACV and advance to build phase',
   },
-  materials_delivered: {
+  collect_deductible: {
     check: (deal, isAdmin) => isAdmin === true,
-    message: 'Only admins can mark materials as delivered',
+    message: 'Only admins can collect deductible',
   },
   install_scheduled: {
     check: (deal, isAdmin) => isAdmin === true && !!deal.install_date,

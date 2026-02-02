@@ -570,7 +570,7 @@
         "validateOnSynth": false,
         "assumeRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-deploy-role-880147167659-us-east-1",
         "cloudFormationExecutionRoleArn": "arn:${AWS::Partition}:iam::880147167659:role/cdk-hnb659fds-cfn-exec-role-880147167659-us-east-1",
-        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/c1427b02321d6be6f8092733efa20f9f063cec07a4e2f57013db03f57a150ad6.json",
+        "stackTemplateAssetObjectUrl": "s3://cdk-hnb659fds-assets-880147167659-us-east-1/e6fd089ce894c8ab15ad58c43119b100baf3f92474f28ffcccb20bbe2dbf3c3d.json",
         "requiresBootstrapStackVersion": 6,
         "bootstrapStackVersionSsmParameter": "/cdk-bootstrap/hnb659fds/version",
         "additionalDependencies": [
@@ -599,7 +599,7 @@
               "new Bundling (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:4190)",
               "Function.bundle (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/bundling.js:1:1141)",
               "new NodejsFunction (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/node_modules/aws-cdk-lib/aws-lambda-nodejs/lib/function.js:1:2443)",
-              "new ApiStack (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/lib/api-stack.ts:71:27)",
+              "new ApiStack (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/lib/api-stack.ts:77:27)",
               "Object.<anonymous> (/Users/lezdev/Desktop/Williams/insight-fuel-flow/infrastructure/bin/infrastructure.ts:42:18)",
               "Module._compile (node:internal/modules/cjs/loader:1554:14)",
               "Module.m._compile (/Users/lezdev/.npm/_npx/1bf7c3c15bf47d04/node_modules/ts-node/src/index.ts:1618:23)",
@@ -775,6 +775,24 @@
             "data": "TrainingFunctionDF02EF51"
           }
         ],
+        "/InsightFuelFlow-Api-dev/MigrateFunction/ServiceRole/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "MigrateFunctionServiceRole09E2C13E"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/MigrateFunction/ServiceRole/DefaultPolicy/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "MigrateFunctionServiceRoleDefaultPolicyDA7D4EFF"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/MigrateFunction/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "MigrateFunction86058513"
+          }
+        ],
         "/InsightFuelFlow-Api-dev/Api/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -796,7 +814,7 @@
         "/InsightFuelFlow-Api-dev/Api/Deployment/Resource": [
           {
             "type": "aws:cdk:logicalId",
-            "data": "ApiDeploymentB17BE62Da502ef82027b9f11085190f41f1d0c75"
+            "data": "ApiDeploymentB17BE62D59ad74a5b50638854825bb3013358b4a"
           }
         ],
         "/InsightFuelFlow-Api-dev/Api/DeploymentStage.dev/Resource": [
@@ -929,6 +947,72 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "ApidealsidDELETED3F5053D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apidealsiddocuments0D8FD543"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsOPTIONS98FFF3CA"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsGETApiPermissionInsightFuelFlowApidevApi26E1307BGETdealsiddocuments79CAE095"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETdealsiddocumentsF8B24922"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsGET519BA310"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTdealsiddocuments1B03D7F9"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTdealsiddocuments434DAF71"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsPOST6D41620A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/DELETE/ApiPermission.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsDELETEApiPermissionInsightFuelFlowApidevApi26E1307BDELETEdealsiddocuments70177980"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/DELETE/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.DELETE..deals.{id}.documents": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsDELETEApiPermissionTestInsightFuelFlowApidevApi26E1307BDELETEdealsiddocuments273C08ED"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/deals/{id}/documents/DELETE/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApidealsiddocumentsDELETED6ED376C"
           }
         ],
         "/InsightFuelFlow-Api-dev/Api/Default/reps/Resource": [
@@ -1297,6 +1381,54 @@
             "data": "ApiuploadurlPOST01FA528C"
           }
         ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "Apiuploaddownload90CD830A"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadOPTIONSAC780A19"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/GET/ApiPermission.InsightFuelFlowApidevApi26E1307B.GET..upload.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadGETApiPermissionInsightFuelFlowApidevApi26E1307BGETuploaddownload84773D7D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/GET/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.GET..upload.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadGETApiPermissionTestInsightFuelFlowApidevApi26E1307BGETuploaddownload049029B5"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/GET/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadGET7841ACBD"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..upload.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadPOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTuploaddownloadE2DD0592"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..upload.download": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadPOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTuploaddownloadCCE6ECF2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/upload/download/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiuploaddownloadPOST08E861C3"
+          }
+        ],
         "/InsightFuelFlow-Api-dev/Api/Default/admin/Resource": [
           {
             "type": "aws:cdk:logicalId",
@@ -1457,6 +1589,36 @@
           {
             "type": "aws:cdk:logicalId",
             "data": "ApiadmininitdbPOST8E7D601D"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/migrate/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminmigrateF5C4FB7C"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/migrate/OPTIONS/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminmigrateOPTIONS050FBAB2"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/migrate/POST/ApiPermission.InsightFuelFlowApidevApi26E1307B.POST..admin.migrate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminmigratePOSTApiPermissionInsightFuelFlowApidevApi26E1307BPOSTadminmigrate7DEC841F"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/migrate/POST/ApiPermission.Test.InsightFuelFlowApidevApi26E1307B.POST..admin.migrate": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminmigratePOSTApiPermissionTestInsightFuelFlowApidevApi26E1307BPOSTadminmigrateDEF3A6D6"
+          }
+        ],
+        "/InsightFuelFlow-Api-dev/Api/Default/admin/migrate/POST/Resource": [
+          {
+            "type": "aws:cdk:logicalId",
+            "data": "ApiadminmigratePOSTD787851E"
           }
         ],
         "/InsightFuelFlow-Api-dev/Api/Default/training/Resource": [

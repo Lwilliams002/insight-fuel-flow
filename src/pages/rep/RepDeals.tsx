@@ -35,8 +35,8 @@ export default function RepDeals() {
 
   // Group deals by phase
   const dealsByPhase = {
-    sign: deals?.filter(d => ['inspection_scheduled', 'claim_filed', 'adjuster_scheduled', 'adjuster_met', 'approved', 'signed'].includes(d.status)) || [],
-    build: deals?.filter(d => ['materials_ordered', 'materials_delivered', 'install_scheduled', 'installed'].includes(d.status)) || [],
+    sign: deals?.filter(d => ['inspection_scheduled', 'claim_filed', 'adjuster_met', 'approved', 'signed'].includes(d.status)) || [],
+    build: deals?.filter(d => ['collect_acv', 'collect_deductible', 'install_scheduled', 'installed'].includes(d.status)) || [],
     finalizing: deals?.filter(d => ['invoice_sent', 'depreciation_collected'].includes(d.status)) || [],
     complete: deals?.filter(d => d.status === 'complete') || [],
   };

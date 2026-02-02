@@ -186,6 +186,8 @@ async function updatePin(pinId: string, user: any, event: APIGatewayProxyEvent) 
     'appointment_date', 'appointment_end_date', 'appointment_all_day',
     'document_url', 'assigned_closer_id',
     'outcome', 'outcome_notes', 'follow_up_date',
+    'image_url', 'utility_url', 'contract_url',
+    'inspection_images',
   ];
 
   // Map lat/lng to latitude/longitude if provided

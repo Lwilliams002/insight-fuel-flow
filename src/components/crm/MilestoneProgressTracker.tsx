@@ -36,18 +36,17 @@ interface MilestoneProgressTrackerProps {
 const milestones: { status: DealStatus; icon: React.ElementType; label: string; phase: CRMPhase }[] = [
   { status: 'lead', icon: User, label: 'Lead', phase: 'sign' },
   { status: 'inspection_scheduled', icon: Search, label: 'Inspection', phase: 'sign' },
-  { status: 'signed', icon: FileSignature, label: 'Signed', phase: 'sign' },
   { status: 'claim_filed', icon: FileText, label: 'Claim Filed', phase: 'sign' },
-  { status: 'adjuster_scheduled', icon: Calendar, label: 'Adj. Sched.', phase: 'sign' },
+  { status: 'signed', icon: FileSignature, label: 'Signed', phase: 'sign' },
   { status: 'adjuster_met', icon: Clock, label: 'Awaiting Appr.', phase: 'sign' },
   { status: 'approved', icon: CheckCircle2, label: 'Approved', phase: 'sign' },
-  { status: 'materials_ordered', icon: Package, label: 'Mat. Ordered', phase: 'build' },
-  { status: 'materials_delivered', icon: Truck, label: 'Delivered', phase: 'build' },
+  { status: 'collect_acv', icon: DollarSign, label: 'Collect ACV', phase: 'build' },
+  { status: 'collect_deductible', icon: DollarSign, label: 'Collect Ded.', phase: 'build' },
   { status: 'install_scheduled', icon: Calendar, label: 'Inst. Sched.', phase: 'build' },
   { status: 'installed', icon: Home, label: 'Installed', phase: 'build' },
-  { status: 'invoice_sent', icon: Send, label: 'Invoice Sent', phase: 'collect' },
-  { status: 'depreciation_collected', icon: DollarSign, label: 'Depreciation', phase: 'collect' },
-  { status: 'complete', icon: Trophy, label: 'Complete', phase: 'collect' },
+  { status: 'invoice_sent', icon: Send, label: 'Invoice Sent', phase: 'finalizing' },
+  { status: 'depreciation_collected', icon: DollarSign, label: 'Depreciation', phase: 'finalizing' },
+  { status: 'complete', icon: Trophy, label: 'Complete', phase: 'finalizing' },
 ];
 
 // Titan Prime palette
@@ -56,9 +55,10 @@ const PRIME_GOLD = '#C9A24D';
 const CHARCOAL = '#2E2E2E';
 
 const phaseLabels: Record<CRMPhase, string> = {
-  sign: 'SIGN',
-  build: 'BUILD',
-  collect: 'COLLECT',
+  sign: 'SIGNED',
+  build: 'INSTALL REVIEW',
+  finalizing: 'FINALIZING',
+  complete: 'COMPLETE',
   other: '',
 };
 

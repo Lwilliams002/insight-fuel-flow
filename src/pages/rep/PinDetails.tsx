@@ -16,9 +16,10 @@ import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { 
   ChevronLeft, User, Phone, Mail, Trash2, Briefcase,
-  CalendarIcon, Clock, X, Upload, FileText, Loader2, Users, Image, Zap
+  CalendarIcon, Clock, X, Upload, FileText, Loader2, Users, Image, Zap, Camera
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AwsAuthContext';
+import { ImageUpload } from '@/components/uploads';
 import {
   Dialog,
   DialogContent,
@@ -52,6 +53,7 @@ interface Pin {
   image_url: string | null;
   utility_url: string | null;
   contract_url: string | null;
+  inspection_images: string[] | null;
 }
 
 // Convert AWS Pin to local format
@@ -77,6 +79,7 @@ function mapAwsPinToPin(awsPin: AwsPin): Pin {
     image_url: awsPin.image_url,
     utility_url: awsPin.utility_url,
     contract_url: awsPin.contract_url,
+    inspection_images: awsPin.inspection_images,
   };
 }
 
@@ -1013,6 +1016,67 @@ export default function PinDetails() {
                     )}
                   </Button>
                 )}
+              </div>
+
+              {/* Inspection Photos Section */}
+              <div className="space-y-2">
+                <Label className="text-muted-foreground text-xs flex items-center gap-2">
+                  <Camera className="w-4 h-4" />
+                  Inspection Photos
+                </Label>
+                {pin?.inspection_images && pin.inspection_images.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mb-2">
+                    {pin.inspection_images.map((url, idx) => (
+                      <div key={idx} className="relative group">
+                        <img
+                          src={url}
+                          alt={`Inspection ${idx + 1}`}
+                          className="w-full h-16 object-cover rounded-lg border"
+                        />
+                        <button
+                          onClick={async () => {
+                            const currentImages = pin.inspection_images || [];
+                            const updatedImages = currentImages.filter(u => u !== url);
+                            try {
+                              await pinsApi.update(pin.id, { inspection_images: updatedImages });
+                              queryClient.invalidateQueries({ queryKey: ['pin', pin.id] });
+                              toast.success('Photo removed');
+                            } catch (error) {
+                              toast.error('Failed to remove photo');
+                            }
+                          }}
+                          className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <ImageUpload
+                  category="inspection-photos"
+                  pinId={pin?.id || 'new'}
+                  existingFiles={pin?.inspection_images || []}
+                  label="Add Inspection Photos"
+                  onUpload={async (url) => {
+                    if (pin) {
+                      const currentImages = pin.inspection_images || [];
+                      try {
+                        await pinsApi.update(pin.id, { inspection_images: [...currentImages, url] });
+                        queryClient.invalidateQueries({ queryKey: ['pin', pin.id] });
+                        toast.success('Photo uploaded');
+                      } catch (error) {
+                        toast.error('Failed to save photo');
+                      }
+                    } else {
+                      // For new pins, store temporarily until save
+                      toast.success('Photo uploaded - save pin to keep it');
+                    }
+                  }}
+                />
+                <p className="text-xs text-muted-foreground">
+                  These photos will transfer to the deal when converted
+                </p>
               </div>
             </div>
           )}

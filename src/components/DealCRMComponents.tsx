@@ -16,7 +16,9 @@ import {
   CheckCircle2,
   Circle,
   ChevronRight,
-  Shield
+  Shield,
+  DollarSign,
+  Clock
 } from 'lucide-react';
 
 interface DealPipelineProps {
@@ -39,7 +41,7 @@ export function DealPipeline({ currentStatus, onStatusChange, deal }: DealPipeli
   const progress = getProgressPercentage(currentStatus);
   const currentPhase = getPhaseForStatus(currentStatus);
 
-  const phases: CRMPhase[] = ['sign', 'build', 'collect'];
+  const phases: CRMPhase[] = ['sign', 'build', 'finalizing'];
 
   return (
     <Card>
@@ -138,6 +140,14 @@ interface InsuranceCardProps {
   claimNumber?: string;
   acvCollected?: boolean;
   depreciationCollected?: boolean;
+  // Commission props
+  salesTax?: number;
+  repTitlePercentage?: number;
+  repTitle?: string;
+  commissionAmount?: number;
+  paymentRequested?: boolean;
+  paymentRequestDate?: string;
+  onRequestPayment?: () => void;
 }
 
 export function InsuranceCard({
@@ -149,9 +159,37 @@ export function InsuranceCard({
   claimNumber,
   acvCollected = false,
   depreciationCollected = false,
+  salesTax,
+  repTitlePercentage = 0,
+  repTitle,
+  commissionAmount,
+  paymentRequested = false,
+  paymentRequestDate,
+  onRequestPayment,
 }: InsuranceCardProps) {
   const formatCurrency = (amount: number) =>
     `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+  // Ensure all values are numbers
+  const numRcv = Number(rcv) || 0;
+  const numAcv = Number(acv) || 0;
+  const numDepreciation = Number(depreciation) || 0;
+  const numDeductible = Number(deductible) || 0;
+  const numRepTitlePercentage = Number(repTitlePercentage) || 0;
+
+  // Calculate RCV if not provided (ACV + Deductible + Depreciation = RCV)
+  // Note: The correct formula is RCV = ACV + Depreciation (deductible is paid by homeowner, not part of RCV)
+  // But per insurance: ACV + Depreciation = RCV, and homeowner pays deductible separately
+  const calculatedRcv = numRcv > 0 ? numRcv : (numAcv + numDepreciation);
+
+  // Calculate sales tax at 8.25% if not provided
+  const numSalesTax = salesTax !== undefined && Number(salesTax) > 0 ? Number(salesTax) : (calculatedRcv * 0.0825);
+
+  // Calculate base amount and commission
+  const baseAmount = calculatedRcv - numSalesTax;
+  const calculatedCommission = commissionAmount !== undefined && Number(commissionAmount) > 0
+    ? Number(commissionAmount)
+    : (baseAmount * (numRepTitlePercentage / 100));
 
   return (
     <Card>
@@ -186,10 +224,18 @@ export function InsuranceCard({
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-primary" />
-              <span className="text-sm">RCV (Total Claim)</span>
+              <div className="w-3 h-3 rounded-full bg-red-500" />
+              <span className="text-sm">Deductible (Homeowner Pays)</span>
             </div>
-            <span className="font-bold">{formatCurrency(rcv)}</span>
+            <span className="font-medium text-red-600">-{formatCurrency(numDeductible)}</span>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-blue-500" />
+              <span className="text-sm">ACV (Actual Cash Value)</span>
+            </div>
+            <span className="font-medium">{formatCurrency(numAcv)}</span>
           </div>
 
           <div className="flex items-center justify-between">
@@ -197,23 +243,15 @@ export function InsuranceCard({
               <div className="w-3 h-3 rounded-full bg-orange-500" />
               <span className="text-sm">Depreciation (Held Back)</span>
             </div>
-            <span className="font-medium text-orange-600">-{formatCurrency(depreciation)}</span>
+            <span className="font-medium text-orange-600">-{formatCurrency(numDepreciation)}</span>
           </div>
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-sm">ACV (After Depreciation)</span>
+              <div className="w-3 h-3 rounded-full bg-primary" />
+              <span className="text-sm">RCV (Total Claim)</span>
             </div>
-            <span className="font-medium">{formatCurrency(acv)}</span>
-          </div>
-
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500" />
-              <span className="text-sm">Deductible (Homeowner Pays)</span>
-            </div>
-            <span className="font-medium text-red-600">-{formatCurrency(deductible)}</span>
+            <span className="font-bold">{formatCurrency(calculatedRcv)}</span>
           </div>
 
           <Separator />
@@ -229,7 +267,7 @@ export function InsuranceCard({
                 )}
                 <span className="text-sm">1st Check (ACV - Deductible)</span>
               </div>
-              <span className="font-bold">{formatCurrency(acv - deductible)}</span>
+              <span className="font-bold">{formatCurrency(numAcv - numDeductible)}</span>
             </div>
 
             <div className="flex items-center justify-between p-2 rounded-lg bg-muted">
@@ -241,7 +279,7 @@ export function InsuranceCard({
                 )}
                 <span className="text-sm">2nd Check (Depreciation)</span>
               </div>
-              <span className="font-bold">{formatCurrency(depreciation)}</span>
+              <span className="font-bold">{formatCurrency(numDepreciation)}</span>
             </div>
           </div>
         </div>
@@ -249,11 +287,95 @@ export function InsuranceCard({
         {/* Formula Reminder */}
         <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
           <p className="text-xs text-muted-foreground text-center">
-            ACV + Deductible + Depreciation = RCV
+            ACV + Depreciation = RCV
           </p>
           <p className="text-xs text-center font-medium mt-1">
-            {formatCurrency(acv)} + {formatCurrency(deductible)} + {formatCurrency(depreciation)} = {formatCurrency(rcv)}
+            {formatCurrency(numAcv)} + {formatCurrency(numDepreciation)} = {formatCurrency(calculatedRcv)}
           </p>
+        </div>
+
+        <Separator />
+
+        {/* Commission Details */}
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5 text-green-600" />
+            <h3 className="font-semibold">Commission Details</h3>
+          </div>
+
+          {/* Commission Breakdown */}
+          <div className="space-y-2 p-3 rounded-lg bg-muted/50">
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">RCV (Total Claim)</span>
+              <span className="font-medium">{formatCurrency(calculatedRcv)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Sales Tax (8.25%)</span>
+              <span className="font-medium text-red-600">-{formatCurrency(numSalesTax)}</span>
+            </div>
+            <Separator className="my-2" />
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">Base Amount</span>
+              <span className="font-medium">{formatCurrency(baseAmount)}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-muted-foreground">
+                Commission Level {repTitle ? `(${repTitle})` : ''} @ {numRepTitlePercentage}%
+              </span>
+              <span className="font-medium">×{numRepTitlePercentage}%</span>
+            </div>
+          </div>
+
+          {/* Commission Formula */}
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+            <p className="text-xs text-muted-foreground text-center">
+              (RCV - Sales Tax) × Commission Level % = Commission
+            </p>
+            <p className="text-xs text-center font-medium mt-1">
+              ({formatCurrency(calculatedRcv)} - {formatCurrency(numSalesTax)}) × {numRepTitlePercentage}% = {formatCurrency(calculatedCommission)}
+            </p>
+          </div>
+
+          {/* Commission Amount */}
+          <div className="p-4 rounded-lg bg-green-600 text-white text-center">
+            <p className="text-sm opacity-90">Your Commission</p>
+            <p className="text-2xl font-bold">
+              {formatCurrency(calculatedCommission)}
+            </p>
+          </div>
+
+          {/* Request Payment Button - Only show if depreciation receipt is collected */}
+          {depreciationCollected && (
+            <div className="space-y-2">
+              {paymentRequested ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+                  <Clock className="h-4 w-4 text-yellow-600" />
+                  <div>
+                    <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">Payment Requested</p>
+                    {paymentRequestDate && (
+                      <p className="text-xs text-muted-foreground">
+                        Requested on {new Date(paymentRequestDate).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <Button
+                  className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                  onClick={onRequestPayment}
+                >
+                  <DollarSign className="h-4 w-4" />
+                  Request Payment
+                </Button>
+              )}
+            </div>
+          )}
+
+          {!depreciationCollected && (
+            <p className="text-xs text-muted-foreground text-center italic">
+              Complete depreciation receipt to request payment
+            </p>
+          )}
         </div>
       </CardContent>
     </Card>
@@ -267,10 +389,9 @@ interface StatusTimelineProps {
 
 export function StatusTimeline({ currentStatus, statusHistory = [] }: StatusTimelineProps) {
   const allStatuses: DealStatus[] = [
-    'lead', 'inspection_scheduled', 'claim_filed', 'adjuster_scheduled',
-    'adjuster_met', 'approved', 'signed', 'materials_ordered',
-    'materials_delivered', 'install_scheduled', 'installed',
-    'invoice_sent', 'depreciation_collected', 'complete'
+    'lead', 'inspection_scheduled', 'claim_filed', 'signed',
+    'adjuster_met', 'approved', 'collect_acv', 'collect_deductible',
+    'install_scheduled', 'installed', 'invoice_sent', 'depreciation_collected', 'complete'
   ];
 
   const currentIndex = allStatuses.indexOf(currentStatus);

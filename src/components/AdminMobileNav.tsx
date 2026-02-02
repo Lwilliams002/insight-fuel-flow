@@ -24,7 +24,7 @@ import { useState } from 'react';
 
 const navItems = [
   { href: '/admin', icon: LayoutDashboard, label: 'Dashboard' },
-  { href: '/admin/deals', icon: Home, label: 'Deals' },
+  { href: '/admin/deals', icon: Home, label: 'Pipeline' },
   { href: '/admin/map', icon: MapPin, label: 'Map' },
   { href: '/admin/reps', icon: Users, label: 'Reps' },
   { href: '/admin/commissions', icon: DollarSign, label: 'Commissions' },

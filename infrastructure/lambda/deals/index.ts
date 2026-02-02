@@ -20,8 +20,14 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
   const method = event.httpMethod;
   const dealId = event.pathParameters?.id;
+  const path = event.resource || event.path || '';
 
   try {
+    // Handle document routes
+    if (path.includes('/documents')) {
+      return await handleDocuments(dealId!, user, event);
+    }
+
     switch (method) {
       case 'GET':
         return dealId ? await getDeal(dealId, user) : await listDeals(user, event);
@@ -227,13 +233,13 @@ async function createDealFromPin(user: any, event: APIGatewayProxyEvent) {
   }
 
   const result = await withTransaction(async (client) => {
-    // Create the deal from pin data
+    // Create the deal from pin data, including inspection_images
     const dealResult = await client.query(
       `INSERT INTO deals (
         homeowner_name, homeowner_phone, homeowner_email,
         address, city, state, zip_code,
-        status, total_price, notes
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        status, total_price, notes, inspection_images
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *`,
       [
         pin.homeowner_name || body.homeowner_name,
@@ -246,6 +252,7 @@ async function createDealFromPin(user: any, event: APIGatewayProxyEvent) {
         body.status || 'lead',
         body.total_price || 0,
         pin.notes || body.notes,
+        pin.inspection_images || null, // Transfer inspection photos from pin to deal
       ]
     );
 
@@ -319,22 +326,66 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
   let paramIndex = 1;
 
   const allowedFields = [
+    // Basic info
     'homeowner_name', 'homeowner_phone', 'homeowner_email',
     'address', 'city', 'state', 'zip_code',
+
+    // Property details
     'roof_type', 'roof_squares', 'roof_squares_with_waste', 'stories',
+
+    // Status & notes
     'status', 'total_price', 'notes',
+
+    // Insurance info
     'insurance_company', 'policy_number', 'claim_number', 'date_of_loss', 'deductible',
     'inspection_date',
-    'rcv', 'acv', 'depreciation',
+    'rcv', 'acv', 'depreciation', 'sales_tax',
+
+    // Adjuster info
     'adjuster_name', 'adjuster_phone', 'adjuster_email', 'adjuster_meeting_date',
+
+    // Contract & signature
     'contract_signed', 'signed_date', 'agreement_document_url',
+    'signature_url', 'signature_date',
+    'insurance_agreement_url',
+
+    // Payment tracking - SIGN phase
     'acv_check_collected', 'acv_check_amount', 'acv_check_date',
+
+    // BUILD phase
     'materials_ordered_date', 'materials_delivered_date', 'install_date', 'completion_date',
-    'permit_file_url', 'install_images', 'completion_images',
+
+    // Documents & images
+    'permit_file_url', 'lost_statement_url',
+    'inspection_images', 'install_images', 'completion_images',
+
+    // Receipts
+    'acv_receipt_url', 'deductible_receipt_url', 'depreciation_receipt_url',
+
+    // COLLECT phase
     'invoice_sent_date', 'invoice_amount',
     'depreciation_check_collected', 'depreciation_check_amount', 'depreciation_check_date',
+
+    // Invoice fields
+    'invoice_items', 'invoice_total', 'invoice_created_at', 'invoice_url',
+
+    // Supplements
     'supplement_amount', 'supplement_approved', 'supplement_notes',
-    'total_contract_value', 'payment_requested',
+
+    // Totals
+    'total_contract_value', 'payment_requested', 'payment_request_date',
+
+    // Approval
+    'approval_type',
+
+    // Material specifications
+    'material_category', 'material_type', 'material_color', 'drip_edge_color', 'vent_color',
+
+    // Milestone timestamps
+    'lead_date', 'inspection_scheduled_date', 'claim_filed_date', 'signed_date',
+    'adjuster_met_date', 'approved_date', 'collect_acv_date', 'collect_deductible_date',
+    'install_scheduled_date', 'installed_date', 'invoice_sent_at',
+    'depreciation_collected_date', 'complete_date',
   ];
 
   for (const field of allowedFields) {
@@ -367,4 +418,77 @@ async function deleteDeal(dealId: string, user: any) {
 
   await execute('DELETE FROM deals WHERE id = $1', [dealId]);
   return success({ message: 'Deal deleted' });
+}
+
+// Handle deal documents (list, add, delete)
+async function handleDocuments(dealId: string, user: any, event: APIGatewayProxyEvent) {
+  const method = event.httpMethod;
+  const userIsAdmin = isAdmin(user);
+  const repId = await getRepId(user.sub);
+
+  // Verify access to the deal
+  if (!userIsAdmin && repId) {
+    const hasAccess = await queryOne(
+      `SELECT 1 FROM deal_commissions WHERE deal_id = $1 AND rep_id = $2`,
+      [dealId, repId]
+    );
+    if (!hasAccess) {
+      return forbidden('Access denied');
+    }
+  }
+
+  switch (method) {
+    case 'GET':
+      // List all documents for a deal
+      const documents = await query(
+        `SELECT * FROM deal_documents WHERE deal_id = $1 ORDER BY created_at DESC`,
+        [dealId]
+      );
+      return success(documents);
+
+    case 'POST': {
+      // Add a new document
+      const body = parseBody(event);
+      if (!body) {
+        return badRequest('Request body required');
+      }
+
+      const { document_type, file_name, file_url, file_type, file_size, description } = body;
+
+      if (!document_type || !file_name || !file_url) {
+        return badRequest('document_type, file_name, and file_url are required');
+      }
+
+      const result = await queryOne(
+        `INSERT INTO deal_documents (
+          deal_id, document_type, file_name, file_url, file_type, file_size, description, uploaded_by
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING *`,
+        [dealId, document_type, file_name, file_url, file_type, file_size, description, user.sub]
+      );
+
+      return created(result);
+    }
+
+    case 'DELETE': {
+      // Delete a document
+      const body = parseBody(event);
+      const documentId = body?.document_id || event.queryStringParameters?.document_id;
+
+      if (!documentId) {
+        return badRequest('document_id is required');
+      }
+
+      // Only admins can delete documents
+      if (!userIsAdmin) {
+        return forbidden('Only admins can delete documents');
+      }
+
+      await execute('DELETE FROM deal_documents WHERE id = $1 AND deal_id = $2', [documentId, dealId]);
+      return success({ message: 'Document deleted' });
+    }
+
+    default:
+      return badRequest(`Unsupported method for documents: ${method}`);
+  }
 }

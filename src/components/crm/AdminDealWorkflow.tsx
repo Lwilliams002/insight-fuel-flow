@@ -33,20 +33,26 @@ interface AdminDealWorkflowProps {
 const adminSteps = [
   { status: 'lead', label: 'Lead' },
   { status: 'signed', label: 'Ready' },
-  { status: 'materials_ordered', label: 'Ordered' },
-  { status: 'materials_delivered', label: 'Delivered' },
+  { status: 'collect_acv', label: 'Collect ACV' },
+  { status: 'collect_deductible', label: 'Collect Ded.' },
+  { status: 'install_scheduled', label: 'Scheduled' },
   { status: 'installed', label: 'Installed' },
   { status: 'complete', label: 'Complete' },
 ];
 
 function getStepIndex(status: DealStatus): number {
   // Map various statuses to simplified step index
-  if (['lead', 'inspection_scheduled', 'claim_filed', 'adjuster_scheduled'].includes(status)) return 0;
+  if (['lead', 'inspection_scheduled', 'claim_filed', 'adjuster_met'].includes(status)) return 0;
   if (status === 'signed') return 1;
+  if (status === 'collect_acv') return 2;
+  if (status === 'collect_deductible') return 3;
+  if (status === 'install_scheduled') return 4;
+  if (status === 'installed') return 5;
+  if (status === 'complete') return 6;
+  // Legacy statuses mapped to new flow
   if (status === 'materials_ordered') return 2;
-  if (status === 'materials_delivered' || status === 'install_scheduled') return 3;
-  if (status === 'installed') return 4;
-  if (status === 'complete') return 5;
+  if (status === 'materials_delivered') return 3;
+  if (status === 'adjuster_scheduled') return 0;
   return 0;
 }
 
@@ -107,8 +113,6 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
 
   const handleAction = (status: DealStatus, extras?: Partial<Deal>) => {
     const updates: Partial<Deal> = { status, ...extras };
-    if (status === 'materials_ordered') updates.materials_ordered_date = new Date().toISOString().split('T')[0];
-    if (status === 'materials_delivered') updates.materials_delivered_date = new Date().toISOString().split('T')[0];
     if (status === 'installed') updates.completion_date = new Date().toISOString().split('T')[0];
     updateMutation.mutate(updates);
   };
@@ -117,11 +121,11 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
   const getNextAction = () => {
     switch (deal.status) {
       case 'signed':
-      case 'adjuster_scheduled':
-        return { label: 'Order Materials', icon: Package, status: 'materials_ordered' as DealStatus };
-      case 'materials_ordered':
-        return { label: 'Mark Delivered', icon: Truck, status: 'materials_delivered' as DealStatus };
-      case 'materials_delivered':
+        return { label: 'Collect ACV', icon: DollarSign, status: 'collect_acv' as DealStatus };
+      case 'collect_acv':
+        return { label: 'Collect Deductible', icon: DollarSign, status: 'collect_deductible' as DealStatus };
+      case 'collect_deductible':
+        return { label: 'Schedule Install', icon: Calendar, status: 'install_scheduled' as DealStatus };
       case 'install_scheduled':
         return { label: 'Mark Installed', icon: CheckCircle2, status: 'installed' as DealStatus };
       case 'installed':
@@ -132,7 +136,7 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
   };
 
   const nextAction = getNextAction();
-  const isComplete = currentStepIndex >= 5;
+  const isComplete = currentStepIndex >= 6;
 
   return (
     <div className="space-y-4">
@@ -180,7 +184,7 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
       {/* Next Action */}
       {nextAction && (
         <div className="space-y-2">
-          {['materials_ordered', 'materials_delivered', 'install_scheduled'].includes(deal.status) && (
+          {['collect_deductible', 'install_scheduled'].includes(deal.status) && (
             <div className="space-y-1">
               <Label className="text-xs">Install Date (optional)</Label>
               <Input
@@ -213,28 +217,38 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleAction('materials_ordered')}
+            onClick={() => handleAction('collect_acv')}
             disabled={updateMutation.isPending || currentStepIndex >= 2}
             className="gap-1 text-xs"
           >
-            <Package className="w-3 h-3" />
-            Order
+            <DollarSign className="w-3 h-3" />
+            Collect ACV
           </Button>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => handleAction('materials_delivered')}
+            onClick={() => handleAction('collect_deductible')}
             disabled={updateMutation.isPending || currentStepIndex < 2 || currentStepIndex >= 3}
             className="gap-1 text-xs"
           >
-            <Truck className="w-3 h-3" />
-            Delivered
+            <DollarSign className="w-3 h-3" />
+            Collect Ded.
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handleAction('install_scheduled')}
+            disabled={updateMutation.isPending || currentStepIndex < 3 || currentStepIndex >= 4}
+            className="gap-1 text-xs"
+          >
+            <Calendar className="w-3 h-3" />
+            Schedule
           </Button>
           <Button
             variant="outline"
             size="sm"
             onClick={() => handleAction('installed')}
-            disabled={updateMutation.isPending || currentStepIndex < 3 || currentStepIndex >= 4}
+            disabled={updateMutation.isPending || currentStepIndex < 4 || currentStepIndex >= 5}
             className="gap-1 text-xs"
           >
             <CheckCircle2 className="w-3 h-3" />
@@ -244,7 +258,7 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
             variant="outline"
             size="sm"
             onClick={() => handleAction('complete')}
-            disabled={updateMutation.isPending || currentStepIndex !== 4}
+            disabled={updateMutation.isPending || currentStepIndex !== 5}
             className="gap-1 text-xs"
           >
             <DollarSign className="w-3 h-3" />
@@ -290,10 +304,10 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => updateMutation.mutate({ status: 'adjuster_scheduled', adjuster_meeting_date: adjusterMeetingDate })}
+                onClick={() => updateMutation.mutate({ status: 'adjuster_met', adjuster_meeting_date: adjusterMeetingDate })}
                 disabled={updateMutation.isPending || !adjusterMeetingDate}
               >
-                Schedule
+                Met Adjuster
               </Button>
             </div>
           </div>
@@ -425,6 +439,62 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
             </div>
           </div>
         )}
+
+        {/* Material Details */}
+        {(deal.material_category || deal.material_color || deal.drip_edge || deal.vent_color) && (
+          <div className="flex items-start gap-3 p-3 bg-amber-500/10 rounded-lg">
+            <Package className="w-4 h-4 mt-0.5 text-amber-600" />
+            <div className="flex-1 space-y-1">
+              <p className="text-sm font-medium">Material Specifications</p>
+              {deal.material_category && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Material Category</span>
+                  <span>{deal.material_category}</span>
+                </div>
+              )}
+              {deal.material_type && (deal.material_category === 'Metal' || deal.material_category === 'Architectural Metal') && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Metal Type</span>
+                  <span>{deal.material_type}</span>
+                </div>
+              )}
+              {deal.material_color && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Material Color</span>
+                  <span>{deal.material_color}</span>
+                </div>
+              )}
+              {deal.drip_edge && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Drip Edge</span>
+                  <span>{deal.drip_edge}</span>
+                </div>
+              )}
+              {deal.vent_color && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Vent Color</span>
+                  <span>{deal.vent_color}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Lost Statement - Required for Full Approval */}
+        <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+          <div className="flex items-center gap-2">
+            <FileSignature className="w-4 h-4 text-muted-foreground" />
+            <span className="text-sm">Lost Statement</span>
+          </div>
+          {deal.lost_statement_url ? (
+            <Badge className="bg-green-500 text-xs">Uploaded</Badge>
+          ) : (
+            <Badge variant="outline" className="text-xs text-amber-600 border-amber-600">
+              <AlertTriangle className="w-3 h-3 mr-1" />
+              Required for Full Approval
+            </Badge>
+          )}
+        </div>
 
         {/* Contract Status */}
         <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">

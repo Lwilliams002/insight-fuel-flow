@@ -49,6 +49,12 @@ export class ApiStack extends cdk.Stack {
       USER_POOL_ID: userPool.userPoolId,
       USER_POOL_CLIENT_ID: userPoolClient.userPoolClientId,
       MAPBOX_TOKEN: process.env.MAPBOX_TOKEN || '',
+      // Wasabi Storage Configuration
+      WASABI_ACCESS_KEY: '3MHV4874PW3KTU5F8VMY',
+      WASABI_SECRET_KEY: 'GwM0pRJUmhwesijou2iJgDwUFBp82QXXJwqw6MGr',
+      WASABI_BUCKET: 'titanprime',
+      WASABI_REGION: 'us-central-1',
+      WASABI_ENDPOINT: 'https://s3.us-central-1.wasabisys.com',
     };
 
     // Common Lambda configuration
@@ -127,8 +133,18 @@ export class ApiStack extends cdk.Stack {
       handler: 'handler',
     });
 
+    // Migration function - for running database migrations
+    const migrateFunction = new lambdaNodejs.NodejsFunction(this, 'MigrateFunction', {
+      ...lambdaConfig,
+      functionName: `${appName}-migrate-${stage}`,
+      entry: path.join(__dirname, '../lambda/migrate/index.ts'),
+      handler: 'handler',
+      timeout: cdk.Duration.seconds(120), // Longer timeout for migrations
+      description: 'Database migration function - v1.0.0',
+    });
+
     // Grant permissions
-    const allFunctions = [dealsFunction, repsFunction, pinsFunction, commissionsFunction, uploadFunction, adminFunction, initDbFunction, trainingFunction];
+    const allFunctions = [dealsFunction, repsFunction, pinsFunction, commissionsFunction, uploadFunction, adminFunction, initDbFunction, trainingFunction, migrateFunction];
 
     allFunctions.forEach(fn => {
       databaseSecret.grantRead(fn);
@@ -189,6 +205,12 @@ export class ApiStack extends cdk.Stack {
     dealById.addMethod('PUT', new apigateway.LambdaIntegration(dealsFunction), authorizerOptions);
     dealById.addMethod('DELETE', new apigateway.LambdaIntegration(dealsFunction), authorizerOptions);
 
+    // Deal documents
+    const dealDocuments = dealById.addResource('documents');
+    dealDocuments.addMethod('GET', new apigateway.LambdaIntegration(dealsFunction), authorizerOptions);
+    dealDocuments.addMethod('POST', new apigateway.LambdaIntegration(dealsFunction), authorizerOptions);
+    dealDocuments.addMethod('DELETE', new apigateway.LambdaIntegration(dealsFunction), authorizerOptions);
+
     // Reps
     const reps = this.api.root.addResource('reps');
     reps.addMethod('GET', new apigateway.LambdaIntegration(repsFunction), authorizerOptions);
@@ -224,6 +246,11 @@ export class ApiStack extends cdk.Stack {
     const uploadUrl = upload.addResource('url');
     uploadUrl.addMethod('POST', new apigateway.LambdaIntegration(uploadFunction), authorizerOptions);
 
+    // Download - get signed URLs for viewing files
+    const uploadDownload = upload.addResource('download');
+    uploadDownload.addMethod('GET', new apigateway.LambdaIntegration(uploadFunction), authorizerOptions);
+    uploadDownload.addMethod('POST', new apigateway.LambdaIntegration(uploadFunction), authorizerOptions);
+
     // Admin
     const admin = this.api.root.addResource('admin');
     const createRep = admin.addResource('create-rep');
@@ -241,6 +268,10 @@ export class ApiStack extends cdk.Stack {
     // Init DB (no auth - for initial setup only)
     const initDb = admin.addResource('init-db');
     initDb.addMethod('POST', new apigateway.LambdaIntegration(initDbFunction));
+
+    // Database Migration (admin only)
+    const migrate = admin.addResource('migrate');
+    migrate.addMethod('POST', new apigateway.LambdaIntegration(migrateFunction), authorizerOptions);
 
     // Training
     const training = this.api.root.addResource('training');
