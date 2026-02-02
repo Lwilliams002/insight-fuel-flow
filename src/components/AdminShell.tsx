@@ -14,7 +14,7 @@ export function AdminShell({ children }: AdminShellProps) {
     return (
       <div className="min-h-screen bg-background flex flex-col">
         <AdminMobileNav />
-        <main className="flex-1 p-4 pb-20">{children}</main>
+        <main className="flex-1 p-4 pb-24">{children}</main>
       </div>
     );
   }

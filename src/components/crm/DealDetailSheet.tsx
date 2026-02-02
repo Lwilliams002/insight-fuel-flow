@@ -776,49 +776,34 @@ export function DealDetailSheet({ deal, isOpen, onClose, isAdmin = false }: Deal
               <h3 className="font-semibold text-sm text-muted-foreground uppercase tracking-wider">
                 Permit Document
               </h3>
-              {needsPermit && (
-                <Badge variant="outline" className="text-xs gap-1">
-                  <AlertCircle className="w-3 h-3" />
-                  Required for Permit
-                </Badge>
-              )}
             </div>
             {deal.permit_file_url ? (
               <div className="flex items-center gap-2 p-3 bg-muted rounded-lg">
                 <FileText className="w-5 h-5 text-primary" />
-                <a 
-                  href={deal.permit_file_url} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
+                <SecureDocumentLink
+                  src={deal.permit_file_url}
                   className="text-sm text-primary hover:underline flex-1 truncate"
                 >
                   View Permit
-                </a>
+                </SecureDocumentLink>
                 <Check className="w-4 h-4 text-primary" />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => updateDealMutation.mutate({ permit_file_url: null })}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
               </div>
             ) : (
-              <>
-                <input
-                  ref={permitInputRef}
-                  type="file"
-                  accept=".pdf,.jpg,.jpeg,.png"
-                  className="hidden"
-                  onChange={handlePermitUpload}
-                />
-                <Button
-                  variant="outline"
-                  className="w-full gap-2"
-                  onClick={() => permitInputRef.current?.click()}
-                  disabled={uploadingPermit}
-                >
-                  {uploadingPermit ? (
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                  ) : (
-                    <Upload className="w-4 h-4" />
-                  )}
-                  Upload Permit
-                </Button>
-              </>
+              <DocumentUpload
+                category="permits"
+                dealId={deal.id}
+                label="Upload Permit"
+                onUpload={(url) => {
+                  updateDealMutation.mutate({ permit_file_url: url });
+                }}
+              />
             )}
           </div>
 

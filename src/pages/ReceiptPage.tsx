@@ -23,8 +23,6 @@ export default function ReceiptPage() {
   const [logoBase64, setLogoBase64] = useState<string>('');
   const [viewingReceipt, setViewingReceipt] = useState<{ type: ReceiptType; url: string } | null>(null);
 
-  const repName = user?.email || 'Sales Rep';
-
   // Fetch deal data
   const { data: deal, isLoading, error } = useQuery({
     queryKey: ['deal', dealId],
@@ -36,6 +34,9 @@ export default function ReceiptPage() {
     },
     enabled: !!dealId,
   });
+
+  // Get rep name from deal commissions or user profile (must be after deal query)
+  const repName = deal?.deal_commissions?.[0]?.rep_name || user?.fullName || user?.email?.split('@')[0] || 'Sales Rep';
 
   // Load logo as base64 on mount
   useEffect(() => {

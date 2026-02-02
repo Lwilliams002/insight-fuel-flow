@@ -5,11 +5,12 @@ import { dealsApi, Deal } from '@/integrations/aws/api';
 import { RepLayout } from '@/components/RepLayout';
 import { DealsTable } from '@/components/crm/DealsTable';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, LayoutList, Columns3, ChevronRight } from 'lucide-react';
+import { Plus, LayoutList, Columns3, ChevronRight, Search, X } from 'lucide-react';
 import { dealStatusConfig, phaseConfig, DealStatus, getProgressPercentage } from '@/lib/crmProcess';
 import { cn } from '@/lib/utils';
 
@@ -18,6 +19,7 @@ type ViewMode = 'pipeline' | 'leads';
 export default function RepDeals() {
   const navigate = useNavigate();
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Fetch deals for this rep (via deal_commissions)
   const { data: deals, isLoading } = useQuery({
@@ -43,6 +45,19 @@ export default function RepDeals() {
 
   // Filter leads separately
   const leads = deals?.filter(d => d.status === 'lead') || [];
+
+  // Filter deals by search query
+  const filteredDeals = deals?.filter(deal => {
+    if (!searchQuery.trim()) return true;
+    const query = searchQuery.toLowerCase();
+    return (
+      deal.homeowner_name?.toLowerCase().includes(query) ||
+      deal.address?.toLowerCase().includes(query) ||
+      deal.city?.toLowerCase().includes(query) ||
+      deal.homeowner_phone?.includes(query) ||
+      deal.insurance_company?.toLowerCase().includes(query)
+    );
+  }) || [];
 
   // Calculate phase values
   const phaseValues = {
@@ -118,6 +133,27 @@ export default function RepDeals() {
           </div>
         )}
 
+        {/* Search Bar - Show in pipeline mode */}
+        {viewMode === 'pipeline' && (
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, address, phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 pr-9"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-auto">
           {isLoading ? (
@@ -126,7 +162,7 @@ export default function RepDeals() {
             </div>
           ) : viewMode === 'pipeline' ? (
             <div className="space-y-3">
-              {deals?.filter(deal => deal.status !== 'lead').map((deal) => {
+              {filteredDeals?.filter(deal => deal.status !== 'lead').map((deal) => {
                 const config = dealStatusConfig[deal.status as DealStatus] || dealStatusConfig.lead;
                 const progress = getProgressPercentage(deal.status as DealStatus);
 
@@ -166,12 +202,23 @@ export default function RepDeals() {
                   </Card>
                 );
               })}
-              {(!deals || deals.filter(deal => deal.status !== 'lead').length === 0) && (
+              {filteredDeals?.filter(deal => deal.status !== 'lead').length === 0 && (
                 <div className="text-center py-12 text-muted-foreground">
-                  <p>No deals in pipeline yet</p>
-                  <Button onClick={() => navigate('/deals/new')} className="mt-4">
-                    Create Your First Deal
-                  </Button>
+                  {searchQuery ? (
+                    <>
+                      <p>No deals found matching "{searchQuery}"</p>
+                      <Button variant="outline" onClick={() => setSearchQuery('')} className="mt-4">
+                        Clear Search
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <p>No deals in pipeline yet</p>
+                      <Button onClick={() => navigate('/deals/new')} className="mt-4">
+                        Create Your First Deal
+                      </Button>
+                    </>
+                  )}
                 </div>
               )}
             </div>

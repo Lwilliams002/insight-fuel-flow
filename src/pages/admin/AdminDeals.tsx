@@ -16,14 +16,19 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   lead: { label: 'Lead', color: 'text-slate-600', bgColor: 'bg-slate-100' },
   inspection_scheduled: { label: 'Inspected', color: 'text-blue-600', bgColor: 'bg-blue-100' },
   claim_filed: { label: 'Claim Filed', color: 'text-purple-600', bgColor: 'bg-purple-100' },
+  adjuster_scheduled: { label: 'Adj. Scheduled', color: 'text-pink-600', bgColor: 'bg-pink-100' },
   adjuster_met: { label: 'Adjuster Met', color: 'text-pink-600', bgColor: 'bg-pink-100' },
+  approved: { label: 'Approved', color: 'text-teal-600', bgColor: 'bg-teal-100' },
   signed: { label: 'Ready', color: 'text-green-600', bgColor: 'bg-green-100' },
   collect_acv: { label: 'Collect ACV', color: 'text-orange-600', bgColor: 'bg-orange-100' },
   collect_deductible: { label: 'Collect Ded.', color: 'text-amber-600', bgColor: 'bg-amber-100' },
   install_scheduled: { label: 'Scheduled', color: 'text-cyan-600', bgColor: 'bg-cyan-100' },
   installed: { label: 'Installed', color: 'text-teal-600', bgColor: 'bg-teal-100' },
+  invoice_sent: { label: 'Invoice Sent', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
+  depreciation_collected: { label: 'Dep. Collected', color: 'text-teal-600', bgColor: 'bg-teal-100' },
   complete: { label: 'Complete', color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
   cancelled: { label: 'Cancelled', color: 'text-red-600', bgColor: 'bg-red-100' },
+  on_hold: { label: 'On Hold', color: 'text-gray-600', bgColor: 'bg-gray-100' },
 };
 
 export default function AdminDeals() {
@@ -73,7 +78,7 @@ export default function AdminDeals() {
 
   // Group deals by status for quick view
   const needsAction = filteredDeals.filter(d =>
-    ['signed', 'collect_acv', 'collect_deductible', 'install_scheduled'].includes(d.status)
+    ['signed', 'collect_acv', 'collect_deductible', 'install_scheduled', 'installed'].includes(d.status)
   );
 
   return (
@@ -145,11 +150,18 @@ export default function AdminDeals() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Statuses</SelectItem>
+                <SelectItem value="lead">Lead</SelectItem>
+                <SelectItem value="inspection_scheduled">Inspection Scheduled</SelectItem>
+                <SelectItem value="claim_filed">Claim Filed</SelectItem>
+                <SelectItem value="adjuster_met">Adjuster Met</SelectItem>
+                <SelectItem value="approved">Approved</SelectItem>
                 <SelectItem value="signed">Ready for Install</SelectItem>
                 <SelectItem value="collect_acv">Collect ACV</SelectItem>
                 <SelectItem value="collect_deductible">Collect Deductible</SelectItem>
                 <SelectItem value="install_scheduled">Scheduled</SelectItem>
                 <SelectItem value="installed">Installed</SelectItem>
+                <SelectItem value="invoice_sent">Invoice Sent</SelectItem>
+                <SelectItem value="depreciation_collected">Depreciation Collected</SelectItem>
                 <SelectItem value="complete">Complete</SelectItem>
               </SelectContent>
             </Select>
@@ -204,6 +216,11 @@ export default function AdminDeals() {
                           <CheckCircle2 className="w-3 h-3" /> Mark Installed
                         </span>
                       )}
+                      {deal.status === 'installed' && (
+                        <span className="flex items-center gap-1 text-primary font-medium">
+                          <DollarSign className="w-3 h-3" /> Send Invoice
+                        </span>
+                      )}
                       {deal.rcv && <span>${deal.rcv.toLocaleString()}</span>}
                     </div>
                   </CardContent>
@@ -232,7 +249,10 @@ export default function AdminDeals() {
               {filteredDeals.map((deal) => (
                 <Card
                   key={deal.id}
-                  className="cursor-pointer hover:bg-muted/50 transition-colors"
+                  className={cn(
+                    "cursor-pointer hover:bg-muted/50 transition-colors",
+                    deal.approval_type === 'supplement_needed' && "border-amber-500/50"
+                  )}
                   onClick={() => setSelectedDeal(deal)}
                 >
                   <CardContent className="p-3">
@@ -243,8 +263,17 @@ export default function AdminDeals() {
                           {deal.contract_signed && (
                             <FileSignature className="w-3 h-3 text-primary flex-shrink-0" />
                           )}
+                          {deal.approval_type === 'supplement_needed' && (
+                            <span className="text-xs text-amber-600">⚠️</span>
+                          )}
                         </div>
                         <p className="text-xs text-muted-foreground truncate">{deal.address}</p>
+                        {/* Show rep name if available */}
+                        {deal.deal_commissions?.[0]?.rep_name && (
+                          <p className="text-xs text-muted-foreground">
+                            Rep: {deal.deal_commissions[0].rep_name}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-col items-end gap-1">
                         <Badge variant="outline" className={cn("text-xs", statusConfig[deal.status]?.color)}>
@@ -253,6 +282,11 @@ export default function AdminDeals() {
                         {(deal.rcv || deal.total_price) && (
                           <span className="text-xs font-medium text-green-600">
                             ${(deal.rcv || deal.total_price || 0).toLocaleString()}
+                          </span>
+                        )}
+                        {deal.install_date && (
+                          <span className="text-[10px] text-muted-foreground">
+                            Install: {new Date(deal.install_date).toLocaleDateString()}
                           </span>
                         )}
                       </div>
