@@ -382,7 +382,7 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
     'material_category', 'material_type', 'material_color', 'drip_edge_color', 'vent_color',
 
     // Milestone timestamps
-    'lead_date', 'inspection_scheduled_date', 'claim_filed_date', 'signed_date',
+    'lead_date', 'inspection_scheduled_date', 'claim_filed_date',
     'adjuster_met_date', 'approved_date', 'collect_acv_date', 'collect_deductible_date',
     'install_scheduled_date', 'installed_date', 'invoice_sent_at',
     'depreciation_collected_date', 'complete_date',
