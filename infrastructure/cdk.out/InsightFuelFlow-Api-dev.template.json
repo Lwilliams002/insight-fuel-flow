@@ -867,7 +867,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
-     "S3Key": "b2bb4906d8801ccac3afb995733b1d435c3c1ae9ba52a085d2a0cea915a42065.zip"
+     "S3Key": "8d55669b08dddc46d0fef6b1c808231a38169a5b482ff59d1fa074897a8b1cc2.zip"
     },
     "Environment": {
      "Variables": {
@@ -935,7 +935,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "InsightFuelFlow-Api-dev/UploadFunction/Resource",
-    "aws:asset:path": "asset.b2bb4906d8801ccac3afb995733b1d435c3c1ae9ba52a085d2a0cea915a42065",
+    "aws:asset:path": "asset.8d55669b08dddc46d0fef6b1c808231a38169a5b482ff59d1fa074897a8b1cc2",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }

@@ -87,7 +87,7 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   const method = event.httpMethod;
 
   try {
-    // GET /upload/download - get signed URL for viewing a file
+    // GET or POST /upload/download - get signed URL for viewing a file
     if (path.includes('/download') || (method === 'GET' && event.queryStringParameters?.key)) {
       return await getDownloadUrl(user, event);
     }
@@ -105,7 +105,13 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 // Get a signed download URL for an existing file
 async function getDownloadUrl(user: UserInfo, event: APIGatewayProxyEvent) {
-  const key = event.queryStringParameters?.key || parseBody(event)?.key;
+  const bodyKey = parseBody(event)?.key;
+  const queryKey = event.queryStringParameters?.key;
+  const key = queryKey || bodyKey;
+
+  console.log('[getDownloadUrl] Query key:', queryKey);
+  console.log('[getDownloadUrl] Body key:', bodyKey);
+  console.log('[getDownloadUrl] Using key:', key);
 
   if (!key) {
     return badRequest('key is required');
@@ -114,6 +120,8 @@ async function getDownloadUrl(user: UserInfo, event: APIGatewayProxyEvent) {
   try {
     const client = await getS3Client();
 
+    console.log('[getDownloadUrl] Getting signed URL for bucket:', WASABI_BUCKET, 'key:', key);
+
     const command = new GetObjectCommand({
       Bucket: WASABI_BUCKET,
       Key: key,
@@ -121,12 +129,14 @@ async function getDownloadUrl(user: UserInfo, event: APIGatewayProxyEvent) {
 
     const signedUrl = await getSignedUrl(client, command, { expiresIn: 3600 }); // 1 hour
 
+    console.log('[getDownloadUrl] Generated signed URL successfully');
+
     return success({
       url: signedUrl,
       key,
     });
   } catch (error) {
-    console.error('Error getting download URL:', error);
+    console.error('[getDownloadUrl] Error getting download URL:', error);
     return serverError(error instanceof Error ? error.message : 'Failed to get download URL');
   }
 }

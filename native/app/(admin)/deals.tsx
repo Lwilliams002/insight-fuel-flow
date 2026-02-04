@@ -1,0 +1,315 @@
+import { useState } from 'react';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useQuery } from '@tanstack/react-query';
+import { Ionicons } from '@expo/vector-icons';
+import { dealsApi, Deal } from '../../src/services/api';
+import { colors } from '../../src/constants/config';
+
+const statusConfig: Record<string, { label: string; color: string }> = {
+  lead: { label: 'Lead', color: '#64748B' },
+  inspection_scheduled: { label: 'Inspected', color: '#3B82F6' },
+  claim_filed: { label: 'Claim Filed', color: '#8B5CF6' },
+  adjuster_met: { label: 'Adjuster Met', color: '#EC4899' },
+  approved: { label: 'Approved', color: '#14B8A6' },
+  signed: { label: 'Signed', color: '#22C55E' },
+  collect_acv: { label: 'Collect ACV', color: '#F97316' },
+  collect_deductible: { label: 'Collect Ded.', color: '#F59E0B' },
+  install_scheduled: { label: 'Scheduled', color: '#06B6D4' },
+  installed: { label: 'Installed', color: '#14B8A6' },
+  invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  complete: { label: 'Complete', color: '#10B981' },
+};
+
+export default function AdminDealsScreen() {
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | null>(null);
+
+  const { data: deals, isLoading, refetch } = useQuery({
+    queryKey: ['deals', 'admin'],
+    queryFn: async () => {
+      const response = await dealsApi.list();
+      if (response.error) throw new Error(response.error);
+      return response.data || [];
+    },
+  });
+
+  const filteredDeals = deals?.filter(deal => {
+    // Search filter
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      const matchesSearch =
+        deal.homeowner_name?.toLowerCase().includes(query) ||
+        deal.address?.toLowerCase().includes(query) ||
+        deal.city?.toLowerCase().includes(query);
+      if (!matchesSearch) return false;
+    }
+    // Status filter
+    if (statusFilter && deal.status !== statusFilter) return false;
+    return true;
+  }) || [];
+
+  const totalValue = filteredDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0);
+
+  // Status counts for filter buttons
+  const statusCounts = deals?.reduce((acc, deal) => {
+    acc[deal.status] = (acc[deal.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>) || {};
+
+  return (
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <View>
+            <Text style={styles.title}>All Deals</Text>
+            <Text style={styles.subtitle}>
+              {filteredDeals.length} deals · ${(totalValue / 1000).toFixed(0)}k total
+            </Text>
+          </View>
+        </View>
+
+        {/* Search */}
+        <View style={styles.searchContainer}>
+          <Ionicons name="search" size={18} color="#9CA3AF" />
+          <TextInput
+            placeholder="Search deals..."
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            style={styles.searchInput}
+            placeholderTextColor="#9CA3AF"
+          />
+          {searchQuery ? (
+            <TouchableOpacity onPress={() => setSearchQuery('')}>
+              <Ionicons name="close" size={18} color="#9CA3AF" />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
+        {/* Status Filters */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
+          <TouchableOpacity
+            style={[styles.filterChip, !statusFilter && styles.filterChipActive]}
+            onPress={() => setStatusFilter(null)}
+          >
+            <Text style={[styles.filterChipText, !statusFilter && styles.filterChipTextActive]}>
+              All ({deals?.length || 0})
+            </Text>
+          </TouchableOpacity>
+          {Object.entries(statusConfig).slice(0, 6).map(([key, config]) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.filterChip, statusFilter === key && styles.filterChipActive]}
+              onPress={() => setStatusFilter(statusFilter === key ? null : key)}
+            >
+              <Text style={[styles.filterChipText, statusFilter === key && styles.filterChipTextActive]}>
+                {config.label} ({statusCounts[key] || 0})
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      </View>
+
+      {/* Deals List */}
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl refreshing={isLoading} onRefresh={refetch} />
+        }
+      >
+        {filteredDeals.length === 0 ? (
+          <View style={styles.emptyCard}>
+            <Ionicons name="document-text-outline" size={40} color="#9CA3AF" />
+            <Text style={styles.emptyText}>
+              {searchQuery ? `No deals found matching "${searchQuery}"` : 'No deals found'}
+            </Text>
+          </View>
+        ) : (
+          filteredDeals.map((deal) => {
+            const config = statusConfig[deal.status] || statusConfig.lead;
+
+            return (
+              <TouchableOpacity
+                key={deal.id}
+                activeOpacity={0.7}
+                style={styles.dealCard}
+              >
+                <View style={styles.dealContent}>
+                  <View style={styles.dealInfo}>
+                    <View style={styles.dealHeader}>
+                      <Text style={styles.dealName}>{deal.homeowner_name}</Text>
+                      <View style={[styles.badge, { borderColor: config.color }]}>
+                        <Text style={[styles.badgeText, { color: config.color }]}>
+                          {config.label}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.dealAddress} numberOfLines={1}>
+                      {deal.address}
+                      {deal.city && `, ${deal.city}`}
+                    </Text>
+                    <View style={styles.dealFooter}>
+                      <Text style={styles.dealPrice}>
+                        ${(deal.rcv || deal.total_price || 0).toLocaleString()}
+                      </Text>
+                      {deal.rep_name && (
+                        <Text style={styles.repName}>
+                          <Ionicons name="person" size={12} color="#9CA3AF" /> {deal.rep_name}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+
+        <View style={{ height: 80 }} />
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  header: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  title: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#111827',
+  },
+  subtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    marginTop: 12,
+    height: 40,
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 8,
+    fontSize: 14,
+    color: '#111827',
+  },
+  filterScroll: {
+    marginTop: 12,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F3F4F6',
+    borderRadius: 16,
+    marginRight: 8,
+  },
+  filterChipActive: {
+    backgroundColor: colors.primary,
+  },
+  filterChipText: {
+    fontSize: 12,
+    color: '#6B7280',
+    fontWeight: '500',
+  },
+  filterChipTextActive: {
+    color: '#FFFFFF',
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    padding: 16,
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 24,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  emptyText: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 8,
+  },
+  dealCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  dealContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+  },
+  dealInfo: {
+    flex: 1,
+  },
+  dealHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  dealName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+    flex: 1,
+  },
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginLeft: 8,
+  },
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  dealAddress: {
+    fontSize: 14,
+    color: '#6B7280',
+    marginTop: 2,
+  },
+  dealFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  dealPrice: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#22C55E',
+  },
+  repName: {
+    fontSize: 12,
+    color: '#9CA3AF',
+  },
+});
