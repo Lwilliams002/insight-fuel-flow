@@ -139,16 +139,43 @@ CREATE TABLE deals (
     acv_check_amount NUMERIC,
     acv_check_date DATE,
 
-    -- BUILD PHASE
+    -- BUILD PHASE - Material Specifications
+    material_category TEXT,             -- Shingle, Metal, Architectural Metal
+    material_type TEXT,                 -- Specific type within category
+    material_color TEXT,                -- Material color
+    drip_edge TEXT,                     -- Drip edge color
+    vent_color TEXT,                    -- Vent color
+
     materials_ordered_date DATE,
     materials_delivered_date DATE,
     install_date DATE,
+    install_time TEXT,                  -- Installation time
+    crew_assignment TEXT,               -- Crew assigned to install
     completion_date DATE,
 
     -- BUILD Phase Documents
     permit_file_url TEXT,
     install_images TEXT[],
     completion_images TEXT[],
+    inspection_images TEXT[],           -- Inspection photos
+
+    -- Signature and Agreement Documents
+    signature_url TEXT,                 -- Homeowner signature image
+    lost_statement_url TEXT,            -- Insurance lost statement
+    insurance_agreement_url TEXT,       -- Uploaded insurance agreement
+
+    -- Completion Form Documents
+    completion_form_url TEXT,           -- Base64-encoded HTML document of signed completion form
+    completion_form_signature_url TEXT, -- URL to rep signature on completion form
+    homeowner_completion_signature_url TEXT, -- URL to homeowner signature on completion form
+    completion_signed_date TIMESTAMP WITH TIME ZONE, -- Date when both parties signed
+
+    -- Receipt Documents
+    acv_receipt_url TEXT,               -- ACV payment receipt
+    deductible_receipt_url TEXT,        -- Deductible payment receipt
+    depreciation_receipt_url TEXT,      -- Depreciation payment receipt
+    invoice_url TEXT,                   -- Invoice document
+    invoice_work_items TEXT,            -- JSON string of work items
 
     -- COLLECT PHASE
     invoice_sent_date DATE,
@@ -161,6 +188,15 @@ CREATE TABLE deals (
     supplement_amount NUMERIC DEFAULT 0,
     supplement_approved BOOLEAN DEFAULT false,
     supplement_notes TEXT,
+
+    -- Approval Info
+    approval_type TEXT,                 -- full, partial, supplement_needed, sale
+    approved_date TIMESTAMP WITH TIME ZONE,
+    sales_tax NUMERIC,
+
+    -- Rep Assignment
+    rep_id UUID,
+    rep_name TEXT,
 
     -- Calculated totals
     total_contract_value NUMERIC NOT NULL DEFAULT 0,  -- RCV or total job cost

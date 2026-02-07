@@ -1,27 +1,36 @@
 import { useState } from 'react';
 import { View, Text, ScrollView, RefreshControl, TouchableOpacity, TextInput, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { dealsApi, Deal } from '../../src/services/api';
-import { colors } from '../../src/constants/config';
+import { dealsApi } from '../../../src/services/api';
+import { colors as staticColors } from '../../../src/constants/config';
+import { useTheme } from '../../../src/contexts/ThemeContext';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#64748B' },
   inspection_scheduled: { label: 'Inspected', color: '#3B82F6' },
   claim_filed: { label: 'Claim Filed', color: '#8B5CF6' },
-  adjuster_met: { label: 'Adjuster Met', color: '#EC4899' },
-  approved: { label: 'Approved', color: '#14B8A6' },
   signed: { label: 'Signed', color: '#22C55E' },
-  collect_acv: { label: 'Collect ACV', color: '#F97316' },
-  collect_deductible: { label: 'Collect Ded.', color: '#F59E0B' },
+  adjuster_met: { label: 'Adjuster Met', color: '#EC4899' },
+  awaiting_approval: { label: 'Awaiting Approval', color: '#F59E0B' },
+  approved: { label: 'Approved', color: '#14B8A6' },
+  acv_collected: { label: 'ACV Collected', color: '#F97316' },
+  deductible_collected: { label: 'Ded. Collected', color: '#F59E0B' },
+  materials_selected: { label: 'Materials', color: '#8B5CF6' },
   install_scheduled: { label: 'Scheduled', color: '#06B6D4' },
   installed: { label: 'Installed', color: '#14B8A6' },
+  completion_signed: { label: 'Completion Form', color: '#06B6D4' },
   invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  depreciation_collected: { label: 'Depreciation', color: '#8B5CF6' },
   complete: { label: 'Complete', color: '#10B981' },
+  paid: { label: 'Paid', color: '#059669' },
 };
 
 export default function AdminDealsScreen() {
+  const router = useRouter();
+  const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
 
@@ -49,7 +58,30 @@ export default function AdminDealsScreen() {
     return true;
   }) || [];
 
-  const totalValue = filteredDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0);
+  // Safe number parsing to handle invalid values
+  const safeNumber = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    const num = typeof val === 'number' ? val : Number(val);
+    if (isNaN(num) || !isFinite(num)) return 0;
+    return num;
+  };
+
+  // Get deal value - prefer RCV, fall back to total_price
+  const getDealValue = (d: any): number => {
+    const rcv = safeNumber(d.rcv);
+    const totalPrice = safeNumber(d.total_price);
+    return rcv > 0 ? rcv : totalPrice;
+  };
+
+  // Format currency for display
+  const formatCurrency = (value: number): string => {
+    if (!isFinite(value) || isNaN(value)) return '$0';
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}k`;
+    return `$${value.toLocaleString()}`;
+  };
+
+  const totalValue = filteredDeals.reduce((sum, d) => sum + getDealValue(d), 0);
 
   // Status counts for filter buttons
   const statusCounts = deals?.reduce((acc, deal) => {
@@ -57,32 +89,63 @@ export default function AdminDealsScreen() {
     return acc;
   }, {} as Record<string, number>) || {};
 
+  // Count pending payment requests
+  const pendingPaymentRequests = deals?.filter(deal =>
+    deal.status === 'complete' &&
+    deal.payment_requested &&
+    !deal.deal_commissions?.[0]?.paid
+  ) || [];
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      {/* Pending Payment Requests Banner */}
+      {pendingPaymentRequests.length > 0 && (
+        <TouchableOpacity
+          style={[styles.pendingPaymentBanner, { backgroundColor: colors.primary }]}
+          onPress={() => setStatusFilter('complete')}
+        >
+          <View style={styles.pendingPaymentBannerContent}>
+            <View style={styles.pendingPaymentIconContainer}>
+              <Ionicons name="cash" size={20} color="#FFF" />
+              <View style={styles.pendingPaymentBadge}>
+                <Text style={styles.pendingPaymentBadgeText}>{pendingPaymentRequests.length}</Text>
+              </View>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.pendingPaymentTitle}>
+                {pendingPaymentRequests.length} Commission Request{pendingPaymentRequests.length > 1 ? 's' : ''} Pending
+              </Text>
+              <Text style={styles.pendingPaymentSubtitle}>Tap to review and approve</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="#FFF" />
+          </View>
+        </TouchableOpacity>
+      )}
+
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.title}>All Deals</Text>
-            <Text style={styles.subtitle}>
-              {filteredDeals.length} deals · ${(totalValue / 1000).toFixed(0)}k total
+            <Text style={[styles.title, { color: colors.foreground }]}>Pipeline</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
+              {filteredDeals.length} deals · {formatCurrency(totalValue)} total
             </Text>
           </View>
         </View>
 
         {/* Search */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color="#9CA3AF" />
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border }]}>
+          <Ionicons name="search" size={18} color={colors.mutedForeground} />
           <TextInput
             placeholder="Search deals..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
-            placeholderTextColor="#9CA3AF"
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholderTextColor={colors.mutedForeground}
           />
           {searchQuery ? (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close" size={18} color="#9CA3AF" />
+              <Ionicons name="close" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -129,13 +192,21 @@ export default function AdminDealsScreen() {
         ) : (
           filteredDeals.map((deal) => {
             const config = statusConfig[deal.status] || statusConfig.lead;
+            const hasPendingPayment = deal.status === 'complete' && deal.payment_requested && !deal.deal_commissions?.[0]?.paid;
 
             return (
               <TouchableOpacity
                 key={deal.id}
                 activeOpacity={0.7}
-                style={styles.dealCard}
+                style={[styles.dealCard, hasPendingPayment && styles.dealCardPendingPayment]}
+                onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
               >
+                {hasPendingPayment && (
+                  <View style={styles.pendingPaymentIndicator}>
+                    <Ionicons name="cash" size={12} color="#FFF" />
+                    <Text style={styles.pendingPaymentIndicatorText}>Payment Request</Text>
+                  </View>
+                )}
                 <View style={styles.dealContent}>
                   <View style={styles.dealInfo}>
                     <View style={styles.dealHeader}>
@@ -226,7 +297,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   filterChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
   },
   filterChipText: {
     fontSize: 12,
@@ -311,5 +382,80 @@ const styles = StyleSheet.create({
   repName: {
     fontSize: 12,
     color: '#9CA3AF',
+  },
+  // Pending Payment Banner
+  pendingPaymentBanner: {
+    backgroundColor: '#F59E0B',
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  pendingPaymentBannerContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 14,
+    gap: 12,
+  },
+  pendingPaymentIconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingPaymentBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#F59E0B',
+  },
+  pendingPaymentBadgeText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  pendingPaymentTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  pendingPaymentSubtitle: {
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.8)',
+    marginTop: 2,
+  },
+  // Deal Card with pending payment
+  dealCardPendingPayment: {
+    borderColor: '#F59E0B',
+    borderWidth: 2,
+  },
+  pendingPaymentIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F59E0B',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderTopLeftRadius: 10,
+    borderTopRightRadius: 10,
+  },
+  pendingPaymentIndicatorText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#FFF',
   },
 });

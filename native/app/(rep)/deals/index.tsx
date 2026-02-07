@@ -5,21 +5,27 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { dealsApi } from '../../../src/services/api';
-import { colors } from '../../../src/constants/config';
+import { colors as staticColors } from '../../../src/constants/config';
+import { useTheme } from '../../../src/contexts/ThemeContext';
 
 const statusConfig: Record<string, { label: string; color: string }> = {
   lead: { label: 'Lead', color: '#64748B' },
   inspection_scheduled: { label: 'Inspected', color: '#3B82F6' },
   claim_filed: { label: 'Claim Filed', color: '#8B5CF6' },
-  adjuster_met: { label: 'Adjuster Met', color: '#EC4899' },
-  approved: { label: 'Approved', color: '#14B8A6' },
   signed: { label: 'Signed', color: '#22C55E' },
-  collect_acv: { label: 'Collect ACV', color: '#F97316' },
-  collect_deductible: { label: 'Collect Ded.', color: '#F59E0B' },
+  adjuster_met: { label: 'Adjuster Met', color: '#EC4899' },
+  awaiting_approval: { label: 'Awaiting Approval', color: '#F59E0B' },
+  approved: { label: 'Approved', color: '#14B8A6' },
+  acv_collected: { label: 'ACV Collected', color: '#F97316' },
+  deductible_collected: { label: 'Ded. Collected', color: '#F59E0B' },
+  materials_selected: { label: 'Materials', color: '#8B5CF6' },
   install_scheduled: { label: 'Scheduled', color: '#06B6D4' },
   installed: { label: 'Installed', color: '#14B8A6' },
+  completion_signed: { label: 'Completion Form', color: '#06B6D4' },
   invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  depreciation_collected: { label: 'Depreciation', color: '#8B5CF6' },
   complete: { label: 'Complete', color: '#10B981' },
+  paid: { label: 'Paid', color: '#059669' },
 };
 
 const phaseConfig = {
@@ -31,9 +37,9 @@ const phaseConfig = {
 
 function getProgressPercentage(status: string): number {
   const statusOrder = [
-    'lead', 'inspection_scheduled', 'claim_filed', 'adjuster_met',
-    'approved', 'signed', 'collect_acv', 'collect_deductible',
-    'install_scheduled', 'installed', 'invoice_sent', 'complete'
+    'lead', 'inspection_scheduled', 'claim_filed', 'signed', 'adjuster_met', 'awaiting_approval',
+    'approved', 'acv_collected', 'deductible_collected', 'materials_selected',
+    'install_scheduled', 'installed', 'completion_signed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'
   ];
   const index = statusOrder.indexOf(status);
   if (index === -1) return 0;
@@ -41,12 +47,15 @@ function getProgressPercentage(status: string): number {
 }
 
 type ViewMode = 'pipeline' | 'leads';
+type PhaseFilter = 'sign' | 'build' | 'finalizing' | 'complete' | null;
 
 export default function DealsScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colors, isDark } = useTheme();
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<ViewMode>('pipeline');
+  const [phaseFilter, setPhaseFilter] = useState<PhaseFilter>(null);
 
   const { data: deals, isLoading, refetch } = useQuery({
     queryKey: ['deals'],
@@ -68,25 +77,45 @@ export default function DealsScreen() {
 
   // Group deals by phase like web app
   const dealsByPhase = useMemo(() => ({
-    sign: deals?.filter(d => ['inspection_scheduled', 'claim_filed', 'adjuster_met', 'approved', 'signed'].includes(d.status)) || [],
-    build: deals?.filter(d => ['collect_acv', 'collect_deductible', 'install_scheduled', 'installed'].includes(d.status)) || [],
-    finalizing: deals?.filter(d => ['invoice_sent', 'depreciation_collected'].includes(d.status)) || [],
-    complete: deals?.filter(d => d.status === 'complete') || [],
+    sign: deals?.filter(d => ['inspection_scheduled', 'claim_filed', 'signed', 'adjuster_met', 'awaiting_approval', 'approved'].includes(d.status)) || [],
+    build: deals?.filter(d => ['acv_collected', 'deductible_collected', 'materials_selected', 'install_scheduled', 'installed'].includes(d.status)) || [],
+    finalizing: deals?.filter(d => ['completion_signed', 'invoice_sent', 'depreciation_collected'].includes(d.status)) || [],
+    complete: deals?.filter(d => ['complete', 'paid'].includes(d.status)) || [],
   }), [deals]);
 
   // Filter leads separately
   const leads = deals?.filter(d => d.status === 'lead') || [];
 
-  // Calculate phase values
+  // Calculate phase values with proper number validation
+  const safeNumber = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    const num = typeof val === 'number' ? val : Number(val);
+    // Only filter out truly invalid numbers, not legitimate large values
+    if (isNaN(num) || !isFinite(num)) return 0;
+    return num;
+  };
+
+  // Get deal value - prefer RCV, fall back to total_price
+  const getDealValue = (d: any): number => {
+    const rcv = safeNumber(d.rcv);
+    const totalPrice = safeNumber(d.total_price);
+    return rcv > 0 ? rcv : totalPrice;
+  };
+
   const phaseValues = useMemo(() => ({
-    sign: dealsByPhase.sign.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
-    build: dealsByPhase.build.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
-    finalizing: dealsByPhase.finalizing.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
-    complete: dealsByPhase.complete.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0),
+    sign: dealsByPhase.sign.reduce((sum, d) => sum + getDealValue(d), 0),
+    build: dealsByPhase.build.reduce((sum, d) => sum + getDealValue(d), 0),
+    finalizing: dealsByPhase.finalizing.reduce((sum, d) => sum + getDealValue(d), 0),
+    complete: dealsByPhase.complete.reduce((sum, d) => sum + getDealValue(d), 0),
   }), [dealsByPhase]);
 
   const filteredDeals = useMemo(() => {
-    const dealsToFilter = viewMode === 'leads' ? leads : deals?.filter(d => d.status !== 'lead') || [];
+    let dealsToFilter = viewMode === 'leads' ? leads : deals?.filter(d => d.status !== 'lead') || [];
+
+    // Apply phase filter if set
+    if (phaseFilter && viewMode === 'pipeline') {
+      dealsToFilter = dealsByPhase[phaseFilter];
+    }
 
     if (!searchQuery.trim()) return dealsToFilter;
 
@@ -96,26 +125,34 @@ export default function DealsScreen() {
       deal.address?.toLowerCase().includes(query) ||
       deal.city?.toLowerCase().includes(query)
     );
-  }, [deals, leads, searchQuery, viewMode]);
+  }, [deals, leads, searchQuery, viewMode, phaseFilter, dealsByPhase]);
 
-  const pipelineValue = filteredDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0);
+  const pipelineValue = filteredDeals.reduce((sum, d) => sum + getDealValue(d), 0);
+
+  // Format currency for display
+  const formatCurrency = (value: number): string => {
+    if (!isFinite(value) || isNaN(value)) return '$0';
+    if (value >= 1000000) return `$${(value / 1000000).toFixed(1)}M`;
+    if (value >= 1000) return `$${(value / 1000).toFixed(0)}k`;
+    return `$${value.toLocaleString()}`;
+  };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.headerTop}>
           <View>
-            <Text style={styles.title}>My Pipeline</Text>
-            <Text style={styles.subtitle}>
+            <Text style={[styles.title, { color: colors.foreground }]}>My Pipeline</Text>
+            <Text style={[styles.subtitle, { color: colors.mutedForeground }]}>
               {viewMode === 'leads'
                 ? `${leads.length} leads`
-                : `${filteredDeals.length} deals · $${(pipelineValue / 1000).toFixed(0)}k`
+                : `${filteredDeals.length} deals · ${formatCurrency(pipelineValue)}`
               }
             </Text>
           </View>
           <TouchableOpacity
-            style={styles.addButton}
+            style={[styles.addButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push({ pathname: '/(rep)/deals/new' })}
           >
             <Ionicons name="add" size={20} color="#FFFFFF" />
@@ -124,36 +161,36 @@ export default function DealsScreen() {
         </View>
 
         {/* View Toggle */}
-        <View style={styles.toggleContainer}>
+        <View style={[styles.toggleContainer, { backgroundColor: isDark ? colors.secondary : '#F3F4F6' }]}>
           <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'pipeline' && styles.toggleButtonActive]}
+            style={[styles.toggleButton, viewMode === 'pipeline' && [styles.toggleButtonActive, { backgroundColor: colors.primary }]]}
             onPress={() => setViewMode('pipeline')}
           >
-            <Ionicons name="grid" size={16} color={viewMode === 'pipeline' ? '#FFFFFF' : '#6B7280'} />
-            <Text style={[styles.toggleText, viewMode === 'pipeline' && styles.toggleTextActive]}>Pipeline</Text>
+            <Ionicons name="grid" size={16} color={viewMode === 'pipeline' ? '#FFFFFF' : colors.mutedForeground} />
+            <Text style={[styles.toggleText, { color: colors.mutedForeground }, viewMode === 'pipeline' && styles.toggleTextActive]}>Pipeline</Text>
           </TouchableOpacity>
           <TouchableOpacity
-            style={[styles.toggleButton, viewMode === 'leads' && styles.toggleButtonActive]}
+            style={[styles.toggleButton, viewMode === 'leads' && [styles.toggleButtonActive, { backgroundColor: colors.primary }]]}
             onPress={() => setViewMode('leads')}
           >
-            <Ionicons name="list" size={16} color={viewMode === 'leads' ? '#FFFFFF' : '#6B7280'} />
-            <Text style={[styles.toggleText, viewMode === 'leads' && styles.toggleTextActive]}>Leads ({leads.length})</Text>
+            <Ionicons name="list" size={16} color={viewMode === 'leads' ? '#FFFFFF' : colors.mutedForeground} />
+            <Text style={[styles.toggleText, { color: colors.mutedForeground }, viewMode === 'leads' && styles.toggleTextActive]}>Leads ({leads.length})</Text>
           </TouchableOpacity>
         </View>
 
         {/* Search */}
-        <View style={styles.searchContainer}>
-          <Ionicons name="search" size={18} color="#9CA3AF" />
+        <View style={[styles.searchContainer, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border }]}>
+          <Ionicons name="search" size={18} color={colors.mutedForeground} />
           <TextInput
             placeholder="Search by name, address..."
             value={searchQuery}
             onChangeText={setSearchQuery}
-            style={styles.searchInput}
-            placeholderTextColor="#9CA3AF"
+            style={[styles.searchInput, { color: colors.foreground }]}
+            placeholderTextColor={colors.mutedForeground}
           />
           {searchQuery ? (
             <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Ionicons name="close" size={18} color="#9CA3AF" />
+              <Ionicons name="close" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ) : null}
         </View>
@@ -168,25 +205,51 @@ export default function DealsScreen() {
       >
         {/* Phase Summary Cards - only show in pipeline view */}
         {viewMode === 'pipeline' && (
-          <View style={styles.phaseGrid}>
-            {(['sign', 'build', 'finalizing', 'complete'] as const).map((phase) => (
-              <View key={phase} style={[styles.phaseCard, { borderLeftColor: phaseConfig[phase].borderColor }]}>
-                <View style={styles.phaseHeader}>
-                  <Text style={styles.phaseIcon}>{phaseConfig[phase].icon}</Text>
-                  <Text style={styles.phaseLabel}>{phaseConfig[phase].label}</Text>
-                </View>
-                <Text style={styles.phaseCount}>{dealsByPhase[phase].length}</Text>
-                <Text style={styles.phaseValue}>${(phaseValues[phase] / 1000).toFixed(0)}k</Text>
+          <>
+            {/* Phase filter indicator */}
+            {phaseFilter && (
+              <View style={[styles.filterIndicator, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: phaseConfig[phaseFilter].borderColor }]}>
+                <Text style={[styles.filterIndicatorText, { color: colors.foreground }]}>
+                  Showing: {phaseConfig[phaseFilter].icon} {phaseConfig[phaseFilter].label} ({dealsByPhase[phaseFilter].length} deals)
+                </Text>
+                <TouchableOpacity onPress={() => setPhaseFilter(null)}>
+                  <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                </TouchableOpacity>
               </View>
-            ))}
-          </View>
+            )}
+            <View style={styles.phaseGrid}>
+              {(['sign', 'build', 'finalizing', 'complete'] as const).map((phase) => (
+                <TouchableOpacity
+                  key={phase}
+                  style={[
+                    styles.phaseCard,
+                    {
+                      backgroundColor: isDark ? colors.muted : '#FFFFFF',
+                      borderLeftColor: phaseConfig[phase].borderColor,
+                      borderWidth: phaseFilter === phase ? 2 : 0,
+                      borderColor: phaseFilter === phase ? phaseConfig[phase].borderColor : 'transparent',
+                    }
+                  ]}
+                  onPress={() => setPhaseFilter(phaseFilter === phase ? null : phase)}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.phaseHeader}>
+                    <Text style={styles.phaseIcon}>{phaseConfig[phase].icon}</Text>
+                    <Text style={[styles.phaseLabel, { color: colors.mutedForeground }]}>{phaseConfig[phase].label}</Text>
+                  </View>
+                  <Text style={[styles.phaseCount, { color: phaseFilter === phase ? phaseConfig[phase].color : colors.foreground }]}>{dealsByPhase[phase].length}</Text>
+                  <Text style={[styles.phaseValue, { color: colors.mutedForeground }]}>{formatCurrency(phaseValues[phase])}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
         )}
 
         {/* Deals List */}
         {filteredDeals.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="document-text-outline" size={40} color="#9CA3AF" />
-            <Text style={styles.emptyText}>
+          <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+            <Ionicons name="document-text-outline" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {searchQuery
                 ? `No ${viewMode === 'leads' ? 'leads' : 'deals'} found matching "${searchQuery}"`
                 : viewMode === 'leads'
@@ -196,7 +259,7 @@ export default function DealsScreen() {
             </Text>
             {!searchQuery && (
               <TouchableOpacity
-                style={styles.createButton}
+                style={[styles.createButton, { backgroundColor: colors.primary }]}
                 onPress={() => router.push({ pathname: '/(rep)/deals/new' })}
               >
                 <Text style={styles.createButtonText}>Create New Deal</Text>
@@ -213,35 +276,35 @@ export default function DealsScreen() {
                 key={deal.id}
                 onPress={() => router.push({ pathname: '/(rep)/deals/[id]', params: { id: deal.id } })}
                 activeOpacity={0.7}
-                style={styles.dealCard}
+                style={[styles.dealCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
               >
                 <View style={styles.dealContent}>
                   <View style={styles.dealInfo}>
                     <View style={styles.dealHeader}>
-                      <Text style={styles.dealName} numberOfLines={1}>{deal.homeowner_name}</Text>
+                      <Text style={[styles.dealName, { color: colors.foreground }]} numberOfLines={1}>{deal.homeowner_name}</Text>
                       <View style={[styles.badge, { borderColor: config.color }]}>
                         <Text style={[styles.badgeText, { color: config.color }]}>
                           {config.label}
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.dealAddress} numberOfLines={1}>
+                    <Text style={[styles.dealAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {deal.address}
                       {deal.city && `, ${deal.city}`}
                     </Text>
                     <View style={styles.dealFooter}>
-                      <Text style={styles.dealPrice}>
+                      <Text style={[styles.dealPrice, { color: colors.foreground }]}>
                         ${(deal.rcv || deal.total_price || 0).toLocaleString()}
                       </Text>
                       <View style={styles.progressContainer}>
-                        <View style={styles.progressBar}>
-                          <View style={[styles.progressFill, { width: `${progress}%` }]} />
+                        <View style={[styles.progressBar, { backgroundColor: isDark ? colors.secondary : '#E5E7EB' }]}>
+                          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.primary }]} />
                         </View>
-                        <Text style={styles.progressText}>{progress}%</Text>
+                        <Text style={[styles.progressText, { color: colors.mutedForeground }]}>{progress}%</Text>
                       </View>
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                  <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
                 </View>
               </TouchableOpacity>
             );
@@ -283,7 +346,7 @@ const styles = StyleSheet.create({
   addButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 8,
@@ -310,7 +373,7 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   toggleButtonActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
   },
   toggleText: {
     fontSize: 13,
@@ -343,15 +406,16 @@ const styles = StyleSheet.create({
   phaseGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    justifyContent: 'space-between',
     marginBottom: 16,
   },
   phaseCard: {
-    width: '48%',
+    width: '48.5%',
     backgroundColor: '#FFFFFF',
     borderRadius: 8,
     padding: 12,
     borderLeftWidth: 4,
+    marginBottom: 8,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.05,
@@ -398,7 +462,7 @@ const styles = StyleSheet.create({
     marginTop: 16,
     paddingHorizontal: 20,
     paddingVertical: 10,
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     borderRadius: 8,
   },
   createButtonText: {
@@ -472,12 +536,27 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     borderRadius: 3,
   },
   progressText: {
     fontSize: 11,
     color: '#9CA3AF',
     width: 30,
+  },
+  filterIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+  },
+  filterIndicatorText: {
+    fontSize: 14,
+    fontWeight: '500',
   },
 });

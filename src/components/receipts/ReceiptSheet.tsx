@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
+import { format } from 'date-fns';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PaymentReceipt, ReceiptType } from './PaymentReceipt';
-import { Deal, dealsApi } from '@/integrations/aws/api';
+import { Deal, dealsApi, uploadApi } from '@/integrations/aws/api';
 import { FileText, DollarSign, Receipt, CheckCircle, Eye, X, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -164,27 +165,55 @@ export function ReceiptSheet({ deal, repName, onReceiptSaved, trigger }: Receipt
         receiptData.checkNumber || ''
       );
 
-      // Convert receipt HTML to a data URL for storage
-      const receiptDataUrl = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(receiptHtml)));
+      let receiptUrl = '';
+
+      // Try to upload to Wasabi storage
+      try {
+        const receiptTypeLabel = receiptData.type.charAt(0).toUpperCase() + receiptData.type.slice(1);
+        const fileName = `${receiptTypeLabel}_Receipt_${deal.homeowner_name.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.html`;
+        const urlResponse = await uploadApi.getUploadUrl(fileName, 'text/html', `deals/${deal.id}/receipts`);
+
+        if (urlResponse.data) {
+          const { url, key } = urlResponse.data;
+
+          // Upload the HTML content to Wasabi
+          const uploadResponse = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'text/html' },
+            body: receiptHtml,
+          });
+
+          if (uploadResponse.ok) {
+            receiptUrl = key;
+            console.log(`${receiptData.type} receipt saved to Wasabi:`, key);
+          } else {
+            console.warn('Failed to upload receipt to Wasabi, falling back to base64');
+            receiptUrl = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(receiptHtml)));
+          }
+        }
+      } catch (uploadError) {
+        console.warn('Failed to upload receipt to Wasabi, falling back to base64:', uploadError);
+        receiptUrl = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(receiptHtml)));
+      }
 
       // Determine which field to update based on receipt type
       const updateData: Partial<Deal> = {};
 
       switch (receiptData.type) {
         case 'acv':
-          // Store the full receipt HTML (not just signature)
-          updateData.acv_receipt_url = receiptDataUrl;
+          // Store the receipt URL (Wasabi key or base64 fallback)
+          updateData.acv_receipt_url = receiptUrl;
           updateData.acv_check_collected = true;
           updateData.acv_check_amount = receiptData.amount;
           updateData.acv_check_date = receiptData.datePaid;
           updateData.collect_acv_date = new Date().toISOString();
           break;
         case 'deductible':
-          updateData.deductible_receipt_url = receiptDataUrl;
+          updateData.deductible_receipt_url = receiptUrl;
           updateData.collect_deductible_date = new Date().toISOString();
           break;
         case 'depreciation':
-          updateData.depreciation_receipt_url = receiptDataUrl;
+          updateData.depreciation_receipt_url = receiptUrl;
           updateData.depreciation_check_collected = true;
           updateData.depreciation_check_amount = receiptData.amount;
           updateData.depreciation_check_date = receiptData.datePaid;
@@ -203,10 +232,10 @@ export function ReceiptSheet({ deal, repName, onReceiptSaved, trigger }: Receipt
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', deal.id] });
 
-      toast.success(`${receiptData.type.toUpperCase()} Receipt saved successfully!`);
+      toast.success(`${receiptData.type.toUpperCase()} Receipt saved to cloud storage!`);
 
       if (onReceiptSaved) {
-        onReceiptSaved(receiptData.type, receiptDataUrl);
+        onReceiptSaved(receiptData.type, receiptUrl);
       }
 
       // Close the sheet after successful save

@@ -1,11 +1,12 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet, Modal, TextInput, Switch, Animated, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
+import { useState, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, StyleSheet, Modal, TextInput, Switch, Dimensions, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Location from 'expo-location';
+import DateTimePicker from '@react-native-community/datetimepicker';
 import {
   format,
   startOfMonth,
@@ -18,10 +19,13 @@ import {
   isSameDay,
   isSameMonth,
   isToday,
+  parse,
 } from 'date-fns';
 import { pinsApi, Pin } from '../../src/services/api';
-import { colors } from '../../src/constants/config';
+import { colors as staticColors } from '../../src/constants/config';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { scheduleAppointmentReminder, scheduleEventReminder, getNotificationSettings } from '../../src/services/notifications';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -33,23 +37,6 @@ const statusColors: Record<string, string> = {
   renter: '#64748B',
   not_interested: '#EF4444',
 };
-
-// Time options for pickers
-const generateTimeOptions = () => {
-  const times = [];
-  for (let h = 6; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      const hour = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const label = `${hour}:${m.toString().padStart(2, '0')} ${ampm}`;
-      const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-      times.push({ label, value });
-    }
-  }
-  return times;
-};
-
-const timeOptions = generateTimeOptions();
 
 // Calendar event interface (stored locally)
 interface CalendarEvent {
@@ -67,13 +54,13 @@ export default function CalendarScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const { colors, isDark } = useTheme();
   const [currentMonth, setCurrentMonth] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
 
   // Modal state
   const [showAddAppointmentModal, setShowAddAppointmentModal] = useState(false);
   const [showAddEventModal, setShowAddEventModal] = useState(false);
-  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   // Add Appointment form
   const [appointmentForm, setAppointmentForm] = useState({
@@ -89,7 +76,7 @@ export default function CalendarScreen() {
     all_day: false,
     notes: '',
   });
-  const [addressSuggestions, setAddressSuggestions] = useState<any[]>([]);
+  const [addressSuggestions, setAddressSuggestions] = useState<Array<{ latitude: number; longitude: number; address: Record<string, string>; display: string }>>([]);
   const [showAddressSuggestions, setShowAddressSuggestions] = useState(false);
   const [isSearchingAddress, setIsSearchingAddress] = useState(false);
 
@@ -164,10 +151,27 @@ export default function CalendarScreen() {
       };
       const result = await pinsApi.create(appointmentData);
       if (result.error) throw new Error(result.error);
-      return result.data;
+      return { pin: result.data, formData: data };
     },
-    onSuccess: () => {
+    onSuccess: async ({ pin, formData }) => {
       queryClient.invalidateQueries({ queryKey: ['pins'] });
+
+      // Schedule notification reminder
+      if (pin?.id) {
+        const settings = await getNotificationSettings();
+        const appointmentDateTime = formData.all_day
+          ? parse(`${formData.appointment_date} 09:00`, 'yyyy-MM-dd HH:mm', new Date())
+          : parse(`${formData.appointment_date} ${formData.appointment_time}`, 'yyyy-MM-dd HH:mm', new Date());
+
+        await scheduleAppointmentReminder(
+          pin.id,
+          formData.homeowner_name,
+          formData.address,
+          appointmentDateTime,
+          settings.reminderMinutes
+        );
+      }
+
       closeAddAppointmentModal();
     },
   });
@@ -189,10 +193,24 @@ export default function CalendarScreen() {
       };
       existingEvents.push(newEvent);
       await AsyncStorage.setItem(calendarStorageKey, JSON.stringify(existingEvents));
-      return newEvent;
+      return { event: newEvent, formData: data };
     },
-    onSuccess: () => {
+    onSuccess: async ({ event, formData }) => {
       queryClient.invalidateQueries({ queryKey: ['calendar-events'] });
+
+      // Schedule notification reminder
+      const settings = await getNotificationSettings();
+      const eventDateTime = formData.all_day
+        ? parse(`${formData.event_date} 09:00`, 'yyyy-MM-dd HH:mm', new Date())
+        : parse(`${formData.event_date} ${formData.event_time}`, 'yyyy-MM-dd HH:mm', new Date());
+
+      await scheduleEventReminder(
+        event.id,
+        formData.title,
+        eventDateTime,
+        settings.reminderMinutes
+      );
+
       closeAddEventModal();
     },
   });
@@ -213,24 +231,12 @@ export default function CalendarScreen() {
       notes: '',
     });
     setShowAddAppointmentModal(true);
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
   };
 
   const closeAddAppointmentModal = () => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowAddAppointmentModal(false);
-      setAddressSuggestions([]);
-      setShowAddressSuggestions(false);
-    });
+    setShowAddAppointmentModal(false);
+    setAddressSuggestions([]);
+    setShowAddressSuggestions(false);
   };
 
   const openAddEventModal = () => {
@@ -243,22 +249,26 @@ export default function CalendarScreen() {
       notes: '',
     });
     setShowAddEventModal(true);
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      tension: 65,
-      friction: 11,
-    }).start();
   };
 
   const closeAddEventModal = () => {
-    Animated.timing(slideAnim, {
-      toValue: SCREEN_HEIGHT,
-      duration: 250,
-      useNativeDriver: true,
-    }).start(() => {
-      setShowAddEventModal(false);
-    });
+    setShowAddEventModal(false);
+  };
+
+  // Helper to format time string (HH:MM) to display format
+  const formatTimeDisplay = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const h = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours;
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    return `${h}:${minutes.toString().padStart(2, '0')} ${ampm}`;
+  };
+
+  // Helper to convert time string to Date for picker
+  const timeStringToDate = (timeStr: string) => {
+    const [hours, minutes] = timeStr.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date;
   };
 
   // Address autocomplete using reverse geocoding
@@ -298,7 +308,7 @@ export default function CalendarScreen() {
             return null;
           })
         );
-        setAddressSuggestions(suggestions.filter(Boolean));
+        setAddressSuggestions(suggestions.filter((s): s is NonNullable<typeof s> => s !== null));
         setShowAddressSuggestions(true);
       }
     } catch (error) {
@@ -308,7 +318,7 @@ export default function CalendarScreen() {
     }
   };
 
-  const selectAddressSuggestion = (suggestion: any) => {
+  const selectAddressSuggestion = (suggestion: { address: Record<string, string> }) => {
     setAppointmentForm(prev => ({
       ...prev,
       address: [suggestion.address.streetNumber, suggestion.address.street].filter(Boolean).join(' '),
@@ -392,47 +402,47 @@ export default function CalendarScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.monthNav}>
-          <TouchableOpacity onPress={goToPrevMonth} style={styles.navButton}>
-            <Ionicons name="chevron-back" size={20} color={colors.secondary} />
+          <TouchableOpacity onPress={goToPrevMonth} style={[styles.navButton, { backgroundColor: isDark ? colors.secondary : '#F3F4F6' }]}>
+            <Ionicons name="chevron-back" size={20} color={colors.foreground} />
           </TouchableOpacity>
-          <Text style={styles.monthText}>{format(currentMonth, 'MMMM yyyy')}</Text>
-          <TouchableOpacity onPress={goToNextMonth} style={styles.navButton}>
-            <Ionicons name="chevron-forward" size={20} color={colors.secondary} />
+          <Text style={[styles.monthText, { color: colors.foreground }]}>{format(currentMonth, 'MMMM yyyy')}</Text>
+          <TouchableOpacity onPress={goToNextMonth} style={[styles.navButton, { backgroundColor: isDark ? colors.secondary : '#F3F4F6' }]}>
+            <Ionicons name="chevron-forward" size={20} color={colors.foreground} />
           </TouchableOpacity>
         </View>
 
         {/* Stats */}
-        <View style={styles.statsRow}>
-          <View style={styles.statItem}>
+        <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
+          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#FFF7ED' }]}>
             <Ionicons name="today" size={16} color="#F59E0B" />
-            <Text style={styles.statValue}>{stats.todayAppts}</Text>
-            <Text style={styles.statLabel}>Today</Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.todayAppts}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Today</Text>
           </View>
-          <View style={styles.statItem}>
+          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#F3E8FF' }]}>
             <Ionicons name="calendar" size={16} color="#8B5CF6" />
-            <Text style={styles.statValue}>{stats.thisWeekAppts}</Text>
-            <Text style={styles.statLabel}>This Week</Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.thisWeekAppts}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>This Week</Text>
           </View>
-          <View style={styles.statItem}>
+          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#EFF6FF' }]}>
             <Ionicons name="list" size={16} color="#3B82F6" />
-            <Text style={styles.statValue}>{stats.totalAppts}</Text>
-            <Text style={styles.statLabel}>Total</Text>
+            <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.totalAppts}</Text>
+            <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Total</Text>
           </View>
         </View>
 
         {/* Action Buttons */}
         <View style={styles.actionButtonsRow}>
-          <TouchableOpacity style={styles.addAppointmentButton} onPress={openAddAppointmentModal}>
+          <TouchableOpacity style={[styles.addAppointmentButton, { backgroundColor: colors.primary }]} onPress={openAddAppointmentModal}>
             <Ionicons name="add" size={18} color="#FFF" />
             <Text style={styles.addButtonText}>Add Appointment</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.addEventButton} onPress={openAddEventModal}>
-            <Ionicons name="calendar-outline" size={18} color={colors.secondary} />
-            <Text style={styles.addEventButtonText}>Add Event</Text>
+          <TouchableOpacity style={[styles.addEventButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6', borderColor: colors.border }]} onPress={openAddEventModal}>
+            <Ionicons name="calendar-outline" size={18} color={colors.foreground} />
+            <Text style={[styles.addEventButtonText, { color: colors.foreground }]}>Add Event</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -442,11 +452,11 @@ export default function CalendarScreen() {
         refreshControl={<RefreshControl refreshing={isLoading} onRefresh={refetch} />}
       >
         {/* Calendar Grid */}
-        <View style={styles.calendarCard}>
+        <View style={[styles.calendarCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
           {/* Weekday Headers */}
           <View style={styles.weekdayRow}>
             {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
-              <Text key={day} style={styles.weekdayText}>
+              <Text key={day} style={[styles.weekdayText, { color: colors.mutedForeground }]}>
                 {day}
               </Text>
             ))}
@@ -467,17 +477,18 @@ export default function CalendarScreen() {
                   key={index}
                   style={[
                     styles.dayCell,
-                    isSelected && styles.dayCellSelected,
-                    isTodayDate && styles.dayCellToday,
+                    isSelected && [styles.dayCellSelected, { backgroundColor: colors.primary }],
+                    isTodayDate && !isSelected && [styles.dayCellToday, { borderColor: colors.primary }],
                   ]}
                   onPress={() => handleDayPress(day)}
                 >
                   <Text
                     style={[
                       styles.dayText,
-                      !isCurrentMonth && styles.dayTextMuted,
+                      { color: colors.foreground },
+                      !isCurrentMonth && { color: colors.mutedForeground, opacity: 0.4 },
                       isSelected && styles.dayTextSelected,
-                      isTodayDate && styles.dayTextToday,
+                      isTodayDate && !isSelected && { color: colors.primary, fontWeight: '700' },
                     ]}
                   >
                     {format(day, 'd')}
@@ -498,38 +509,38 @@ export default function CalendarScreen() {
         {/* Selected Date Appointments */}
         {selectedDate && (
           <View style={styles.appointmentsSection}>
-            <Text style={styles.sectionTitle}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>
               {format(selectedDate, 'EEEE, MMMM d')}
             </Text>
             {selectedDateAppointments.length === 0 ? (
-              <View style={styles.emptyCard}>
-                <Ionicons name="calendar-outline" size={40} color="#9CA3AF" />
-                <Text style={styles.emptyText}>No appointments scheduled</Text>
+              <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+                <Ionicons name="calendar-outline" size={40} color={colors.mutedForeground} />
+                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No appointments scheduled</Text>
               </View>
             ) : (
               selectedDateAppointments.map((pin) => (
                 <TouchableOpacity
                   key={pin.id}
-                  style={styles.appointmentCard}
+                  style={[styles.appointmentCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
                   onPress={() => handleAppointmentPress(pin)}
                 >
                   <View style={styles.appointmentTime}>
                     <Ionicons name="time" size={16} color="#8B5CF6" />
-                    <Text style={styles.appointmentTimeText}>
+                    <Text style={[styles.appointmentTimeText, { color: colors.foreground }]}>
                       {pin.appointment_date
                         ? format(new Date(pin.appointment_date), 'h:mm a')
                         : 'All day'}
                     </Text>
                   </View>
                   <View style={styles.appointmentDetails}>
-                    <Text style={styles.appointmentName}>
+                    <Text style={[styles.appointmentName, { color: colors.foreground }]}>
                       {pin.homeowner_name || 'Unknown'}
                     </Text>
-                    <Text style={styles.appointmentAddress} numberOfLines={1}>
+                    <Text style={[styles.appointmentAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {pin.address || 'No address'}
                     </Text>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
               ))
             )}
@@ -538,12 +549,12 @@ export default function CalendarScreen() {
 
         {/* Upcoming Appointments */}
         <View style={styles.upcomingSection}>
-          <Text style={styles.sectionTitle}>Upcoming Appointments</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Upcoming Appointments</Text>
           {appointmentPins.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Ionicons name="calendar-outline" size={40} color="#9CA3AF" />
-              <Text style={styles.emptyText}>No upcoming appointments</Text>
-              <Text style={styles.emptySubtext}>
+            <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+              <Ionicons name="calendar-outline" size={40} color={colors.mutedForeground} />
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No upcoming appointments</Text>
+              <Text style={[styles.emptySubtext, { color: colors.mutedForeground }]}>
                 Schedule appointments from the Map tab
               </Text>
             </View>
@@ -559,10 +570,10 @@ export default function CalendarScreen() {
               .map((pin) => (
                 <TouchableOpacity
                   key={pin.id}
-                  style={styles.upcomingCard}
+                  style={[styles.upcomingCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
                   onPress={() => handleAppointmentPress(pin)}
                 >
-                  <View style={styles.upcomingDate}>
+                  <View style={[styles.upcomingDate, { backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'rgba(139, 92, 246, 0.1)' }]}>
                     <Text style={styles.upcomingDay}>
                       {format(new Date(pin.appointment_date!), 'd')}
                     </Text>
@@ -571,13 +582,13 @@ export default function CalendarScreen() {
                     </Text>
                   </View>
                   <View style={styles.upcomingDetails}>
-                    <Text style={styles.upcomingName}>
+                    <Text style={[styles.upcomingName, { color: colors.foreground }]}>
                       {pin.homeowner_name || 'Unknown'}
                     </Text>
-                    <Text style={styles.upcomingAddress} numberOfLines={1}>
+                    <Text style={[styles.upcomingAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {pin.address || 'No address'}
                     </Text>
-                    <Text style={styles.upcomingTime}>
+                    <Text style={[styles.upcomingTime, { color: colors.mutedForeground }]}>
                       {format(new Date(pin.appointment_date!), 'EEEE, h:mm a')}
                     </Text>
                   </View>
@@ -592,43 +603,45 @@ export default function CalendarScreen() {
       {/* Add Appointment Modal */}
       <Modal
         visible={showAddAppointmentModal}
-        transparent
-        animationType="none"
+        transparent={false}
+        animationType="slide"
         onRequestClose={closeAddAppointmentModal}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeAddAppointmentModal} />
-          <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
-              <Text style={styles.modalTitle}>Add Appointment</Text>
-            </View>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: isDark ? colors.background : '#FFFFFF' }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: isDark ? colors.border : '#E5E7EB' }]}>
+            <TouchableOpacity onPress={closeAddAppointmentModal} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Add Appointment</Text>
+            <View style={{ width: 40 }} />
+          </View>
 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               {/* Homeowner Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Homeowner Name *</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Homeowner Name *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={appointmentForm.homeowner_name}
                   onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, homeowner_name: text }))}
                   placeholder="Enter name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                 />
               </View>
 
               {/* Phone */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Phone Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={appointmentForm.homeowner_phone}
                   onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, homeowner_phone: text }))}
                   placeholder="Enter phone"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
                 />
               </View>
@@ -636,29 +649,29 @@ export default function CalendarScreen() {
               {/* Address with autocomplete */}
               <View style={styles.inputGroup}>
                 <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Address *</Text>
+                  <Text style={[styles.inputLabel, { color: colors.foreground }]}>Address *</Text>
                   {isSearchingAddress && <ActivityIndicator size="small" color={colors.primary} />}
                 </View>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={appointmentForm.address}
                   onChangeText={(text) => {
                     setAppointmentForm(prev => ({ ...prev, address: text }));
                     searchAddress(text);
                   }}
                   placeholder="Start typing address..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                 />
                 {showAddressSuggestions && addressSuggestions.length > 0 && (
-                  <View style={styles.suggestionsContainer}>
+                  <View style={[styles.suggestionsContainer, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
                     {addressSuggestions.map((suggestion, index) => (
                       <TouchableOpacity
                         key={index}
-                        style={styles.suggestionItem}
+                        style={[styles.suggestionItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
                         onPress={() => selectAddressSuggestion(suggestion)}
                       >
-                        <Ionicons name="location-outline" size={16} color="#6B7280" />
-                        <Text style={styles.suggestionText} numberOfLines={2}>
+                        <Ionicons name="location-outline" size={16} color={colors.mutedForeground} />
+                        <Text style={[styles.suggestionText, { color: colors.foreground }]} numberOfLines={2}>
                           {suggestion.display}
                         </Text>
                       </TouchableOpacity>
@@ -670,35 +683,35 @@ export default function CalendarScreen() {
               {/* City, State, Zip */}
               <View style={styles.addressRow}>
                 <View style={[styles.inputGroup, { flex: 2 }]}>
-                  <Text style={styles.inputLabel}>City</Text>
+                  <Text style={[styles.inputLabel, { color: colors.foreground }]}>City</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                     value={appointmentForm.city}
                     onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, city: text }))}
                     placeholder="City"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>State</Text>
+                  <Text style={[styles.inputLabel, { color: colors.foreground }]}>State</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                     value={appointmentForm.state}
                     onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, state: text }))}
                     placeholder="TX"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     autoCapitalize="characters"
                     maxLength={2}
                   />
                 </View>
                 <View style={[styles.inputGroup, { flex: 1.2 }]}>
-                  <Text style={styles.inputLabel}>ZIP</Text>
+                  <Text style={[styles.inputLabel, { color: colors.foreground }]}>ZIP</Text>
                   <TextInput
-                    style={styles.input}
+                    style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                     value={appointmentForm.zip_code}
                     onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, zip_code: text }))}
                     placeholder="12345"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="number-pad"
                     maxLength={5}
                   />
@@ -707,21 +720,44 @@ export default function CalendarScreen() {
 
               {/* Date */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date *</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Date *</Text>
                 <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => { setPickerTarget('appointment'); setShowDatePicker(true); }}
+                  style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                  onPress={() => { setPickerTarget('appointment'); setShowDatePicker(!showDatePicker); setShowStartTimePicker(false); setShowEndTimePicker(false); }}
                 >
-                  <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-                  <Text style={styles.datePickerText}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.mutedForeground} />
+                  <Text style={[styles.datePickerText, { color: colors.foreground }]}>
                     {format(new Date(appointmentForm.appointment_date), 'MMMM d, yyyy')}
                   </Text>
+                  <Ionicons name={showDatePicker && pickerTarget === 'appointment' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
+                {showDatePicker && pickerTarget === 'appointment' && (
+                  <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                    <DateTimePicker
+                      value={new Date(appointmentForm.appointment_date)}
+                      mode="date"
+                      display="spinner"
+                      onChange={(event, date) => {
+                        if (date) {
+                          setAppointmentForm(prev => ({ ...prev, appointment_date: format(date, 'yyyy-MM-dd') }));
+                        }
+                        if (Platform.OS === 'android') setShowDatePicker(false);
+                      }}
+                      minimumDate={new Date()}
+                      style={{ height: 150 }}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowDatePicker(false)}>
+                        <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
 
               {/* All Day Toggle */}
               <View style={styles.toggleRow}>
-                <Text style={styles.inputLabel}>All day appointment</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground, marginBottom: 0 }]}>All day appointment</Text>
                 <Switch
                   value={appointmentForm.all_day}
                   onValueChange={(val) => setAppointmentForm(prev => ({ ...prev, all_day: val }))}
@@ -732,43 +768,90 @@ export default function CalendarScreen() {
 
               {/* Time */}
               {!appointmentForm.all_day && (
-                <View style={styles.timeRow}>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Start Time</Text>
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground }]}>Start Time</Text>
                     <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => { setPickerTarget('appointment'); setShowStartTimePicker(true); }}
+                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                      onPress={() => { setPickerTarget('appointment'); setShowStartTimePicker(!showStartTimePicker); setShowDatePicker(false); setShowEndTimePicker(false); }}
                     >
-                      <Ionicons name="time-outline" size={18} color="#6B7280" />
-                      <Text style={styles.datePickerText}>
-                        {timeOptions.find(t => t.value === appointmentForm.appointment_time)?.label || '9:00 AM'}
+                      <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                      <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                        {formatTimeDisplay(appointmentForm.appointment_time)}
                       </Text>
+                      <Ionicons name={showStartTimePicker && pickerTarget === 'appointment' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                     </TouchableOpacity>
+                    {showStartTimePicker && pickerTarget === 'appointment' && (
+                      <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                        <DateTimePicker
+                          value={timeStringToDate(appointmentForm.appointment_time)}
+                          mode="time"
+                          display="spinner"
+                          onChange={(event, date) => {
+                            if (date) {
+                              setAppointmentForm(prev => ({ ...prev, appointment_time: format(date, 'HH:mm') }));
+                            }
+                            if (Platform.OS === 'android') setShowStartTimePicker(false);
+                          }}
+                          minuteInterval={15}
+                          style={{ height: 150 }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowStartTimePicker(false)}>
+                            <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>End Time</Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground }]}>End Time</Text>
                     <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => { setPickerTarget('appointment'); setShowEndTimePicker(true); }}
+                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                      onPress={() => { setPickerTarget('appointment'); setShowEndTimePicker(!showEndTimePicker); setShowDatePicker(false); setShowStartTimePicker(false); }}
                     >
-                      <Ionicons name="time-outline" size={18} color="#6B7280" />
-                      <Text style={styles.datePickerText}>
-                        {timeOptions.find(t => t.value === appointmentForm.appointment_end_time)?.label || '10:00 AM'}
+                      <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                      <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                        {formatTimeDisplay(appointmentForm.appointment_end_time)}
                       </Text>
+                      <Ionicons name={showEndTimePicker && pickerTarget === 'appointment' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                     </TouchableOpacity>
+                    {showEndTimePicker && pickerTarget === 'appointment' && (
+                      <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                        <DateTimePicker
+                          value={timeStringToDate(appointmentForm.appointment_end_time)}
+                          mode="time"
+                          display="spinner"
+                          onChange={(event, date) => {
+                            if (date) {
+                              setAppointmentForm(prev => ({ ...prev, appointment_end_time: format(date, 'HH:mm') }));
+                            }
+                            if (Platform.OS === 'android') setShowEndTimePicker(false);
+                          }}
+                          minuteInterval={15}
+                          style={{ height: 150 }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowEndTimePicker(false)}>
+                            <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
-                </View>
+                </>
               )}
 
               {/* Notes */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={appointmentForm.notes}
                   onChangeText={(text) => setAppointmentForm(prev => ({ ...prev, notes: text }))}
                   placeholder="Add notes..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -778,9 +861,9 @@ export default function CalendarScreen() {
               <View style={{ height: 20 }} />
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={closeAddAppointmentModal}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+            <View style={[styles.modalFooter, { borderTopColor: isDark ? colors.border : '#E5E7EB' }]}>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={closeAddAppointmentModal}>
+                <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.saveButton, (!appointmentForm.homeowner_name || !appointmentForm.address) && styles.saveButtonDisabled]}
@@ -797,58 +880,83 @@ export default function CalendarScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
 
       {/* Add Event Modal */}
       <Modal
         visible={showAddEventModal}
-        transparent
-        animationType="none"
+        transparent={false}
+        animationType="slide"
         onRequestClose={closeAddEventModal}
       >
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-          style={styles.modalOverlay}
-        >
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={closeAddEventModal} />
-          <Animated.View style={[styles.modalContent, { transform: [{ translateY: slideAnim }] }]}>
-            <View style={styles.modalHeader}>
-              <View style={styles.modalHandle} />
-              <Text style={styles.modalTitle}>Add Event</Text>
-            </View>
+        <SafeAreaView style={[styles.modalContainer, { backgroundColor: isDark ? colors.background : '#FFFFFF' }]}>
+          <View style={[styles.modalHeader, { borderBottomColor: isDark ? colors.border : '#E5E7EB' }]}>
+            <TouchableOpacity onPress={closeAddEventModal} style={styles.modalCloseButton}>
+              <Ionicons name="close" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Add Event</Text>
+            <View style={{ width: 40 }} />
+          </View>
 
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Event Title */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Event Title *</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Event Title *</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={eventForm.title}
                   onChangeText={(text) => setEventForm(prev => ({ ...prev, title: text }))}
                   placeholder="Enter event title"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                 />
               </View>
 
               {/* Date */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Date *</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Date *</Text>
                 <TouchableOpacity
-                  style={styles.datePickerButton}
-                  onPress={() => { setPickerTarget('event'); setShowDatePicker(true); }}
+                  style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                  onPress={() => { setPickerTarget('event'); setShowDatePicker(!showDatePicker); setShowStartTimePicker(false); setShowEndTimePicker(false); }}
                 >
-                  <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-                  <Text style={styles.datePickerText}>
+                  <Ionicons name="calendar-outline" size={18} color={colors.mutedForeground} />
+                  <Text style={[styles.datePickerText, { color: colors.foreground }]}>
                     {format(new Date(eventForm.event_date), 'MMMM d, yyyy')}
                   </Text>
+                  <Ionicons name={showDatePicker && pickerTarget === 'event' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
+                {showDatePicker && pickerTarget === 'event' && (
+                  <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                    <DateTimePicker
+                      value={new Date(eventForm.event_date)}
+                      mode="date"
+                      display="spinner"
+                      onChange={(event, date) => {
+                        if (date) {
+                          setEventForm(prev => ({ ...prev, event_date: format(date, 'yyyy-MM-dd') }));
+                        }
+                        if (Platform.OS === 'android') setShowDatePicker(false);
+                      }}
+                      minimumDate={new Date()}
+                      style={{ height: 150 }}
+                    />
+                    {Platform.OS === 'ios' && (
+                      <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowDatePicker(false)}>
+                        <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                )}
               </View>
 
               {/* All Day Toggle */}
               <View style={styles.toggleRow}>
-                <Text style={styles.inputLabel}>All day event</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground, marginBottom: 0 }]}>All day event</Text>
                 <Switch
                   value={eventForm.all_day}
                   onValueChange={(val) => setEventForm(prev => ({ ...prev, all_day: val }))}
@@ -859,43 +967,90 @@ export default function CalendarScreen() {
 
               {/* Time */}
               {!eventForm.all_day && (
-                <View style={styles.timeRow}>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>Start Time</Text>
+                <>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground }]}>Start Time</Text>
                     <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => { setPickerTarget('event'); setShowStartTimePicker(true); }}
+                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                      onPress={() => { setPickerTarget('event'); setShowStartTimePicker(!showStartTimePicker); setShowDatePicker(false); setShowEndTimePicker(false); }}
                     >
-                      <Ionicons name="time-outline" size={18} color="#6B7280" />
-                      <Text style={styles.datePickerText}>
-                        {timeOptions.find(t => t.value === eventForm.event_time)?.label || '9:00 AM'}
+                      <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                      <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                        {formatTimeDisplay(eventForm.event_time)}
                       </Text>
+                      <Ionicons name={showStartTimePicker && pickerTarget === 'event' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                     </TouchableOpacity>
+                    {showStartTimePicker && pickerTarget === 'event' && (
+                      <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                        <DateTimePicker
+                          value={timeStringToDate(eventForm.event_time)}
+                          mode="time"
+                          display="spinner"
+                          onChange={(event, date) => {
+                            if (date) {
+                              setEventForm(prev => ({ ...prev, event_time: format(date, 'HH:mm') }));
+                            }
+                            if (Platform.OS === 'android') setShowStartTimePicker(false);
+                          }}
+                          minuteInterval={15}
+                          style={{ height: 150 }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowStartTimePicker(false)}>
+                            <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
-                  <View style={[styles.inputGroup, { flex: 1 }]}>
-                    <Text style={styles.inputLabel}>End Time</Text>
+
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground }]}>End Time</Text>
                     <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => { setPickerTarget('event'); setShowEndTimePicker(true); }}
+                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                      onPress={() => { setPickerTarget('event'); setShowEndTimePicker(!showEndTimePicker); setShowDatePicker(false); setShowStartTimePicker(false); }}
                     >
-                      <Ionicons name="time-outline" size={18} color="#6B7280" />
-                      <Text style={styles.datePickerText}>
-                        {timeOptions.find(t => t.value === eventForm.event_end_time)?.label || '10:00 AM'}
+                      <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                      <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                        {formatTimeDisplay(eventForm.event_end_time)}
                       </Text>
+                      <Ionicons name={showEndTimePicker && pickerTarget === 'event' ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
                     </TouchableOpacity>
+                    {showEndTimePicker && pickerTarget === 'event' && (
+                      <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                        <DateTimePicker
+                          value={timeStringToDate(eventForm.event_end_time)}
+                          mode="time"
+                          display="spinner"
+                          onChange={(event, date) => {
+                            if (date) {
+                              setEventForm(prev => ({ ...prev, event_end_time: format(date, 'HH:mm') }));
+                            }
+                            if (Platform.OS === 'android') setShowEndTimePicker(false);
+                          }}
+                          minuteInterval={15}
+                          style={{ height: 150 }}
+                        />
+                        {Platform.OS === 'ios' && (
+                          <TouchableOpacity style={styles.inlinePickerDone} onPress={() => setShowEndTimePicker(false)}>
+                            <Text style={[styles.inlinePickerDoneText, { color: colors.primary }]}>Done</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    )}
                   </View>
-                </View>
+                </>
               )}
 
               {/* Notes */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={eventForm.notes}
                   onChangeText={(text) => setEventForm(prev => ({ ...prev, notes: text }))}
                   placeholder="Add notes..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
@@ -905,9 +1060,9 @@ export default function CalendarScreen() {
               <View style={{ height: 20 }} />
             </ScrollView>
 
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={closeAddEventModal}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+            <View style={[styles.modalFooter, { borderTopColor: isDark ? colors.border : '#E5E7EB' }]}>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={closeAddEventModal}>
+                <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.saveButton, styles.eventSaveButton, !eventForm.title && styles.saveButtonDisabled]}
@@ -924,110 +1079,8 @@ export default function CalendarScreen() {
                 )}
               </TouchableOpacity>
             </View>
-          </Animated.View>
-        </KeyboardAvoidingView>
-      </Modal>
-
-      {/* Date Picker Modal */}
-      <Modal visible={showDatePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Select Date</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {Array.from({ length: 60 }, (_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() + i);
-                const dateStr = format(date, 'yyyy-MM-dd');
-                const currentValue = pickerTarget === 'appointment' ? appointmentForm.appointment_date : eventForm.event_date;
-                const isSelected = currentValue === dateStr;
-                return (
-                  <TouchableOpacity
-                    key={dateStr}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      if (pickerTarget === 'appointment') {
-                        setAppointmentForm(prev => ({ ...prev, appointment_date: dateStr }));
-                      } else {
-                        setEventForm(prev => ({ ...prev, event_date: dateStr }));
-                      }
-                      setShowDatePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {format(date, 'EEEE, MMMM d, yyyy')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Start Time Picker Modal */}
-      <Modal visible={showStartTimePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowStartTimePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Start Time</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {timeOptions.map((time) => {
-                const currentValue = pickerTarget === 'appointment' ? appointmentForm.appointment_time : eventForm.event_time;
-                const isSelected = currentValue === time.value;
-                return (
-                  <TouchableOpacity
-                    key={time.value}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      if (pickerTarget === 'appointment') {
-                        setAppointmentForm(prev => ({ ...prev, appointment_time: time.value }));
-                      } else {
-                        setEventForm(prev => ({ ...prev, event_time: time.value }));
-                      }
-                      setShowStartTimePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {time.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* End Time Picker Modal */}
-      <Modal visible={showEndTimePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowEndTimePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>End Time</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {timeOptions.map((time) => {
-                const currentValue = pickerTarget === 'appointment' ? appointmentForm.appointment_end_time : eventForm.event_end_time;
-                const isSelected = currentValue === time.value;
-                return (
-                  <TouchableOpacity
-                    key={time.value}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      if (pickerTarget === 'appointment') {
-                        setAppointmentForm(prev => ({ ...prev, appointment_end_time: time.value }));
-                      } else {
-                        setEventForm(prev => ({ ...prev, event_end_time: time.value }));
-                      }
-                      setShowEndTimePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {time.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
@@ -1118,12 +1171,12 @@ const styles = StyleSheet.create({
     padding: 2,
   },
   dayCellSelected: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     borderRadius: 8,
   },
   dayCellToday: {
     borderWidth: 2,
-    borderColor: colors.primary,
+    borderColor: staticColors.primary,
     borderRadius: 8,
   },
   dayText: {
@@ -1138,7 +1191,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   dayTextToday: {
-    color: colors.primary,
+    color: staticColors.primary,
     fontWeight: '700',
   },
   appointmentDots: {
@@ -1299,10 +1352,13 @@ const styles = StyleSheet.create({
   addEventButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: colors.secondary,
+    color: staticColors.secondary,
   },
 
   // Modal Styles
+  modalContainer: {
+    flex: 1,
+  },
   modalOverlay: {
     flex: 1,
     justifyContent: 'flex-end',
@@ -1323,11 +1379,19 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   modalHeader: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 12,
-    paddingBottom: 16,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E7EB',
+  },
+  modalCloseButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   modalHandle: {
     width: 40,
@@ -1337,12 +1401,13 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 18,
+    fontWeight: '600',
     color: '#111827',
   },
   modalBody: {
     padding: 20,
+    flex: 1,
   },
   inputGroup: {
     marginBottom: 16,
@@ -1411,8 +1476,25 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   datePickerText: {
+    flex: 1,
     fontSize: 15,
     color: '#111827',
+  },
+  inlinePicker: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+  inlinePickerDone: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+  },
+  inlinePickerDoneText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
   toggleRow: {
     flexDirection: 'row',
@@ -1455,7 +1537,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   eventSaveButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
   },
   saveButtonDisabled: {
     backgroundColor: '#9CA3AF',
@@ -1509,5 +1591,41 @@ const styles = StyleSheet.create({
   pickerOptionTextSelected: {
     color: '#8B5CF6',
     fontWeight: '600',
+  },
+
+  // iOS Picker Modal Styles
+  pickerModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'flex-end',
+  },
+  pickerModalContent: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 34,
+  },
+  pickerModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  pickerModalTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  pickerModalCancel: {
+    fontSize: 16,
+    color: '#6B7280',
+  },
+  pickerModalDone: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#8B5CF6',
   },
 });

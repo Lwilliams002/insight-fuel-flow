@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Deal, dealsApi } from '@/integrations/aws/api';
+import { Deal, dealsApi, uploadApi } from '@/integrations/aws/api';
 import { Download, Save, CheckCircle, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
@@ -234,10 +234,55 @@ export function InvoiceGenerator({ deal, onSave }: InvoiceGeneratorProps) {
     setSaving(true);
     try {
       const invoiceHtml = generateInvoiceHtml();
-      const invoiceDataUrl = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(invoiceHtml)));
+      let invoiceUrl = '';
+
+      // Try to upload to Wasabi storage
+      try {
+        const fileName = `Invoice_${deal.homeowner_name.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.html`;
+        console.log('[InvoiceGenerator] Requesting upload URL for:', fileName);
+
+        const urlResponse = await uploadApi.getUploadUrl(fileName, 'text/html', `deals/${deal.id}/invoices`);
+        console.log('[InvoiceGenerator] Upload URL response:', urlResponse);
+
+        if (urlResponse.error) {
+          console.warn('[InvoiceGenerator] Upload URL error:', urlResponse.error);
+          throw new Error(urlResponse.error);
+        }
+
+        if (urlResponse.data) {
+          const { url, key } = urlResponse.data;
+          console.log('[InvoiceGenerator] Got upload URL, key:', key);
+
+          // Upload the HTML content to Wasabi
+          const uploadResponse = await fetch(url, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'text/html' },
+            body: invoiceHtml,
+          });
+
+          console.log('[InvoiceGenerator] Upload response status:', uploadResponse.status);
+
+          if (uploadResponse.ok) {
+            invoiceUrl = key;
+            console.log('[InvoiceGenerator] Invoice saved to Wasabi:', key);
+          } else {
+            const errorText = await uploadResponse.text();
+            console.warn('[InvoiceGenerator] Failed to upload invoice to Wasabi:', uploadResponse.status, errorText);
+            throw new Error('Upload failed');
+          }
+        } else {
+          console.warn('[InvoiceGenerator] No data in upload URL response');
+          throw new Error('No upload URL received');
+        }
+      } catch (uploadError) {
+        console.warn('[InvoiceGenerator] Upload error, falling back to base64:', uploadError);
+        invoiceUrl = 'data:text/html;base64,' + btoa(unescape(encodeURIComponent(invoiceHtml)));
+      }
+
+      console.log('[InvoiceGenerator] Saving invoice URL to deal:', invoiceUrl.substring(0, 100) + '...');
 
       const response = await dealsApi.update(deal.id, {
-        invoice_url: invoiceDataUrl,
+        invoice_url: invoiceUrl,
         invoice_sent_date: new Date().toISOString(),
         invoice_amount: Number(totalAmount) || 0,
         invoice_work_items: workItems,
@@ -253,7 +298,12 @@ export function InvoiceGenerator({ deal, onSave }: InvoiceGeneratorProps) {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', deal.id] });
 
-      toast.success('Invoice saved!');
+      // Show appropriate success message
+      if (invoiceUrl.startsWith('data:')) {
+        toast.success('Invoice saved (local format)');
+      } else {
+        toast.success('Invoice saved to cloud storage!');
+      }
       onSave?.();
     } catch (error) {
       console.error('Error saving invoice:', error);

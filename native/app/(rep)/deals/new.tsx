@@ -16,11 +16,13 @@ import { useRouter } from 'expo-router';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { dealsApi } from '../../../src/services/api';
-import { colors } from '../../../src/constants/config';
+import { colors as staticColors } from '../../../src/constants/config';
+import { useTheme } from '../../../src/contexts/ThemeContext';
 
 export default function NewDealScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
+  const { colors, isDark } = useTheme();
 
   const [formData, setFormData] = useState({
     homeowner_name: '',
@@ -74,15 +76,15 @@ export default function NewDealScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="arrow-back" size={24} color="#374151" />
+          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>New Deal</Text>
+        <Text style={[styles.headerTitle, { color: colors.foreground }]}>New Deal</Text>
         <TouchableOpacity
-          style={[styles.saveButton, createMutation.isPending && styles.saveButtonDisabled]}
+          style={[styles.saveButton, { backgroundColor: colors.primary }, createMutation.isPending && styles.saveButtonDisabled]}
           onPress={handleSubmit}
           disabled={createMutation.isPending}
         >
@@ -98,41 +100,41 @@ export default function NewDealScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex}
       >
-        <ScrollView style={styles.scrollView} keyboardShouldPersistTaps="handled">
+        <ScrollView style={[styles.scrollView, { backgroundColor: colors.background }]} keyboardShouldPersistTaps="handled">
           {/* Homeowner Info */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.cardTitleRow}>
               <Ionicons name="person" size={18} color={colors.primary} />
-              <Text style={styles.cardTitle}>Homeowner Info</Text>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Homeowner Info</Text>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Name *</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Name *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="John Smith"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.homeowner_name}
                 onChangeText={(v) => updateField('homeowner_name', v)}
                 autoCapitalize="words"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Phone</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Phone</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="(555) 555-5555"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.homeowner_phone}
                 onChangeText={(v) => updateField('homeowner_phone', v)}
                 keyboardType="phone-pad"
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Email</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="john@example.com"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.homeowner_email}
                 onChangeText={(v) => updateField('homeowner_email', v)}
                 keyboardType="email-address"
@@ -142,38 +144,38 @@ export default function NewDealScreen() {
           </View>
 
           {/* Property Info */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.cardTitleRow}>
               <Ionicons name="location" size={18} color={colors.primary} />
-              <Text style={styles.cardTitle}>Property Address</Text>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Property Address</Text>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Street Address *</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Street Address *</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="123 Main St"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.address}
                 onChangeText={(v) => updateField('address', v)}
               />
             </View>
             <View style={styles.row}>
               <View style={[styles.inputGroup, { flex: 1 }]}>
-                <Text style={styles.label}>City</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>City</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                   placeholder="City"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   value={formData.city}
                   onChangeText={(v) => updateField('city', v)}
                 />
               </View>
               <View style={[styles.inputGroup, { width: 80 }]}>
-                <Text style={styles.label}>State</Text>
+                <Text style={[styles.label, { color: colors.mutedForeground }]}>State</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                   placeholder="CA"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   value={formData.state}
                   onChangeText={(v) => updateField('state', v)}
                   maxLength={2}
@@ -182,11 +184,11 @@ export default function NewDealScreen() {
               </View>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>ZIP Code</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>ZIP Code</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="12345"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.zip_code}
                 onChangeText={(v) => updateField('zip_code', v)}
                 keyboardType="number-pad"
@@ -196,27 +198,27 @@ export default function NewDealScreen() {
           </View>
 
           {/* Insurance Info */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.cardTitleRow}>
               <Ionicons name="business" size={18} color={colors.primary} />
-              <Text style={styles.cardTitle}>Insurance (Optional)</Text>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Insurance (Optional)</Text>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Insurance Company</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Insurance Company</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="State Farm"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.insurance_company}
                 onChangeText={(v) => updateField('insurance_company', v)}
               />
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Claim Number</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Claim Number</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="CLM-12345"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.claim_number}
                 onChangeText={(v) => updateField('claim_number', v)}
               />
@@ -224,17 +226,17 @@ export default function NewDealScreen() {
           </View>
 
           {/* Value */}
-          <View style={styles.card}>
+          <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.cardTitleRow}>
               <Ionicons name="cash" size={18} color="#22C55E" />
-              <Text style={styles.cardTitle}>Estimated Value</Text>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Estimated Value</Text>
             </View>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>RCV (Replacement Cost Value)</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>RCV (Replacement Cost Value)</Text>
               <TextInput
-                style={styles.input}
+                style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="15000"
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.rcv}
                 onChangeText={(v) => updateField('rcv', v)}
                 keyboardType="numeric"
@@ -243,13 +245,13 @@ export default function NewDealScreen() {
           </View>
 
           {/* Notes */}
-          <View style={[styles.card, { marginBottom: 24 }]}>
+          <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border, marginBottom: 24 }]}>
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Notes</Text>
+              <Text style={[styles.label, { color: colors.mutedForeground }]}>Notes</Text>
               <TextInput
-                style={[styles.input, styles.textArea]}
+                style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                 placeholder="Any additional notes..."
-                placeholderTextColor="#9CA3AF"
+                placeholderTextColor={colors.mutedForeground}
                 value={formData.notes}
                 onChangeText={(v) => updateField('notes', v)}
                 multiline
@@ -291,7 +293,7 @@ const styles = StyleSheet.create({
     color: '#111827',
   },
   saveButton: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     paddingHorizontal: 16,
     paddingVertical: 8,
     borderRadius: 8,

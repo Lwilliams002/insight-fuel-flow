@@ -1,17 +1,19 @@
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../src/constants/config';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
-export default function AdminLayout() {
+function TabsLayout() {
+  const { colors, isDark } = useTheme();
+
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
-        tabBarInactiveTintColor: '#9CA3AF',
+        tabBarInactiveTintColor: colors.mutedForeground,
         tabBarStyle: {
-          backgroundColor: '#FFFFFF',
-          borderTopColor: '#E5E7EB',
+          backgroundColor: isDark ? colors.background : '#FFFFFF',
+          borderTopColor: colors.border,
           height: 85,
           paddingTop: 8,
           paddingBottom: 25,
@@ -32,8 +34,8 @@ export default function AdminLayout() {
       <Tabs.Screen
         name="deals"
         options={{
-          title: 'Deals',
-          tabBarIcon: ({ color, size }) => <Ionicons name="document-text" size={size} color={color} />,
+          title: 'Pipeline',
+          tabBarIcon: ({ color, size }) => <Ionicons name="git-branch" size={size} color={color} />,
         }}
       />
       <Tabs.Screen
@@ -59,4 +61,8 @@ export default function AdminLayout() {
       />
     </Tabs>
   );
+}
+
+export default function AdminLayout() {
+  return <TabsLayout />;
 }

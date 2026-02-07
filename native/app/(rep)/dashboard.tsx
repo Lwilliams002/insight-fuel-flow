@@ -1,17 +1,37 @@
 import { useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, StyleSheet, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { format, subDays, isToday, startOfWeek, endOfWeek } from 'date-fns';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
+import { useTheme } from '../../src/contexts/ThemeContext';
 import { dealsApi, pinsApi } from '../../src/services/api';
-import { colors } from '../../src/constants/config';
+import { colors as staticColors } from '../../src/constants/config';
 
 export default function RepDashboard() {
   const router = useRouter();
   const { user, signOut } = useAuth();
+  const { colors, isDark } = useTheme();
+
+  const handleSignOut = () => {
+    Alert.alert(
+      'Sign Out',
+      'Are you sure you want to sign out?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Sign Out',
+          style: 'destructive',
+          onPress: async () => {
+            await signOut();
+            router.replace('/');
+          },
+        },
+      ]
+    );
+  };
 
   const { data: deals, isLoading: dealsLoading, refetch: refetchDeals } = useQuery({
     queryKey: ['deals'],
@@ -86,20 +106,36 @@ export default function RepDashboard() {
 
   // Pipeline stats
   const activeDeals = deals?.filter(d => !['complete', 'cancelled', 'lead'].includes(d.status)) || [];
-  const pipelineValue = activeDeals.reduce((sum, d) => sum + (d.rcv || d.total_price || 0), 0);
+
+  // Helper to safely parse numeric values
+  const safeNumber = (val: any): number => {
+    if (val === null || val === undefined || val === '') return 0;
+    const num = typeof val === 'number' ? val : Number(val);
+    if (isNaN(num) || !isFinite(num)) return 0;
+    return num;
+  };
+
+  const pipelineValue = activeDeals.reduce((sum, d) => {
+    const rcv = safeNumber(d.rcv);
+    const totalPrice = safeNumber(d.total_price);
+    const value = rcv > 0 ? rcv : totalPrice;
+    return sum + value;
+  }, 0);
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header Bar - matching web */}
-      <View style={styles.headerBar}>
+      <View style={[styles.headerBar, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <View style={styles.headerLeft}>
-          <View style={styles.logoContainer}>
-            <Text style={styles.logoText}>TP</Text>
-          </View>
-          <Text style={styles.headerTitle}>Dashboard</Text>
+          <Image
+            source={require('../../assets/logo.png')}
+            style={styles.headerLogo}
+            resizeMode="contain"
+          />
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Dashboard</Text>
         </View>
-        <TouchableOpacity onPress={signOut} style={styles.signOutButton}>
-          <Ionicons name="log-out-outline" size={22} color="#6B7280" />
+        <TouchableOpacity onPress={handleSignOut} style={styles.signOutButton}>
+          <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
         </TouchableOpacity>
       </View>
 
@@ -112,40 +148,40 @@ export default function RepDashboard() {
       >
         {/* Lead Generation KPI Cards - matching web */}
         <View style={styles.kpiGrid}>
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>Total Leads</Text>
-              <Text style={styles.kpiValue}>{leadStats.totalLeads}</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Total Leads</Text>
+              <Text style={[styles.kpiValue, { color: colors.foreground }]}>{leadStats.totalLeads}</Text>
             </View>
             <View style={[styles.kpiIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
               <Ionicons name="people" size={20} color="#3B82F6" />
             </View>
           </View>
 
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>Today</Text>
-              <Text style={styles.kpiValue}>{leadStats.todayAppointments}</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Today</Text>
+              <Text style={[styles.kpiValue, { color: colors.foreground }]}>{leadStats.todayAppointments}</Text>
             </View>
             <View style={[styles.kpiIcon, { backgroundColor: 'rgba(201, 162, 77, 0.1)' }]}>
               <Ionicons name="calendar" size={20} color={colors.primary} />
             </View>
           </View>
 
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>This Week</Text>
-              <Text style={styles.kpiValue}>{leadStats.thisWeekAppointments}</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>This Week</Text>
+              <Text style={[styles.kpiValue, { color: colors.foreground }]}>{leadStats.thisWeekAppointments}</Text>
             </View>
             <View style={[styles.kpiIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
               <Ionicons name="trending-up" size={20} color="#22C55E" />
             </View>
           </View>
 
-          <View style={styles.kpiCard}>
+          <View style={[styles.kpiCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <View style={styles.kpiContent}>
-              <Text style={styles.kpiLabel}>Conversion</Text>
-              <Text style={styles.kpiValue}>{leadStats.conversionRate}%</Text>
+              <Text style={[styles.kpiLabel, { color: colors.mutedForeground }]}>Conversion</Text>
+              <Text style={[styles.kpiValue, { color: colors.foreground }]}>{leadStats.conversionRate}%</Text>
             </View>
             <View style={[styles.kpiIcon, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
               <Ionicons name="checkmark-done" size={20} color="#8B5CF6" />
@@ -155,24 +191,24 @@ export default function RepDashboard() {
 
         {/* Recent Activity */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Recent Activity</Text>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Recent Activity</Text>
           {recentActivity.length === 0 ? (
-            <View style={styles.emptyCard}>
-              <Text style={styles.emptyText}>No recent activity</Text>
+            <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No recent activity</Text>
             </View>
           ) : (
             recentActivity.map((pin) => (
-              <View key={pin.id} style={styles.activityCard}>
+              <View key={pin.id} style={[styles.activityCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
                 <View style={styles.activityRow}>
                   <View style={styles.activityInfo}>
-                    <Text style={styles.activityTitle}>
+                    <Text style={[styles.activityTitle, { color: colors.foreground }]}>
                       {pin.homeowner_name || 'Unknown'} - {pin.status}
                     </Text>
-                    <Text style={styles.activityDate}>
+                    <Text style={[styles.activityDate, { color: colors.mutedForeground }]}>
                       {format(new Date(pin.created_at), 'MMM d, h:mm a')}
                     </Text>
                   </View>
-                  <Text style={styles.activityAddress} numberOfLines={1}>
+                  <Text style={[styles.activityAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                     {pin.address ? pin.address.split(',')[0] : 'No address'}
                   </Text>
                 </View>
@@ -183,32 +219,32 @@ export default function RepDashboard() {
 
         {/* Pipeline Overview */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Pipeline Overview</Text>
-          <View style={styles.pipelineCard}>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Pipeline Overview</Text>
+          <View style={[styles.pipelineCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.pipelineRow}>
               <View style={styles.pipelineStat}>
                 <Ionicons name="document-text" size={24} color={colors.primary} />
                 <View>
-                  <Text style={styles.pipelineValue}>{activeDeals.length}</Text>
-                  <Text style={styles.pipelineLabel}>Active Deals</Text>
+                  <Text style={[styles.pipelineValue, { color: colors.foreground }]}>{activeDeals.length}</Text>
+                  <Text style={[styles.pipelineLabel, { color: colors.mutedForeground }]}>Active Deals</Text>
                 </View>
               </View>
-              <View style={styles.pipelineDivider} />
+              <View style={[styles.pipelineDivider, { backgroundColor: colors.border }]} />
               <View style={styles.pipelineStat}>
                 <Ionicons name="cash" size={24} color="#22C55E" />
                 <View>
                   <Text style={[styles.pipelineValue, { color: '#22C55E' }]}>
-                    ${(pipelineValue / 1000).toFixed(0)}k
+                    ${pipelineValue >= 1000000 ? `${(pipelineValue / 1000000).toFixed(1)}M` : pipelineValue >= 1000 ? `${(pipelineValue / 1000).toFixed(0)}k` : Math.round(pipelineValue).toString()}
                   </Text>
-                  <Text style={styles.pipelineLabel}>Pipeline Value</Text>
+                  <Text style={[styles.pipelineLabel, { color: colors.mutedForeground }]}>Pipeline Value</Text>
                 </View>
               </View>
             </View>
             <TouchableOpacity
-              style={styles.viewPipelineButton}
+              style={[styles.viewPipelineButton, { borderTopColor: colors.border }]}
               onPress={() => router.push('/(rep)/deals')}
             >
-              <Text style={styles.viewPipelineText}>View Pipeline</Text>
+              <Text style={[styles.viewPipelineText, { color: colors.primary }]}>View Pipeline</Text>
               <Ionicons name="chevron-forward" size={16} color={colors.primary} />
             </TouchableOpacity>
           </View>
@@ -216,46 +252,46 @@ export default function RepDashboard() {
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionLabel}>Quick Actions</Text>
+          <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>Quick Actions</Text>
           <View style={styles.actionsGrid}>
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
               onPress={() => router.push({ pathname: '/(rep)/deals/new' })}
             >
               <View style={[styles.actionIcon, { backgroundColor: 'rgba(201, 162, 77, 0.1)' }]}>
                 <Ionicons name="add-circle" size={24} color={colors.primary} />
               </View>
-              <Text style={styles.actionLabel}>New Deal</Text>
+              <Text style={[styles.actionLabel, { color: colors.foreground }]}>New Deal</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
               onPress={() => router.push('/(rep)/map')}
             >
               <View style={[styles.actionIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
                 <Ionicons name="map" size={24} color="#3B82F6" />
               </View>
-              <Text style={styles.actionLabel}>Add Pin</Text>
+              <Text style={[styles.actionLabel, { color: colors.foreground }]}>Add Pin</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
               onPress={() => router.push('/(rep)/calendar')}
             >
               <View style={[styles.actionIcon, { backgroundColor: 'rgba(139, 92, 246, 0.1)' }]}>
                 <Ionicons name="calendar" size={24} color="#8B5CF6" />
               </View>
-              <Text style={styles.actionLabel}>Calendar</Text>
+              <Text style={[styles.actionLabel, { color: colors.foreground }]}>Calendar</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={styles.actionCard}
+              style={[styles.actionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
               onPress={() => router.push('/(rep)/deals')}
             >
               <View style={[styles.actionIcon, { backgroundColor: 'rgba(34, 197, 94, 0.1)' }]}>
                 <Ionicons name="list" size={24} color="#22C55E" />
               </View>
-              <Text style={styles.actionLabel}>My Deals</Text>
+              <Text style={[styles.actionLabel, { color: colors.foreground }]}>My Deals</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -286,18 +322,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
   },
-  logoContainer: {
-    width: 32,
-    height: 32,
-    backgroundColor: colors.secondary,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoText: {
-    color: colors.primary,
-    fontWeight: 'bold',
-    fontSize: 14,
+  headerLogo: {
+    width: 36,
+    height: 36,
   },
   headerTitle: {
     fontSize: 18,
@@ -451,7 +478,7 @@ const styles = StyleSheet.create({
   viewPipelineText: {
     fontSize: 14,
     fontWeight: '500',
-    color: colors.primary,
+    color: staticColors.primary,
   },
   actionsGrid: {
     flexDirection: 'row',

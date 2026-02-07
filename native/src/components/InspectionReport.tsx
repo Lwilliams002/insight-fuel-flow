@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Deal, getSignedFileUrl } from '../services/api';
+import { Deal, getSignedFileUrl, uploadFile, dealsApi } from '../services/api';
 import { colors } from '../constants/config';
 import { getLogoBase64, companyBranding } from '../constants/branding';
 
@@ -326,6 +326,21 @@ export function InspectionReport({ deal, onClose }: InspectionReportProps) {
 
     try {
       const { uri } = await Print.printToFileAsync({ html });
+
+      // Save the PDF to Wasabi storage
+      try {
+        const fileName = `Inspection_Report_${deal.homeowner_name.replace(/\s+/g, '_')}_${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+        const uploadResult = await uploadFile(uri, fileName, 'application/pdf', 'reports', deal.id);
+
+        if (uploadResult) {
+          console.log(`Inspection report saved to Wasabi: ${uploadResult.key}`);
+          Alert.alert('Success', 'Inspection report generated and saved to cloud storage.');
+        }
+      } catch (uploadError) {
+        console.warn('Failed to upload inspection report to storage:', uploadError);
+        // Continue with sharing even if upload fails
+      }
+
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
         dialogTitle: `Inspection Report - ${deal.homeowner_name}`,

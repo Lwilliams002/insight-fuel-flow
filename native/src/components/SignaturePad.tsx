@@ -86,8 +86,8 @@ export function SignaturePad({
           ref={signatureRef}
           onOK={handleSignature}
           onEmpty={handleEmpty}
-          onEnd={handleEnd}
           onBegin={handleBegin}
+          onEnd={handleEnd}
           webStyle={webStyle}
           backgroundColor="white"
           penColor="black"

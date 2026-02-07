@@ -30,7 +30,11 @@ interface RepDealWorkflowProps {
   onUpdate: () => void;
 }
 
-// Step configuration for rep workflow - Based on owner's requirements
+// Step configuration for rep workflow - Based on owner's requirements:
+// 1. Knock → 2. Inspect → 3. File Claim → 4. Sign → 5. Meet Adjuster →
+// 6. Await Approval → 7. Approved → 8. Collect ACV → 9. Collect Deductible →
+// 10. Select Materials → 11. Schedule Install → 12. Installed →
+// 13. Completion Form → 14. Invoice → 15. Collect Depreciation → 16. Complete → 17. Paid
 const workflowSteps: {
   status: DealStatus;
   label: string;
@@ -41,81 +45,133 @@ const workflowSteps: {
 }[] = [
   {
     status: 'lead',
-    label: 'Lead',
-    description: 'Schedule the inspection with homeowner',
+    label: 'Schedule & Complete Inspection',
+    description: 'Take inspection photos and show homeowner the report',
     icon: Calendar,
-    requiredFields: [
-      { field: 'install_date', label: 'Inspection Date', type: 'date' },
-    ],
+    requiredFields: [],
   },
   {
     status: 'inspection_scheduled',
     label: 'File Claim & Sign Agreement',
-    description: 'File insurance claim and get agreement signed',
+    description: 'Call insurance, get adjuster info, sign agreement with homeowner',
     icon: FileSignature,
     requiredFields: [
       { field: 'insurance_company', label: 'Insurance Company', type: 'text' },
+      { field: 'policy_number', label: 'Policy Number', type: 'text' },
       { field: 'claim_number', label: 'Claim Number', type: 'text' },
-      { field: 'contract_signed', label: 'Agreement Signature', type: 'signature' },
+      { field: 'adjuster_name', label: 'Adjuster Name', type: 'text' },
+      { field: 'adjuster_meeting_date', label: 'Adjuster Appointment Date', type: 'date' },
     ],
   },
   {
     status: 'claim_filed',
-    label: 'Adjuster Appointment',
-    description: 'Schedule and meet with the insurance adjuster',
+    label: 'Meet Adjuster',
+    description: 'Meet adjuster at appointment to inspect the roof',
     icon: ClipboardCheck,
-    requiredFields: [
-      { field: 'adjuster_name', label: 'Adjuster Name', type: 'text' },
-      { field: 'adjuster_meeting_date', label: 'Adjuster Meeting Date', type: 'date' },
-    ],
-  },
-  {
-    status: 'collect_acv',
-    label: 'Collect ACV',
-    description: 'Collect ACV check from insurance',
-    icon: Building2,
-    requiredFields: [
-      { field: 'acv', label: 'ACV (Actual Cash Value)', type: 'number' },
-    ],
-  },
-  {
-    status: 'collect_deductible',
-    label: 'Collect Deductible',
-    description: 'Collect deductible from homeowner',
-    icon: Building2,
-    requiredFields: [
-      { field: 'deductible', label: 'Deductible', type: 'number' },
-    ],
+    requiredFields: [],
   },
   {
     status: 'signed',
+    label: 'Awaiting Insurance Decision',
+    description: 'Waiting for insurance approval/denial/partial approval',
+    icon: ClipboardCheck,
+    requiredFields: [],
+  },
+  {
+    status: 'adjuster_met',
+    label: 'Awaiting Admin Approval',
+    description: 'Upload loss statement. Wait for admin to approve financials.',
+    icon: Lock,
+    requiredFields: [],
+    adminOnly: true,
+  },
+  {
+    status: 'awaiting_approval',
+    label: 'Approved',
+    description: 'Insurance approved! Admin reviewed financials.',
+    icon: Check,
+    requiredFields: [],
+    adminOnly: true,
+  },
+  {
+    status: 'approved',
+    label: 'Collect ACV Payment',
+    description: 'Collect ACV check from homeowner and give them a receipt',
+    icon: Building2,
+    requiredFields: [],
+  },
+  {
+    status: 'acv_collected',
+    label: 'Collect Deductible',
+    description: 'Collect deductible from homeowner and give them a receipt',
+    icon: Building2,
+    requiredFields: [],
+  },
+  {
+    status: 'deductible_collected',
+    label: 'Select Materials',
+    description: 'Pick roof materials and colors with homeowner',
+    icon: ClipboardCheck,
+    requiredFields: [],
+  },
+  {
+    status: 'materials_selected',
     label: 'Ready for Install',
     description: 'All info collected - waiting for admin to schedule install',
-    icon: User,
+    icon: Lock,
     requiredFields: [],
-    adminOnly: true, // Admin takes over for install
+    adminOnly: true,
   },
   {
     status: 'install_scheduled',
-    label: 'Install Scheduled',
-    description: 'Installation scheduled',
+    label: 'Installation In Progress',
+    description: 'Crew is installing. They will upload progress & completion photos.',
     icon: Lock,
     requiredFields: [],
     adminOnly: true,
   },
   {
     status: 'installed',
-    label: 'Installed',
-    description: 'Installation complete - collect final payment',
-    icon: Check,
+    label: 'Get Completion Signature',
+    description: 'Have homeowner sign the installation completion form',
+    icon: FileSignature,
+    requiredFields: [],
+  },
+  {
+    status: 'completion_signed',
+    label: 'Invoice Sent',
+    description: 'Final invoice sent to insurance for depreciation',
+    icon: Lock,
     requiredFields: [],
     adminOnly: true,
   },
   {
+    status: 'invoice_sent',
+    label: 'Collect Depreciation',
+    description: 'Collect depreciation payment, give receipt + roof certificate',
+    icon: Building2,
+    requiredFields: [],
+  },
+  {
+    status: 'depreciation_collected',
+    label: 'Request Commission',
+    description: 'All payments collected! Request your commission.',
+    icon: Check,
+    requiredFields: [],
+  },
+  {
     status: 'complete',
-    label: 'Collect RCV Final Payment',
-    description: 'Collect depreciation/final payment',
+    label: 'Waiting for Commission',
+    description: 'Waiting for admin to approve commission payment',
     icon: Lock,
+    requiredFields: [],
+    adminOnly: true,
+  },
+  {
+    status: 'paid',
+    label: 'Paid!',
+    description: 'Commission has been paid! 💰',
+    icon: Check,
     requiredFields: [],
     adminOnly: true,
   },

@@ -10,6 +10,7 @@ import {
   TextInput,
   TouchableOpacity,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -130,9 +131,15 @@ export default function LoginScreen() {
         >
           {/* Logo */}
           <View style={styles.header}>
-            <Text style={styles.logoText}>TITAN PRIME</Text>
-            <Text style={styles.logoSubtext}>SOLUTIONS</Text>
-            <Text style={styles.tagline}>Professional Roofing & Construction</Text>
+            <Image
+              source={require('../../assets/logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <View style={styles.titleRow}>
+              <Text style={styles.logoTextGold}>PRIME</Text>
+              <Text style={styles.logoTextWhite}> PROS</Text>
+            </View>
           </View>
 
           {/* Form */}
@@ -204,7 +211,26 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 40,
+  },
+  logo: {
+    width: 200,
+    height: 140,
+    marginBottom: 16,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  logoTextGold: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#C9A24D',
+  },
+  logoTextWhite: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   logoText: {
     fontSize: 28,

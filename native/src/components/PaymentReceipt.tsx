@@ -4,7 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { Deal } from '../services/api';
+import * as FileSystem from 'expo-file-system';
+import { Deal, uploadFile, dealsApi } from '../services/api';
 import { colors } from '../constants/config';
 import { getLogoBase64, companyBranding } from '../constants/branding';
 import { SignaturePad } from './SignaturePad';
@@ -27,6 +28,7 @@ interface ReceiptData {
   paymentMethod: string;
   checkNumber: string;
   datePaid: string;
+  receiptUrl?: string;
 }
 
 const receiptConfig: Record<ReceiptType, { title: string; description: string; fieldLabel: string; icon: IoniconsName }> = {
@@ -71,6 +73,15 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
   const [logoBase64, setLogoBase64] = useState<string>('');
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
+
+  // Check if material specifications are complete (required for ACV receipt)
+  const hasMaterialSpecs = !!(
+    deal.material_category &&
+    deal.material_color
+  );
+
+  // For ACV receipt, material specs are required
+  const canGenerateReceipt = type !== 'acv' || hasMaterialSpecs;
 
   // Load logo on mount
   useEffect(() => {
@@ -261,6 +272,36 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
             </div>
           </div>
           
+          ${type === 'acv' ? `
+          <div style="background: #F9FAFB; border-radius: 8px; padding: 16px; margin-bottom: 20px; border: 1px solid #E5E7EB;">
+            <div style="font-size: 14px; font-weight: 600; color: #374151; margin-bottom: 12px;">Material Specifications</div>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+              <div style="flex: 1; min-width: 120px;">
+                <div class="info-label">Category</div>
+                <div style="font-size: 14px; font-weight: 500; color: #111;">${deal.material_category || 'N/A'}</div>
+              </div>
+              ${(deal.material_category === 'Metal' || deal.material_category === 'Architectural Metal') ? `
+              <div style="flex: 1; min-width: 120px;">
+                <div class="info-label">Metal Type</div>
+                <div style="font-size: 14px; font-weight: 500; color: #111;">${deal.material_type || 'N/A'}</div>
+              </div>
+              ` : ''}
+              <div style="flex: 1; min-width: 120px;">
+                <div class="info-label">Material Color</div>
+                <div style="font-size: 14px; font-weight: 500; color: #111;">${deal.material_color || 'N/A'}</div>
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <div class="info-label">Drip Edge</div>
+                <div style="font-size: 14px; font-weight: 500; color: #111;">${deal.drip_edge || 'N/A'}</div>
+              </div>
+              <div style="flex: 1; min-width: 120px;">
+                <div class="info-label">Vent Color</div>
+                <div style="font-size: 14px; font-weight: 500; color: #111;">${deal.vent_color || 'N/A'}</div>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+          
           <div class="amount-card">
             <div class="amount-label">${config.description}</div>
             <div class="amount-value">$${parseFloat(amount || '0').toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
@@ -296,6 +337,29 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
 
     try {
       const { uri } = await Print.printToFileAsync({ html });
+
+      // Save the PDF to Wasabi storage
+      let receiptUrl: string | undefined;
+      try {
+        const fileName = `${config.title.replace(/\s+/g, '_')}_${deal.homeowner_name.replace(/\s+/g, '_')}_${datePaid}.pdf`;
+        const uploadResult = await uploadFile(uri, fileName, 'application/pdf', 'receipts', deal.id);
+
+        if (uploadResult) {
+          receiptUrl = uploadResult.key;
+
+          // Update the deal with the receipt URL based on type
+          const updateField = type === 'acv' ? 'acv_receipt_url'
+            : type === 'deductible' ? 'deductible_receipt_url'
+            : 'depreciation_receipt_url';
+
+          await dealsApi.update(deal.id, { [updateField]: receiptUrl });
+          console.log(`Receipt saved to Wasabi: ${receiptUrl}`);
+        }
+      } catch (uploadError) {
+        console.warn('Failed to upload receipt to storage:', uploadError);
+        // Continue with sharing even if upload fails
+      }
+
       await Sharing.shareAsync(uri, {
         mimeType: 'application/pdf',
         dialogTitle: `${config.title} - ${deal.homeowner_name}`,
@@ -309,7 +373,13 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
           paymentMethod,
           checkNumber,
           datePaid,
+          receiptUrl,
         });
+      }
+
+      // Show success message if saved to cloud
+      if (receiptUrl) {
+        Alert.alert('Success', 'Receipt generated and saved to cloud storage.');
       }
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -458,11 +528,24 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
           <Text style={styles.summaryAmount}>${parseFloat(amount || '0').toLocaleString()}</Text>
         </View>
 
+        {/* Material Specs Warning for ACV */}
+        {type === 'acv' && !hasMaterialSpecs && (
+          <View style={styles.warningCard}>
+            <Ionicons name="warning" size={24} color="#F59E0B" />
+            <View style={styles.warningContent}>
+              <Text style={styles.warningTitle}>Material Specifications Required</Text>
+              <Text style={styles.warningText}>
+                Please fill out the material specifications (category, color) in the Insurance tab before generating the ACV receipt.
+              </Text>
+            </View>
+          </View>
+        )}
+
         {/* Generate Button */}
         <TouchableOpacity
-          style={[styles.generateButton, (generating || !signatureDataUrl) && styles.generateButtonDisabled]}
+          style={[styles.generateButton, (generating || !signatureDataUrl || !canGenerateReceipt) && styles.generateButtonDisabled]}
           onPress={generatePDF}
-          disabled={generating || !signatureDataUrl}
+          disabled={generating || !signatureDataUrl || !canGenerateReceipt}
         >
           {generating ? (
             <ActivityIndicator size="small" color="#FFF" />
@@ -473,6 +556,10 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
             </>
           )}
         </TouchableOpacity>
+
+        {!canGenerateReceipt && (
+          <Text style={styles.disabledHint}>Complete material specifications to generate receipt</Text>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -541,7 +628,14 @@ const styles = StyleSheet.create({
   summaryLabel: { fontSize: 14, color: 'rgba(255,255,255,0.8)', marginBottom: 4 },
   summaryAmount: { fontSize: 32, fontWeight: 'bold', color: '#FFF' },
 
+  warningCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, margin: 16, marginBottom: 0, backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: 16, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)' },
+  warningContent: { flex: 1 },
+  warningTitle: { fontSize: 14, fontWeight: '600', color: '#92400E', marginBottom: 4 },
+  warningText: { fontSize: 13, color: '#92400E', lineHeight: 18 },
+
   generateButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, margin: 16, backgroundColor: '#22C55E', paddingVertical: 16, borderRadius: 12 },
   generateButtonDisabled: { opacity: 0.6 },
   generateButtonText: { color: '#FFF', fontSize: 16, fontWeight: '600' },
+
+  disabledHint: { fontSize: 12, color: '#F59E0B', textAlign: 'center', marginTop: -8, marginBottom: 16 },
 });

@@ -273,14 +273,39 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async (): Promise<void> => {
-    const cognitoUser = userPool.getCurrentUser();
-    if (cognitoUser) {
-      cognitoUser.signOut();
+    try {
+      const cognitoUser = userPool.getCurrentUser();
+      if (cognitoUser) {
+        // Global sign out to invalidate all tokens
+        cognitoUser.globalSignOut({
+          onSuccess: () => {
+            console.log('[Auth] Global sign out successful');
+          },
+          onFailure: (err) => {
+            console.log('[Auth] Global sign out failed, using local sign out:', err);
+            cognitoUser.signOut();
+          },
+        });
+      }
+
+      // Clear the Cognito storage
+      cognitoStorage.clear();
+
+      // Clear all state
+      setUser(null);
+      setSession(null);
+      setRole(null);
+      setNewPasswordRequired(false);
+
+      console.log('[Auth] Sign out complete');
+    } catch (error) {
+      console.error('[Auth] Sign out error:', error);
+      // Still clear state even if there's an error
+      setUser(null);
+      setSession(null);
+      setRole(null);
+      setNewPasswordRequired(false);
     }
-    setUser(null);
-    setSession(null);
-    setRole(null);
-    setNewPasswordRequired(false);
   };
 
   const getIdToken = async (): Promise<string | null> => {

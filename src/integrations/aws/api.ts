@@ -68,24 +68,33 @@ export async function getSignedFileUrl(key: string): Promise<string | null> {
 
 // ============ DEALS API ============
 
-// Deal status follows the Sign → Build → Collect workflow from training
+// Deal status follows the owner's workflow:
+// 1. Knock → 2. Inspect → 3. File Claim → 4. Sign → 5. Meet Adjuster →
+// 6. Await Approval → 7. Approved → 8. Collect ACV → 9. Collect Deductible →
+// 10. Select Materials → 11. Schedule Install → 12. Installed →
+// 13. Completion Form → 14. Invoice → 15. Collect Depreciation → 16. Complete → 17. Paid
 export type DealStatus =
   // SIGN PHASE
   | 'lead'
   | 'inspection_scheduled'
   | 'claim_filed'
-  | 'adjuster_met'
-  | 'approved'
   | 'signed'
+  | 'adjuster_met'
+  | 'awaiting_approval'
+  | 'approved'
   // BUILD PHASE
-  | 'collect_acv'
-  | 'collect_deductible'
+  | 'acv_collected'
+  | 'deductible_collected'
+  | 'materials_selected'
   | 'install_scheduled'
   | 'installed'
-  // COLLECT PHASE
+  // FINALIZING PHASE
+  | 'completion_signed'
   | 'invoice_sent'
   | 'depreciation_collected'
+  // COMPLETE PHASE
   | 'complete'
+  | 'paid'
   // Other
   | 'cancelled'
   | 'on_hold'
@@ -95,7 +104,8 @@ export type DealStatus =
   | 'materials_ordered'
   | 'materials_delivered'
   | 'adjuster_scheduled'
-  | 'paid';
+  | 'collect_acv'
+  | 'collect_deductible';
 
 export interface Deal {
   id: string;

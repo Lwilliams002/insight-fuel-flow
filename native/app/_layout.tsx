@@ -9,6 +9,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StyleSheet } from 'react-native';
 import { AuthProvider, useAuth } from '../src/contexts/AuthContext';
+import { ThemeProvider } from '../src/contexts/ThemeContext';
 import { setGetIdTokenFn } from '../src/services/api';
 
 const queryClient = new QueryClient({
@@ -55,7 +56,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
           <AuthProvider>
-            <RootLayoutNav />
+            <ThemeProvider>
+              <RootLayoutNav />
+            </ThemeProvider>
           </AuthProvider>
         </QueryClientProvider>
       </SafeAreaProvider>

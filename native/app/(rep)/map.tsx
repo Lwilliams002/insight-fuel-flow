@@ -1,17 +1,16 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { View, Text, TouchableOpacity, Alert, Platform, StyleSheet, Modal, TextInput, ScrollView, KeyboardAvoidingView, Animated, Dimensions, Switch, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE, LongPressEvent } from 'react-native-maps';
 import * as Location from 'expo-location';
-import * as DocumentPicker from 'expo-document-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { format } from 'date-fns';
-import { pinsApi, dealsApi, Pin, uploadFile } from '../../src/services/api';
-import { colors } from '../../src/constants/config';
+import { pinsApi, dealsApi, Pin } from '../../src/services/api';
+import { colors as staticColors } from '../../src/constants/config';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
-type MapType = 'standard' | 'satellite' | 'hybrid';
+type MapType = 'standard' | 'hybrid';
 type PinStatus = 'lead' | 'followup' | 'appointment' | 'installed' | 'renter' | 'not_interested';
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -34,63 +33,30 @@ const statusOptions: { value: PinStatus; label: string; color: string }[] = [
   { value: 'not_interested', label: 'Not Interested', color: '#EF4444' },
 ];
 
-// Helper to generate time options
-const generateTimeOptions = () => {
-  const times = [];
-  for (let h = 6; h <= 21; h++) {
-    for (let m = 0; m < 60; m += 30) {
-      const hour = h > 12 ? h - 12 : h === 0 ? 12 : h;
-      const ampm = h >= 12 ? 'PM' : 'AM';
-      const label = `${hour}:${m.toString().padStart(2, '0')} ${ampm}`;
-      const value = `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`;
-      times.push({ label, value });
-    }
-  }
-  return times;
-};
-
-const timeOptions = generateTimeOptions();
-
 export default function MapScreen() {
   const mapRef = useRef<MapView>(null);
   const queryClient = useQueryClient();
   const router = useRouter();
+  const { pinId } = useLocalSearchParams<{ pinId?: string }>();
+  const { colors, isDark } = useTheme();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<MapType>('standard');
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
+  const [uploadLater, setUploadLater] = useState(true);
+  const [initialPinIdHandled, setInitialPinIdHandled] = useState<string | null>(null);
 
   // New pin modal state
   const [showNewPinModal, setShowNewPinModal] = useState(false);
   const [newPinCoords, setNewPinCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [isLoadingAddress, setIsLoadingAddress] = useState(false);
   const [newPinForm, setNewPinForm] = useState({
     homeowner_name: '',
     homeowner_phone: '',
     homeowner_email: '',
     address: '',
-    city: '',
-    state: '',
-    zip_code: '',
     status: 'lead' as PinStatus,
     notes: '',
-    // Appointment fields
-    appointment_date: '',
-    appointment_start_time: '09:00',
-    appointment_end_time: '10:00',
   });
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
-
-  // Convert to deal state
-  const [showConvertModal, setShowConvertModal] = useState(false);
-  const [uploadLater, setUploadLater] = useState(false);
-  const [contractFile, setContractFile] = useState<{ uri: string; name: string; type: string } | null>(null);
-  const [isConverting, setIsConverting] = useState(false);
-  const [pendingPinId, setPendingPinId] = useState<string | null>(null);
-
-  // Date picker state
-  const [showDatePicker, setShowDatePicker] = useState(false);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
 
   const { data: pins, refetch } = useQuery({
     queryKey: ['pins'],
@@ -110,20 +76,134 @@ export default function MapScreen() {
     }, [refetch])
   );
 
+  // Handle pinId from URL params (when navigating from calendar)
+  useEffect(() => {
+    if (pinId && pins && pins.length > 0 && initialPinIdHandled !== pinId) {
+      const pin = pins.find(p => p.id === pinId);
+      if (pin) {
+        setInitialPinIdHandled(pinId);
+        // Center map on the pin
+        if (mapRef.current && pin.latitude && pin.longitude) {
+          mapRef.current.animateToRegion({
+            latitude: pin.latitude,
+            longitude: pin.longitude,
+            latitudeDelta: 0.01,
+            longitudeDelta: 0.01,
+          }, 500);
+        }
+        // Set up pin details and open modal after a short delay
+        setTimeout(() => {
+          setSelectedPin(pin);
+          setEditPinForm({
+            homeowner_name: pin.homeowner_name || '',
+            homeowner_phone: pin.homeowner_phone || '',
+            homeowner_email: pin.homeowner_email || '',
+            address: pin.address || '',
+            status: (pin.status as PinStatus) || 'lead',
+            notes: pin.notes || '',
+          });
+          setShowPinDetailModal(true);
+          Animated.spring(pinDetailSlideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            tension: 65,
+            friction: 11,
+          }).start();
+        }, 600);
+      }
+    }
+  }, [pinId, pins, initialPinIdHandled, pinDetailSlideAnim]);
+
   const createPinMutation = useMutation({
     mutationFn: async (pinData: Partial<Pin>) => {
       const response = await pinsApi.create(pinData);
       if (response.error) throw new Error(response.error);
       return response.data;
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['pins'] });
+    onSuccess: async () => {
+      // Invalidate and refetch to ensure map updates immediately
+      await queryClient.invalidateQueries({ queryKey: ['pins'] });
+      await refetch();
       Alert.alert('Success', 'Pin added successfully');
     },
     onError: (error) => {
       Alert.alert('Error', error.message || 'Failed to add pin');
     },
   });
+
+  // Update pin mutation
+  const updatePinMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<Pin> }) => {
+      const response = await pinsApi.update(id, data);
+      if (response.error) throw new Error(response.error);
+      return response.data;
+    },
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ['pins'] });
+      await refetch();
+      Alert.alert('Success', 'Pin updated successfully');
+      closePinDetailModal();
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message || 'Failed to update pin');
+    },
+  });
+
+  // Convert pin to deal mutation
+  const convertToDealMutation = useMutation({
+    mutationFn: async (pinId: string) => {
+      const response = await dealsApi.createFromPin(pinId);
+      if (response.error) throw new Error(response.error);
+      return response.data;
+    },
+    onSuccess: async (deal) => {
+      await queryClient.invalidateQueries({ queryKey: ['pins'] });
+      await queryClient.invalidateQueries({ queryKey: ['deals'] });
+      await refetch();
+      
+      // Close the modal first
+      setShowPinDetailModal(false);
+      setSelectedPin(null);
+      pinDetailSlideAnim.setValue(SCREEN_HEIGHT);
+      
+      // Show alert after a brief delay to let modal close
+      setTimeout(() => {
+        Alert.alert(
+          'Success',
+          'Pin converted to deal successfully!',
+          [
+            {
+              text: 'View Deal',
+              onPress: () => {
+                if (deal?.id) {
+                  // Use setTimeout to ensure alert is fully dismissed before navigation
+                  setTimeout(() => {
+                    router.push(`/(rep)/deals/${deal.id}`);
+                  }, 100);
+                }
+              },
+            },
+            { text: 'OK' },
+          ]
+        );
+      }, 300);
+    },
+    onError: (error) => {
+      Alert.alert('Error', error.message || 'Failed to convert to deal');
+    },
+  });
+
+  // Pin detail modal state
+  const [showPinDetailModal, setShowPinDetailModal] = useState(false);
+  const [editPinForm, setEditPinForm] = useState({
+    homeowner_name: '',
+    homeowner_phone: '',
+    homeowner_email: '',
+    address: '',
+    status: 'lead' as PinStatus,
+    notes: '',
+  });
+  const pinDetailSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   useEffect(() => {
     (async () => {
@@ -144,42 +224,87 @@ export default function MapScreen() {
   const handleLongPress = async (event: LongPressEvent) => {
     const { latitude, longitude } = event.nativeEvent.coordinate;
     setNewPinCoords({ latitude, longitude });
+
+    // Reverse geocode to get address
+    let addressString = '';
+    try {
+      const reverseGeocode = await Location.reverseGeocodeAsync({ latitude, longitude });
+      if (reverseGeocode && reverseGeocode.length > 0) {
+        const location = reverseGeocode[0];
+        const parts = [];
+        if (location.streetNumber) parts.push(location.streetNumber);
+        if (location.street) parts.push(location.street);
+        addressString = parts.join(' ');
+
+        // Also capture city, state, zip for the full address
+        if (location.city) addressString += addressString ? `, ${location.city}` : location.city;
+        if (location.region) addressString += `, ${location.region}`;
+        if (location.postalCode) addressString += ` ${location.postalCode}`;
+      }
+    } catch (error) {
+      console.log('Reverse geocode error:', error);
+    }
+
     setNewPinForm({
       homeowner_name: '',
       homeowner_phone: '',
       homeowner_email: '',
-      address: '',
-      city: '',
-      state: '',
-      zip_code: '',
+      address: addressString,
       status: 'lead',
       notes: '',
-      appointment_date: format(new Date(), 'yyyy-MM-dd'),
-      appointment_start_time: '09:00',
-      appointment_end_time: '10:00',
     });
     openNewPinModal();
+  };
 
-    // Reverse geocode to get address
-    setIsLoadingAddress(true);
-    try {
-      const results = await Location.reverseGeocodeAsync({ latitude, longitude });
-      if (results && results.length > 0) {
-        const addr = results[0];
-        const streetAddress = [addr.streetNumber, addr.street].filter(Boolean).join(' ');
-        setNewPinForm(prev => ({
-          ...prev,
-          address: streetAddress || '',
-          city: addr.city || '',
-          state: addr.region || '',
-          zip_code: addr.postalCode || '',
-        }));
-      }
-    } catch (error) {
-      console.log('Reverse geocoding failed:', error);
-    } finally {
-      setIsLoadingAddress(false);
-    }
+  // Handle pin marker press - open detail modal
+  const handlePinPress = (pin: Pin) => {
+    setSelectedPin(pin);
+    setEditPinForm({
+      homeowner_name: pin.homeowner_name || '',
+      homeowner_phone: pin.homeowner_phone || '',
+      homeowner_email: pin.homeowner_email || '',
+      address: pin.address || '',
+      status: (pin.status as PinStatus) || 'lead',
+      notes: pin.notes || '',
+    });
+    openPinDetailModal();
+  };
+
+  const openPinDetailModal = () => {
+    setShowPinDetailModal(true);
+    Animated.spring(pinDetailSlideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+  };
+
+  const closePinDetailModal = () => {
+    Animated.timing(pinDetailSlideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 250,
+      useNativeDriver: true,
+    }).start(() => {
+      setShowPinDetailModal(false);
+      setSelectedPin(null);
+    });
+  };
+
+  const handleUpdatePin = () => {
+    if (!selectedPin) return;
+
+    updatePinMutation.mutate({
+      id: selectedPin.id,
+      data: {
+        status: editPinForm.status,
+        homeowner_name: editPinForm.homeowner_name || null,
+        homeowner_phone: editPinForm.homeowner_phone || null,
+        homeowner_email: editPinForm.homeowner_email || null,
+        address: editPinForm.address || null,
+        notes: editPinForm.notes || null,
+      },
+    });
   };
 
   const openNewPinModal = () => {
@@ -200,90 +325,11 @@ export default function MapScreen() {
     }).start(() => {
       setShowNewPinModal(false);
       setNewPinCoords(null);
-      setContractFile(null);
-      setUploadLater(false);
     });
   };
 
-  // Pick contract document
-  const pickContractDocument = async () => {
-    try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/pdf', 'image/*'],
-        copyToCacheDirectory: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        const file = result.assets[0];
-        setContractFile({
-          uri: file.uri,
-          name: file.name,
-          type: file.mimeType || 'application/octet-stream',
-        });
-      }
-    } catch (error) {
-      Alert.alert('Error', 'Failed to pick document');
-    }
-  };
-
-  // Convert pin to deal
-  const handleConvertToDeal = async (pinId: string) => {
-    setIsConverting(true);
-    try {
-      // If contract file exists, upload it first
-      if (contractFile && !uploadLater) {
-        const uploadResult = await uploadFile(
-          contractFile.uri,
-          contractFile.name,
-          contractFile.type,
-          'contract',
-          undefined,
-          pinId
-        );
-        if (uploadResult) {
-          await pinsApi.update(pinId, { contract_url: uploadResult.key });
-        }
-      }
-
-      // Convert pin to deal
-      const response = await dealsApi.createFromPin(pinId);
-      if (response.error) throw new Error(response.error);
-
-      queryClient.invalidateQueries({ queryKey: ['pins'] });
-      queryClient.invalidateQueries({ queryKey: ['deals'] });
-
-      Alert.alert('Success', 'Deal created successfully!', [
-        { text: 'View Deal', onPress: () => router.push(`/deals/${response.data?.id}`) },
-        { text: 'OK' },
-      ]);
-
-      setShowConvertModal(false);
-      closeNewPinModal();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to convert to deal');
-    } finally {
-      setIsConverting(false);
-    }
-  };
-
-  const handleSaveNewPin = async () => {
+  const handleSaveNewPin = () => {
     if (!newPinCoords) return;
-
-    // Build appointment date if status is appointment
-    let appointmentDate = null;
-    let appointmentEndDate = null;
-    if (newPinForm.status === 'appointment' && newPinForm.appointment_date) {
-      appointmentDate = `${newPinForm.appointment_date}T${newPinForm.appointment_start_time}:00`;
-      appointmentEndDate = `${newPinForm.appointment_date}T${newPinForm.appointment_end_time}:00`;
-    }
-
-    // Combine address parts
-    const fullAddress = [
-      newPinForm.address,
-      newPinForm.city,
-      newPinForm.state,
-      newPinForm.zip_code
-    ].filter(Boolean).join(', ');
 
     createPinMutation.mutate({
       lat: newPinCoords.latitude,
@@ -292,106 +338,14 @@ export default function MapScreen() {
       homeowner_name: newPinForm.homeowner_name || null,
       homeowner_phone: newPinForm.homeowner_phone || null,
       homeowner_email: newPinForm.homeowner_email || null,
-      address: fullAddress || null,
-      city: newPinForm.city || null,
-      state: newPinForm.state || null,
-      zip_code: newPinForm.zip_code || null,
+      address: newPinForm.address || null,
       notes: newPinForm.notes || null,
-      appointment_date: appointmentDate,
-      appointment_end_date: appointmentEndDate,
     });
     closeNewPinModal();
   };
 
-  // Save and convert to deal
-  const handleSaveAndConvert = async () => {
-    if (!newPinCoords) return;
-
-    // Validate appointment has contract or upload later
-    if (!uploadLater && !contractFile) {
-      Alert.alert('Contract Required', 'Please upload a contract or select "Upload Later"');
-      return;
-    }
-
-    // Build appointment date if status is appointment
-    let appointmentDate = null;
-    let appointmentEndDate = null;
-    if (newPinForm.status === 'appointment' && newPinForm.appointment_date) {
-      appointmentDate = `${newPinForm.appointment_date}T${newPinForm.appointment_start_time}:00`;
-      appointmentEndDate = `${newPinForm.appointment_date}T${newPinForm.appointment_end_time}:00`;
-    }
-
-    // Combine address parts
-    const fullAddress = [
-      newPinForm.address,
-      newPinForm.city,
-      newPinForm.state,
-      newPinForm.zip_code
-    ].filter(Boolean).join(', ');
-
-    setIsConverting(true);
-    try {
-      // First create the pin
-      const pinResponse = await pinsApi.create({
-        lat: newPinCoords.latitude,
-        lng: newPinCoords.longitude,
-        status: newPinForm.status,
-        homeowner_name: newPinForm.homeowner_name || null,
-        homeowner_phone: newPinForm.homeowner_phone || null,
-        homeowner_email: newPinForm.homeowner_email || null,
-        address: fullAddress || null,
-        city: newPinForm.city || null,
-        state: newPinForm.state || null,
-        zip_code: newPinForm.zip_code || null,
-        notes: newPinForm.notes || null,
-        appointment_date: appointmentDate,
-        appointment_end_date: appointmentEndDate,
-      });
-
-      if (pinResponse.error) throw new Error(pinResponse.error);
-      const newPin = pinResponse.data!;
-
-      // Upload contract if provided
-      if (contractFile && !uploadLater) {
-        const uploadResult = await uploadFile(
-          contractFile.uri,
-          contractFile.name,
-          contractFile.type,
-          'contract',
-          undefined,
-          newPin.id
-        );
-        if (uploadResult) {
-          await pinsApi.update(newPin.id, { contract_url: uploadResult.key });
-        }
-      }
-
-      // Convert to deal
-      const dealResponse = await dealsApi.createFromPin(newPin.id);
-      if (dealResponse.error) throw new Error(dealResponse.error);
-
-      queryClient.invalidateQueries({ queryKey: ['pins'] });
-      queryClient.invalidateQueries({ queryKey: ['deals'] });
-
-      Alert.alert('Success', 'Deal created successfully!', [
-        { text: 'View Deal', onPress: () => router.push(`/deals/${dealResponse.data?.id}`) },
-        { text: 'OK' },
-      ]);
-
-      closeNewPinModal();
-    } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to create deal');
-    } finally {
-      setIsConverting(false);
-    }
-  };
-
   const toggleMapType = () => {
-    setMapType(current => {
-      if (current === 'standard') return 'satellite';
-      if (current === 'satellite') return 'hybrid';
-      return 'standard';
-    });
+    setMapType(current => current === 'standard' ? 'hybrid' : 'standard');
   };
 
   const centerOnUser = async () => {
@@ -420,7 +374,7 @@ export default function MapScreen() {
       };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <MapView
         ref={mapRef}
         style={styles.map}
@@ -439,64 +393,42 @@ export default function MapScreen() {
               longitude: pin.lng,
             }}
             pinColor={pinColors[pin.status] || pinColors.lead}
-            onPress={() => setSelectedPin(pin)}
+            onPress={() => handlePinPress(pin)}
           />
         ))}
       </MapView>
 
       {/* Top Controls */}
       <SafeAreaView style={styles.topControls} edges={['top']}>
-        <View style={styles.pinCount}>
-          <Text style={styles.pinCountText}>{pins?.length || 0} Pins</Text>
+        <View style={[styles.pinCount, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+          <Text style={[styles.pinCountText, { color: colors.foreground }]}>{pins?.length || 0} Pins</Text>
         </View>
       </SafeAreaView>
 
       {/* Bottom Controls */}
       <SafeAreaView style={styles.bottomControls} edges={['bottom']}>
         <View style={styles.controlsRow}>
-          <TouchableOpacity onPress={centerOnUser} style={styles.locationButton}>
-            <Ionicons name="navigate" size={20} color={colors.secondary} />
+          <TouchableOpacity onPress={centerOnUser} style={[styles.locationButton, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <Ionicons name="navigate" size={20} color={colors.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={toggleMapType} style={styles.mapTypeButton}>
+          <TouchableOpacity onPress={toggleMapType} style={[styles.mapTypeButton, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <Ionicons
-              name={mapType === 'standard' ? 'globe-outline' : mapType === 'satellite' ? 'earth' : 'layers'}
+              name={mapType === 'standard' ? 'map-outline' : 'earth'}
               size={20}
-              color={colors.secondary}
+              color={colors.primary}
             />
-            <Text style={styles.mapTypeText}>
-              {mapType === 'standard' ? 'Standard' : mapType === 'satellite' ? 'Satellite' : 'Hybrid'}
+            <Text style={[styles.mapTypeText, { color: colors.foreground }]}>
+              {mapType === 'standard' ? 'Standard' : 'Hybrid'}
             </Text>
           </TouchableOpacity>
         </View>
 
-        <View style={styles.hintContainer}>
-          <Text style={styles.hintText}>Long press on map to add a pin</Text>
+        <View style={[styles.hintContainer, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+          <Text style={[styles.hintText, { color: colors.mutedForeground }]}>Long press on map to add a pin</Text>
         </View>
       </SafeAreaView>
 
-      {/* Selected Pin Card */}
-      {selectedPin && (
-        <View style={styles.pinCard}>
-          <View style={styles.pinCardRow}>
-            <View style={styles.pinCardInfo}>
-              <Text style={styles.pinCardName}>
-                {selectedPin.homeowner_name || 'Unknown'}
-              </Text>
-              <Text style={styles.pinCardAddress} numberOfLines={1}>
-                {selectedPin.address || 'No address'}
-              </Text>
-              <View style={styles.pinCardStatus}>
-                <View style={[styles.statusDot, { backgroundColor: pinColors[selectedPin.status] }]} />
-                <Text style={styles.statusLabel}>{selectedPin.status}</Text>
-              </View>
-            </View>
-            <TouchableOpacity onPress={() => setSelectedPin(null)}>
-              <Ionicons name="close" size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
 
       {/* New Pin Modal */}
       <Modal
@@ -517,14 +449,17 @@ export default function MapScreen() {
           <Animated.View
             style={[
               styles.modalContent,
-              { transform: [{ translateY: slideAnim }] }
+              {
+                transform: [{ translateY: slideAnim }],
+                backgroundColor: isDark ? colors.background : '#FFFFFF',
+              }
             ]}
           >
             {/* Modal Header */}
-            <View style={styles.modalHeader}>
+            <View style={[styles.modalHeader, { borderBottomColor: isDark ? colors.border : '#E5E7EB' }]}>
               <View style={styles.modalHandle} />
-              <Text style={styles.modalTitle}>New Pin</Text>
-              <Text style={styles.modalSubtitle}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>New Pin</Text>
+              <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
                 {newPinCoords ? `${newPinCoords.latitude.toFixed(5)}, ${newPinCoords.longitude.toFixed(5)}` : ''}
               </Text>
             </View>
@@ -532,7 +467,7 @@ export default function MapScreen() {
             <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
               {/* Status Selection */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Status</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Status</Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusScroll}>
                   <View style={styles.statusRow}>
                     {statusOptions.map((option) => (
@@ -540,6 +475,7 @@ export default function MapScreen() {
                         key={option.value}
                         style={[
                           styles.statusChip,
+                          { backgroundColor: isDark ? colors.muted : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
                           newPinForm.status === option.value && { backgroundColor: option.color },
                         ]}
                         onPress={() => setNewPinForm({ ...newPinForm, status: option.value })}
@@ -547,6 +483,7 @@ export default function MapScreen() {
                         <View style={[styles.statusChipDot, { backgroundColor: option.color }]} />
                         <Text style={[
                           styles.statusChipText,
+                          { color: isDark ? colors.foreground : '#374151' },
                           newPinForm.status === option.value && styles.statusChipTextActive
                         ]}>
                           {option.label}
@@ -557,223 +494,84 @@ export default function MapScreen() {
                 </ScrollView>
               </View>
 
-              {/* Appointment Date/Time (only show if status is appointment) */}
-              {newPinForm.status === 'appointment' && (
-                <View style={styles.appointmentSection}>
-                  <Text style={styles.sectionTitle}>
-                    <Ionicons name="calendar" size={16} color={colors.primary} /> Appointment Details
-                  </Text>
-
-                  {/* Date */}
-                  <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>Date</Text>
-                    <TouchableOpacity
-                      style={styles.datePickerButton}
-                      onPress={() => setShowDatePicker(true)}
-                    >
-                      <Ionicons name="calendar-outline" size={18} color="#6B7280" />
-                      <Text style={styles.datePickerText}>
-                        {newPinForm.appointment_date
-                          ? format(new Date(newPinForm.appointment_date), 'MMMM d, yyyy')
-                          : 'Select date'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {/* Time Row */}
-                  <View style={styles.timeRow}>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>Start Time</Text>
-                      <TouchableOpacity
-                        style={styles.datePickerButton}
-                        onPress={() => setShowStartTimePicker(true)}
-                      >
-                        <Ionicons name="time-outline" size={18} color="#6B7280" />
-                        <Text style={styles.datePickerText}>
-                          {timeOptions.find(t => t.value === newPinForm.appointment_start_time)?.label || '9:00 AM'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                    <View style={[styles.inputGroup, { flex: 1 }]}>
-                      <Text style={styles.inputLabel}>End Time</Text>
-                      <TouchableOpacity
-                        style={styles.datePickerButton}
-                        onPress={() => setShowEndTimePicker(true)}
-                      >
-                        <Ionicons name="time-outline" size={18} color="#6B7280" />
-                        <Text style={styles.datePickerText}>
-                          {timeOptions.find(t => t.value === newPinForm.appointment_end_time)?.label || '10:00 AM'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </View>
-              )}
-
               {/* Homeowner Name */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Homeowner Name</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Homeowner Name</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={newPinForm.homeowner_name}
                   onChangeText={(text) => setNewPinForm({ ...newPinForm, homeowner_name: text })}
                   placeholder="Enter name"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                 />
               </View>
 
               {/* Phone */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone Number</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Phone Number</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={newPinForm.homeowner_phone}
                   onChangeText={(text) => setNewPinForm({ ...newPinForm, homeowner_phone: text })}
                   placeholder="Enter phone"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="phone-pad"
                 />
               </View>
 
               {/* Email */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Email</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={newPinForm.homeowner_email}
                   onChangeText={(text) => setNewPinForm({ ...newPinForm, homeowner_email: text })}
                   placeholder="Enter email"
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   keyboardType="email-address"
                   autoCapitalize="none"
                 />
               </View>
 
-              {/* Address with loading indicator */}
+              {/* Address */}
               <View style={styles.inputGroup}>
-                <View style={styles.labelRow}>
-                  <Text style={styles.inputLabel}>Street Address</Text>
-                  {isLoadingAddress && (
-                    <View style={styles.loadingAddress}>
-                      <ActivityIndicator size="small" color={colors.primary} />
-                      <Text style={styles.loadingAddressText}>Getting address...</Text>
-                    </View>
-                  )}
-                </View>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Address</Text>
                 <TextInput
-                  style={styles.input}
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={newPinForm.address}
                   onChangeText={(text) => setNewPinForm({ ...newPinForm, address: text })}
-                  placeholder="Street address"
-                  placeholderTextColor="#9CA3AF"
+                  placeholder="Enter address"
+                  placeholderTextColor={colors.mutedForeground}
                 />
-              </View>
-
-              {/* City, State, Zip Row */}
-              <View style={styles.addressRow}>
-                <View style={[styles.inputGroup, { flex: 2 }]}>
-                  <Text style={styles.inputLabel}>City</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPinForm.city}
-                    onChangeText={(text) => setNewPinForm({ ...newPinForm, city: text })}
-                    placeholder="City"
-                    placeholderTextColor="#9CA3AF"
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1 }]}>
-                  <Text style={styles.inputLabel}>State</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPinForm.state}
-                    onChangeText={(text) => setNewPinForm({ ...newPinForm, state: text })}
-                    placeholder="TX"
-                    placeholderTextColor="#9CA3AF"
-                    autoCapitalize="characters"
-                    maxLength={2}
-                  />
-                </View>
-                <View style={[styles.inputGroup, { flex: 1.2 }]}>
-                  <Text style={styles.inputLabel}>ZIP</Text>
-                  <TextInput
-                    style={styles.input}
-                    value={newPinForm.zip_code}
-                    onChangeText={(text) => setNewPinForm({ ...newPinForm, zip_code: text })}
-                    placeholder="12345"
-                    placeholderTextColor="#9CA3AF"
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
-                </View>
               </View>
 
               {/* Notes */}
               <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Notes</Text>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Notes</Text>
                 <TextInput
-                  style={[styles.input, styles.textArea]}
+                  style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
                   value={newPinForm.notes}
                   onChangeText={(text) => setNewPinForm({ ...newPinForm, notes: text })}
                   placeholder="Add notes..."
-                  placeholderTextColor="#9CA3AF"
+                  placeholderTextColor={colors.mutedForeground}
                   multiline
                   numberOfLines={3}
                   textAlignVertical="top"
                 />
               </View>
 
-              {/* Convert to Deal Section */}
-              <View style={styles.convertSection}>
-                <Text style={styles.sectionTitle}>
-                  <Ionicons name="briefcase" size={16} color={colors.primary} /> Convert to Deal
-                </Text>
-
-                {/* Contract Upload */}
-                <View style={styles.inputGroup}>
-                  <Text style={styles.inputLabel}>Insurance Agreement / Contract</Text>
-                  {contractFile ? (
-                    <View style={styles.fileSelected}>
-                      <Ionicons name="document-text" size={20} color={colors.primary} />
-                      <Text style={styles.fileName} numberOfLines={1}>{contractFile.name}</Text>
-                      <TouchableOpacity onPress={() => setContractFile(null)}>
-                        <Ionicons name="close-circle" size={20} color="#9CA3AF" />
-                      </TouchableOpacity>
-                    </View>
-                  ) : (
-                    <TouchableOpacity style={styles.uploadButton} onPress={pickContractDocument}>
-                      <Ionicons name="cloud-upload-outline" size={20} color={colors.primary} />
-                      <Text style={styles.uploadButtonText}>Upload Contract</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {/* Upload Later Toggle */}
-                <View style={styles.toggleRow}>
-                  <View style={styles.toggleInfo}>
-                    <Text style={styles.toggleLabel}>Upload Later</Text>
-                    <Text style={styles.toggleDescription}>Skip contract upload for now</Text>
-                  </View>
-                  <Switch
-                    value={uploadLater}
-                    onValueChange={setUploadLater}
-                    trackColor={{ false: '#E5E7EB', true: colors.primary }}
-                    thumbColor="#FFFFFF"
-                  />
-                </View>
-              </View>
-
               <View style={{ height: 20 }} />
             </ScrollView>
 
             {/* Modal Footer */}
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.cancelButton} onPress={closeNewPinModal}>
-                <Text style={styles.cancelButtonText}>Cancel</Text>
+            <View style={[styles.modalFooter, { borderTopColor: isDark ? colors.border : '#E5E7EB' }]}>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={closeNewPinModal}>
+                <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.saveButton}
                 onPress={handleSaveNewPin}
-                disabled={createPinMutation.isPending || isConverting}
+                disabled={createPinMutation.isPending}
               >
                 <Ionicons name="location" size={18} color="#FFF" />
                 <Text style={styles.saveButtonText}>
@@ -781,114 +579,273 @@ export default function MapScreen() {
                 </Text>
               </TouchableOpacity>
             </View>
+          </Animated.View>
+        </KeyboardAvoidingView>
+      </Modal>
 
-            {/* Convert to Deal Button */}
-            <View style={styles.convertFooter}>
+      {/* Pin Detail Modal */}
+      {selectedPin && (
+        <Modal
+          visible={showPinDetailModal}
+          transparent
+          animationType="none"
+          onRequestClose={closePinDetailModal}
+        >
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={styles.modalOverlay}
+          >
+            <TouchableOpacity
+              style={styles.modalBackdrop}
+              activeOpacity={1}
+              onPress={closePinDetailModal}
+            />
+            <Animated.View
+              style={[
+                styles.modalContent,
+                {
+                  transform: [{ translateY: pinDetailSlideAnim }],
+                  backgroundColor: isDark ? colors.background : '#FFFFFF',
+                }
+              ]}
+            >
+              {/* Modal Header */}
+              <View style={[styles.modalHeader, { borderBottomColor: isDark ? colors.border : '#E5E7EB' }]}>
+                <View style={styles.modalHandle} />
+                <Text style={[styles.modalTitle, { color: colors.foreground }]}>Pin Details</Text>
+                <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>
+                  {selectedPin.address || 'No address'}
+                </Text>
+              </View>
+
+            <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+              {/* Status Selection */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Status</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.statusScroll}>
+                  <View style={styles.statusRow}>
+                    {statusOptions.map((option) => (
+                      <TouchableOpacity
+                        key={option.value}
+                        style={[
+                          styles.statusChip,
+                          { backgroundColor: isDark ? colors.muted : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
+                          editPinForm.status === option.value && { backgroundColor: option.color },
+                        ]}
+                        onPress={() => setEditPinForm({ ...editPinForm, status: option.value })}
+                      >
+                        <View style={[styles.statusChipDot, { backgroundColor: option.color }]} />
+                        <Text style={[
+                          styles.statusChipText,
+                          { color: isDark ? colors.foreground : '#374151' },
+                          editPinForm.status === option.value && styles.statusChipTextActive
+                        ]}>
+                          {option.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+
+              {/* Homeowner Name */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Homeowner Name</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                  value={editPinForm.homeowner_name}
+                  onChangeText={(text) => setEditPinForm({ ...editPinForm, homeowner_name: text })}
+                  placeholder="Enter name"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+
+              {/* Phone */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Phone Number</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                  value={editPinForm.homeowner_phone}
+                  onChangeText={(text) => setEditPinForm({ ...editPinForm, homeowner_phone: text })}
+                  placeholder="Enter phone"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              {/* Email */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Email</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                  value={editPinForm.homeowner_email}
+                  onChangeText={(text) => setEditPinForm({ ...editPinForm, homeowner_email: text })}
+                  placeholder="Enter email"
+                  placeholderTextColor={colors.mutedForeground}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              </View>
+
+              {/* Address */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Address</Text>
+                <TextInput
+                  style={[styles.input, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                  value={editPinForm.address}
+                  onChangeText={(text) => setEditPinForm({ ...editPinForm, address: text })}
+                  placeholder="Enter address"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+
+              {/* Notes */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Notes</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                  value={editPinForm.notes}
+                  onChangeText={(text) => setEditPinForm({ ...editPinForm, notes: text })}
+                  placeholder="Add notes..."
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+              </View>
+
+              {/* Insurance Agreement Section - Only show if not already a deal */}
+              {!selectedPin.deal_id && (
+                <>
+                  {/* Insurance Agreement Toggle */}
+                  <View style={[styles.toggleRow, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                    <View style={styles.toggleInfo}>
+                      <Text style={[styles.toggleLabel, { color: colors.foreground }]}>Upload Insurance Agreement Later</Text>
+                      <Text style={[styles.toggleHint, { color: colors.mutedForeground }]}>
+                        {uploadLater ? 'Agreement can be uploaded after conversion' : 'Upload agreement before converting'}
+                      </Text>
+                    </View>
+                    <Switch
+                      value={uploadLater}
+                      onValueChange={setUploadLater}
+                      trackColor={{ false: '#D1D5DB', true: colors.primary }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+
+                  {/* Upload Insurance Agreement Button - Shows when toggle is OFF */}
+                  {!uploadLater && (
+                    <TouchableOpacity
+                      style={styles.uploadButton}
+                      onPress={() => {
+                        Alert.alert('Upload', 'Insurance agreement upload will be implemented with document picker');
+                        // TODO: Implement document picker for insurance agreement
+                      }}
+                    >
+                      <Ionicons name="cloud-upload" size={20} color={colors.primary} />
+                      <Text style={styles.uploadButtonText}>Upload Insurance Agreement</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Convert to Deal Button */}
+                  <TouchableOpacity
+                    style={[
+                      styles.convertButton,
+                      (!editPinForm.homeowner_name.trim()) && styles.convertButtonDisabled
+                    ]}
+                    onPress={() => {
+                      if (!editPinForm.homeowner_name.trim()) {
+                        Alert.alert('Required', 'Homeowner name is required to convert to a deal');
+                        return;
+                      }
+                      Alert.alert(
+                        'Convert to Deal',
+                        `Convert pin for "${editPinForm.homeowner_name}" to a deal?`,
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Convert',
+                            onPress: async () => {
+                              try {
+                                // First update the pin with current form data
+                                const updateResponse = await pinsApi.update(selectedPin.id, {
+                                  status: editPinForm.status,
+                                  homeowner_name: editPinForm.homeowner_name || null,
+                                  homeowner_phone: editPinForm.homeowner_phone || null,
+                                  homeowner_email: editPinForm.homeowner_email || null,
+                                  address: editPinForm.address || null,
+                                  notes: editPinForm.notes || null,
+                                });
+
+                                if (updateResponse.error) {
+                                  Alert.alert('Error', updateResponse.error);
+                                  return;
+                                }
+
+                                // Then convert to deal
+                                convertToDealMutation.mutate(selectedPin.id);
+                              } catch (error) {
+                                Alert.alert('Error', error instanceof Error ? error.message : 'Failed to update pin');
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    disabled={convertToDealMutation.isPending || !editPinForm.homeowner_name.trim()}
+                  >
+                    {convertToDealMutation.isPending ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="add-circle" size={20} color="#FFFFFF" />
+                        <Text style={styles.convertButtonText}>Convert to Deal</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+
+                  {!editPinForm.homeowner_name.trim() && (
+                    <Text style={styles.requiredHint}>* Homeowner name is required to convert</Text>
+                  )}
+                </>
+              )}
+
+              {selectedPin.deal_id && (
+                <TouchableOpacity
+                  style={styles.viewDealButton}
+                  onPress={() => {
+                    closePinDetailModal();
+                    router.push(`/(rep)/deals/${selectedPin.deal_id}`);
+                  }}
+                >
+                  <Ionicons name="open" size={20} color={colors.primary} />
+                  <Text style={styles.viewDealButtonText}>View Linked Deal</Text>
+                </TouchableOpacity>
+              )}
+
+              <View style={{ height: 20 }} />
+            </ScrollView>
+
+            {/* Modal Footer */}
+            <View style={[styles.modalFooter, { borderTopColor: isDark ? colors.border : '#E5E7EB' }]}>
+              <TouchableOpacity style={[styles.cancelButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={closePinDetailModal}>
+                <Text style={[styles.cancelButtonText, { color: colors.foreground }]}>Cancel</Text>
+              </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.convertButton, (!uploadLater && !contractFile) && styles.convertButtonDisabled]}
-                onPress={handleSaveAndConvert}
-                disabled={isConverting || (!uploadLater && !contractFile)}
+                style={styles.saveButton}
+                onPress={handleUpdatePin}
+                disabled={updatePinMutation.isPending}
               >
-                {isConverting ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <Ionicons name="briefcase" size={18} color="#FFF" />
-                    <Text style={styles.convertButtonText}>Save & Convert to Deal</Text>
-                  </>
-                )}
+                <Ionicons name="checkmark" size={18} color="#FFF" />
+                <Text style={styles.saveButtonText}>
+                  {updatePinMutation.isPending ? 'Saving...' : 'Update Pin'}
+                </Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
         </KeyboardAvoidingView>
       </Modal>
-
-      {/* Date Picker Modal */}
-      <Modal visible={showDatePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowDatePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Select Date</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {Array.from({ length: 30 }, (_, i) => {
-                const date = new Date();
-                date.setDate(date.getDate() + i);
-                const dateStr = format(date, 'yyyy-MM-dd');
-                const isSelected = newPinForm.appointment_date === dateStr;
-                return (
-                  <TouchableOpacity
-                    key={dateStr}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      setNewPinForm({ ...newPinForm, appointment_date: dateStr });
-                      setShowDatePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {format(date, 'EEEE, MMMM d, yyyy')}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Start Time Picker Modal */}
-      <Modal visible={showStartTimePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowStartTimePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>Start Time</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {timeOptions.map((time) => {
-                const isSelected = newPinForm.appointment_start_time === time.value;
-                return (
-                  <TouchableOpacity
-                    key={time.value}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      setNewPinForm({ ...newPinForm, appointment_start_time: time.value });
-                      setShowStartTimePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {time.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* End Time Picker Modal */}
-      <Modal visible={showEndTimePicker} transparent animationType="fade">
-        <TouchableOpacity style={styles.pickerOverlay} activeOpacity={1} onPress={() => setShowEndTimePicker(false)}>
-          <View style={styles.pickerContent}>
-            <Text style={styles.pickerTitle}>End Time</Text>
-            <ScrollView style={styles.pickerScroll}>
-              {timeOptions.map((time) => {
-                const isSelected = newPinForm.appointment_end_time === time.value;
-                return (
-                  <TouchableOpacity
-                    key={time.value}
-                    style={[styles.pickerOption, isSelected && styles.pickerOptionSelected]}
-                    onPress={() => {
-                      setNewPinForm({ ...newPinForm, appointment_end_time: time.value });
-                      setShowEndTimePicker(false);
-                    }}
-                  >
-                    <Text style={[styles.pickerOptionText, isSelected && styles.pickerOptionTextSelected]}>
-                      {time.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </TouchableOpacity>
-      </Modal>
+      )}
     </View>
   );
 }
@@ -967,7 +924,7 @@ const styles = StyleSheet.create({
   mapTypeText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.secondary,
+    color: staticColors.secondary,
   },
   hintContainer: {
     marginHorizontal: 16,
@@ -1136,8 +1093,8 @@ const styles = StyleSheet.create({
   modalFooter: {
     flexDirection: 'row',
     gap: 12,
-    paddingHorizontal: 20,
-    paddingTop: 12,
+    padding: 20,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
     borderTopWidth: 1,
     borderTopColor: '#E5E7EB',
   },
@@ -1159,7 +1116,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingVertical: 14,
     borderRadius: 10,
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1168,128 +1125,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
   },
-
-  // Appointment Section
-  appointmentSection: {
-    backgroundColor: 'rgba(139, 92, 246, 0.08)',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(139, 92, 246, 0.2)',
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#374151',
-    marginBottom: 12,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  datePickerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  datePickerText: {
-    fontSize: 15,
-    color: '#111827',
-  },
-
-  // Address Row
-  addressRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  labelRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  loadingAddress: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  loadingAddressText: {
-    fontSize: 12,
-    color: colors.primary,
-  },
-
-  // Convert to Deal Section
-  convertSection: {
-    backgroundColor: 'rgba(201, 162, 77, 0.08)',
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(201, 162, 77, 0.2)',
-  },
-  uploadButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    borderRadius: 10,
-    paddingVertical: 16,
-  },
-  uploadButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: colors.primary,
-  },
-  fileSelected: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  fileName: {
-    flex: 1,
-    fontSize: 14,
-    color: '#374151',
-  },
   toggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 10,
+    padding: 16,
+    marginTop: 16,
   },
   toggleInfo: {
     flex: 1,
+    marginRight: 12,
   },
   toggleLabel: {
     fontSize: 14,
-    fontWeight: '500',
-    color: '#374151',
+    fontWeight: '600',
+    color: '#111827',
   },
-  toggleDescription: {
+  toggleHint: {
     fontSize: 12,
-    color: '#9CA3AF',
+    color: '#6B7280',
     marginTop: 2,
-  },
-  convertFooter: {
-    paddingHorizontal: 20,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 20,
   },
   convertButton: {
     flexDirection: 'row',
@@ -1299,58 +1156,56 @@ const styles = StyleSheet.create({
     backgroundColor: '#22C55E',
     paddingVertical: 14,
     borderRadius: 10,
-  },
-  convertButtonDisabled: {
-    backgroundColor: '#9CA3AF',
+    marginTop: 16,
   },
   convertButtonText: {
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
   },
-
-  // Picker Modals
-  pickerOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
+  viewDealButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    padding: 20,
-  },
-  pickerContent: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    width: '100%',
-    maxHeight: SCREEN_HEIGHT * 0.6,
-  },
-  pickerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#111827',
-    textAlign: 'center',
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  pickerScroll: {
-    maxHeight: SCREEN_HEIGHT * 0.5,
-  },
-  pickerOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  pickerOptionSelected: {
+    justifyContent: 'center',
+    gap: 8,
     backgroundColor: 'rgba(201, 162, 77, 0.1)',
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginTop: 16,
+    borderWidth: 1,
+    borderColor: staticColors.primary,
   },
-  pickerOptionText: {
-    fontSize: 16,
-    color: '#374151',
-    textAlign: 'center',
-  },
-  pickerOptionTextSelected: {
-    color: colors.primary,
+  viewDealButtonText: {
+    fontSize: 15,
     fontWeight: '600',
+    color: staticColors.primary,
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#FFFFFF',
+    paddingVertical: 14,
+    borderRadius: 10,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: staticColors.primary,
+    borderStyle: 'dashed',
+  },
+  uploadButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: staticColors.primary,
+  },
+  convertButtonDisabled: {
+    backgroundColor: '#9CA3AF',
+    opacity: 0.7,
+  },
+  requiredHint: {
+    fontSize: 12,
+    color: '#EF4444',
+    marginTop: 8,
+    textAlign: 'center',
   },
 });

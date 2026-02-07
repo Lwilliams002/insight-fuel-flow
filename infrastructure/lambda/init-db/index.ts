@@ -514,7 +514,12 @@ DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_category TEXT; E
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_type TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS material_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS drip_edge_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS drip_edge TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS vent_color TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Rep assignment fields (for reassign feature)
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS rep_id UUID; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS rep_name TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- Lost statement field (required for full approval)
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS lost_statement_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
@@ -531,6 +536,99 @@ DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS sales_tax DECIMAL(12,2); 
 
 -- Install scheduling fields
 DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS install_scheduled_by UUID; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS install_time TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS crew_assignment TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Invoice and depreciation fields
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS invoice_sent_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS depreciation_collected_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Commission payment fields
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS commission_paid BOOLEAN DEFAULT FALSE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS commission_paid_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS paid_date DATE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- Completion form fields
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS completion_form_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS completion_form_signature_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS homeowner_completion_signature_url TEXT; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+
+-- ==========================================
+-- MIGRATION: Add new workflow status enum values (2026-02)
+-- ==========================================
+
+-- Add new deal_status enum values for updated workflow
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'awaiting_approval' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'deal_status')
+    ) THEN
+        ALTER TYPE deal_status ADD VALUE 'awaiting_approval';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'acv_collected' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'deal_status')
+    ) THEN
+        ALTER TYPE deal_status ADD VALUE 'acv_collected';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'deductible_collected' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'deal_status')
+    ) THEN
+        ALTER TYPE deal_status ADD VALUE 'deductible_collected';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'materials_selected' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'deal_status')
+    ) THEN
+        ALTER TYPE deal_status ADD VALUE 'materials_selected';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_enum 
+        WHERE enumlabel = 'completion_signed' 
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'deal_status')
+    ) THEN
+        ALTER TYPE deal_status ADD VALUE 'completion_signed';
+    END IF;
+EXCEPTION
+    WHEN duplicate_object THEN null;
+END $$;
+
+-- Add timestamp columns for new workflow statuses
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS awaiting_approval_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS acv_collected_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS deductible_collected_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS materials_selected_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
+DO $$ BEGIN ALTER TABLE deals ADD COLUMN IF NOT EXISTS completion_signed_date TIMESTAMP WITH TIME ZONE; EXCEPTION WHEN duplicate_column THEN NULL; END $$;
 
 -- Calendar events table for server-side storage
 CREATE TABLE IF NOT EXISTS calendar_events (
@@ -554,7 +652,29 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
   try {
     const pool = await getPool();
 
-    // Run the schema
+    // Run enum additions first - these MUST run outside a transaction
+    // ALTER TYPE ADD VALUE cannot be inside a transaction block in PostgreSQL
+    const enumAdditions = [
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'awaiting_approval'",
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'acv_collected'",
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'deductible_collected'",
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'materials_selected'",
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'completion_signed'",
+      "ALTER TYPE deal_status ADD VALUE IF NOT EXISTS 'paid'",
+      "ALTER TYPE pin_status ADD VALUE IF NOT EXISTS 'renter'",
+      "ALTER TYPE pin_status ADD VALUE IF NOT EXISTS 'not_interested'",
+    ];
+
+    for (const sql of enumAdditions) {
+      try {
+        await pool.query(sql);
+      } catch (e) {
+        // Ignore errors - likely means value already exists
+        console.log(`Enum addition skipped (may already exist): ${sql}`);
+      }
+    }
+
+    // Run the main schema
     await pool.query(SCHEMA);
 
     return {

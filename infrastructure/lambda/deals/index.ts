@@ -353,7 +353,7 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
     'acv_check_collected', 'acv_check_amount', 'acv_check_date',
 
     // BUILD phase
-    'materials_ordered_date', 'materials_delivered_date', 'install_date', 'completion_date',
+    'materials_ordered_date', 'materials_delivered_date', 'install_date', 'install_time', 'crew_assignment', 'completion_date',
 
     // Documents & images
     'permit_file_url', 'lost_statement_url',
@@ -379,13 +379,26 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
     'approval_type',
 
     // Material specifications
-    'material_category', 'material_type', 'material_color', 'drip_edge_color', 'vent_color',
+    'material_category', 'material_type', 'material_color', 'drip_edge', 'vent_color',
+
+    // Rep assignment
+    'rep_id', 'rep_name',
 
     // Milestone timestamps
     'lead_date', 'inspection_scheduled_date', 'claim_filed_date',
     'adjuster_met_date', 'approved_date', 'collect_acv_date', 'collect_deductible_date',
-    'install_scheduled_date', 'installed_date', 'invoice_sent_at',
-    'depreciation_collected_date', 'complete_date',
+    'install_scheduled_date', 'installed_date', 'invoice_sent_at', 'depreciation_collected_date',
+    'depreciation_collected_date', 'complete_date', 'paid_date',
+
+    // Workflow milestone timestamps
+    'awaiting_approval_date', 'acv_collected_date', 'deductible_collected_date',
+    'materials_selected_date', 'completion_signed_date',
+
+    // Completion form
+    'completion_form_url', 'completion_form_signature_url', 'homeowner_completion_signature_url',
+
+    // Commission
+    'commission_paid', 'commission_paid_date',
   ];
 
   for (const field of allowedFields) {

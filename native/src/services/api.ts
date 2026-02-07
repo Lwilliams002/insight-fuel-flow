@@ -76,6 +76,7 @@ export interface Deal {
   contract_signed: boolean;
   signed_date: string | null;
   signature_url: string | null;
+  agreement_document_url: string | null;
   install_date: string | null;
   completion_date: string | null;
   permit_file_url: string | null;
@@ -87,7 +88,6 @@ export interface Deal {
   acv_receipt_url: string | null;
   deductible_receipt_url: string | null;
   depreciation_receipt_url: string | null;
-  invoice_sent_date: string | null;
   invoice_amount: number | null;
   invoice_url: string | null;
   invoice_work_items: string | null;
@@ -99,8 +99,37 @@ export interface Deal {
   drip_edge: string | null;
   vent_color: string | null;
   total_price: number;
+  sales_tax: number | null;
+  payment_requested: boolean;
   rep_id?: string;
   rep_name?: string;
+  // Milestone timestamp fields
+  claim_filed_date: string | null;
+  collect_acv_date: string | null;
+  collect_deductible_date: string | null;
+  installed_date: string | null;
+  depreciation_collected_date: string | null;
+  complete_date: string | null;
+  invoice_sent_date: string | null;
+  // New workflow timestamp fields
+  awaiting_approval_date: string | null;
+  acv_collected_date: string | null;
+  deductible_collected_date: string | null;
+  materials_selected_date: string | null;
+  completion_signed_date: string | null;
+  // Completion form fields
+  completion_form_url: string | null;
+  completion_form_signature_url: string | null;
+  homeowner_completion_signature_url: string | null;
+  // Check collected fields
+  acv_check_collected: boolean | null;
+  depreciation_check_collected: boolean | null;
+  // Installation schedule fields
+  install_time: string | null;
+  crew_assignment: string | null;
+  // Commission payment fields
+  commission_paid: boolean | null;
+  commission_paid_date: string | null;
   deal_commissions?: DealCommission[];
 }
 
@@ -181,8 +210,9 @@ export const dealsApi = {
     fetchApi<void>(`/deals/${id}`, { method: 'DELETE' }),
 
   createFromPin: (pinId: string) =>
-    fetchApi<Deal>(`/deals/from-pin/${pinId}`, {
+    fetchApi<Deal>(`/deals`, {
       method: 'POST',
+      body: JSON.stringify({ pin_id: pinId }),
     }),
 };
 
@@ -250,20 +280,37 @@ export async function uploadFile(
     const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
     const key = `${folder}/${timestamp}-${sanitizedFileName}`;
 
-    // Read file as base64
-    const response = await fetch(fileUri);
-    const blob = await response.blob();
+    let fileData: string;
 
-    const reader = new FileReader();
-    const base64Promise = new Promise<string>((resolve, reject) => {
-      reader.onloadend = () => {
-        const base64 = (reader.result as string).split(',')[1];
-        resolve(base64);
-      };
-      reader.onerror = reject;
-    });
-    reader.readAsDataURL(blob);
-    const fileData = await base64Promise;
+    // Check if fileUri is already a base64 data URL (from signature pad)
+    if (fileUri.startsWith('data:')) {
+      // Extract base64 data from data URL
+      const base64Match = fileUri.match(/^data:[^;]+;base64,(.+)$/);
+      if (base64Match && base64Match[1]) {
+        fileData = base64Match[1];
+        console.log('[uploadFile] Using base64 data from data URL');
+      } else {
+        throw new Error('Invalid data URL format');
+      }
+    } else {
+      // Read file from URI as base64
+      console.log('[uploadFile] Fetching file from URI:', fileUri.substring(0, 50));
+      const response = await fetch(fileUri);
+      const blob = await response.blob();
+
+      const reader = new FileReader();
+      const base64Promise = new Promise<string>((resolve, reject) => {
+        reader.onloadend = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve(base64);
+        };
+        reader.onerror = reject;
+      });
+      reader.readAsDataURL(blob);
+      fileData = await base64Promise;
+    }
+
+    console.log('[uploadFile] Uploading to key:', key, 'fileType:', fileType);
 
     // Upload via API
     const uploadResponse = await fetch(`${awsConfig.api.baseUrl}/upload`, {
@@ -281,16 +328,31 @@ export async function uploadFile(
     });
 
     if (!uploadResponse.ok) {
-      throw new Error('Upload failed');
+      const errorText = await uploadResponse.text();
+      console.error('[uploadFile] Upload failed:', uploadResponse.status, errorText);
+      throw new Error(`Upload failed: ${uploadResponse.status}`);
     }
 
-    const result = await uploadResponse.json();
+    const responseJson = await uploadResponse.json();
+    console.log('[uploadFile] Upload response:', JSON.stringify(responseJson));
+
+    // The API wraps response in { data: ... }, so unwrap it
+    const result = responseJson.data || responseJson;
+
+    // The API returns the URL in different fields depending on the response
+    const url = result.url || result.signedUrl || result.publicUrl;
+    console.log('[uploadFile] Upload successful, URL:', url ? url.substring(0, 100) + '...' : 'undefined');
+
+    if (!url) {
+      console.error('[uploadFile] No URL in response, full result:', result);
+    }
+
     return {
-      url: result.url || result.publicUrl,
-      key,
+      url: url,
+      key: result.key || key,
     };
   } catch (error) {
-    console.error('Upload error:', error);
+    console.error('[uploadFile] Upload error:', error);
     return null;
   }
 }
@@ -366,3 +428,13 @@ export async function getSignedFileUrl(key: string): Promise<string | null> {
     return null;
   }
 }
+
+// ============ ADMIN API ============
+
+export const adminApi = {
+  runMigration: () =>
+    fetchApi<{ success: boolean; message: string }>('/admin/init-db', {
+      method: 'POST',
+    }),
+};
+

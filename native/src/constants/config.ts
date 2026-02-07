@@ -31,7 +31,7 @@ export const colors = {
 // Dark theme colors
 export const darkColors = {
   primary: '#C9A24D',
-  secondary: '#0F1E2E',
+  secondary: '#1A2F45', // Slightly lighter for button backgrounds
   background: '#0F1E2E',
   foreground: '#FFFFFF',
   muted: '#1E3A5F',
