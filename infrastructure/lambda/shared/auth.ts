@@ -31,6 +31,11 @@ export function isRep(user: UserClaims | null): boolean {
   return user['cognito:groups']?.includes('rep') || false;
 }
 
+export function isCrew(user: UserClaims | null): boolean {
+  if (!user) return false;
+  return user['cognito:groups']?.includes('crew') || false;
+}
+
 export function response(statusCode: number, body: any): APIGatewayProxyResult {
   return {
     statusCode,

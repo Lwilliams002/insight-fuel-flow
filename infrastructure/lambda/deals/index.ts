@@ -3,6 +3,7 @@ import { query, queryOne, execute, withTransaction } from '../shared/database';
 import {
   getUserFromEvent,
   isAdmin,
+  isCrew,
   success,
   created,
   badRequest,
@@ -62,7 +63,18 @@ async function getRepId(userId: string): Promise<string | null> {
 
 async function listDeals(user: any, event: APIGatewayProxyEvent) {
   const userIsAdmin = isAdmin(user);
+  const userIsCrew = isCrew(user);
   const repId = await getRepId(user.sub);
+
+  // Get crew lead's name for filtering assigned deals
+  let crewName: string | null = null;
+  if (userIsCrew) {
+    const profile = await queryOne<{ full_name: string }>(
+      'SELECT full_name FROM profiles WHERE id = $1',
+      [user.sub]
+    );
+    crewName = profile?.full_name || null;
+  }
 
   let sql = `
     SELECT d.*,
@@ -85,8 +97,12 @@ async function listDeals(user: any, event: APIGatewayProxyEvent) {
 
   const params: any[] = [];
 
-  // Admin can see all deals, reps can only see their own
-  if (!userIsAdmin && repId) {
+  // Admin can see all deals, crew leads see assigned deals, reps see their own
+  if (userIsCrew && crewName) {
+    // Crew leads see deals assigned to them
+    sql += ` WHERE d.crew_assignment = $1`;
+    params.push(crewName);
+  } else if (!userIsAdmin && repId) {
     sql += ` WHERE EXISTS (
       SELECT 1 FROM deal_commissions dc2
       WHERE dc2.deal_id = d.id AND dc2.rep_id = $1
@@ -102,9 +118,20 @@ async function listDeals(user: any, event: APIGatewayProxyEvent) {
 
 async function getDeal(dealId: string, user: any) {
   const userIsAdmin = isAdmin(user);
+  const userIsCrew = isCrew(user);
   const repId = await getRepId(user.sub);
 
-  const deal = await queryOne(
+  // Get crew lead's name for access check
+  let crewName: string | null = null;
+  if (userIsCrew) {
+    const profile = await queryOne<{ full_name: string }>(
+      'SELECT full_name FROM profiles WHERE id = $1',
+      [user.sub]
+    );
+    crewName = profile?.full_name || null;
+  }
+
+  const deal = await queryOne<any>(
     `SELECT d.*,
       json_agg(
         json_build_object(
@@ -129,6 +156,11 @@ async function getDeal(dealId: string, user: any) {
 
   // Check access
   if (!userIsAdmin) {
+    // Crew leads can access deals assigned to them
+    if (userIsCrew && crewName && deal.crew_assignment === crewName) {
+      return success(deal);
+    }
+    // Reps can access deals they have commission on
     const hasAccess = deal.deal_commissions?.some((dc: any) => dc.rep_id === repId);
     if (!hasAccess) {
       return forbidden('Access denied');
@@ -307,16 +339,39 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
   }
 
   const userIsAdmin = isAdmin(user);
+  const userIsCrew = isCrew(user);
   const repId = await getRepId(user.sub);
+
+  // Get crew lead's name for access check
+  let crewName: string | null = null;
+  if (userIsCrew) {
+    const profile = await queryOne<{ full_name: string }>(
+      'SELECT full_name FROM profiles WHERE id = $1',
+      [user.sub]
+    );
+    crewName = profile?.full_name || null;
+  }
 
   // Check access
   if (!userIsAdmin) {
-    const hasAccess = await queryOne(
-      `SELECT 1 FROM deal_commissions WHERE deal_id = $1 AND rep_id = $2`,
-      [dealId, repId]
-    );
-    if (!hasAccess) {
-      return forbidden('Access denied');
+    // Check if crew lead is assigned to this deal
+    if (userIsCrew && crewName) {
+      const crewAccess = await queryOne(
+        `SELECT 1 FROM deals WHERE id = $1 AND crew_assignment = $2`,
+        [dealId, crewName]
+      );
+      if (!crewAccess) {
+        return forbidden('Access denied');
+      }
+    } else {
+      // Check if rep has commission access
+      const hasAccess = await queryOne(
+        `SELECT 1 FROM deal_commissions WHERE deal_id = $1 AND rep_id = $2`,
+        [dealId, repId]
+      );
+      if (!hasAccess) {
+        return forbidden('Access denied');
+      }
     }
   }
 

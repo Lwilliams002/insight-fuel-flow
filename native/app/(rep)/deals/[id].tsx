@@ -2084,12 +2084,15 @@ export default function DealDetailScreen() {
           const isCommissionPaid = deal.status === 'paid' || deal.commission_paid === true || deal.deal_commissions?.[0]?.paid;
 
           if (isCommissionPaid) {
-            // Calculate commission amount
+            // Calculate commission amount - check for override first
             const rcv = Number(deal.rcv) || 0;
             const salesTax = rcv * 0.0825;
             const baseAmount = rcv - salesTax;
             const commissionPercent = deal.deal_commissions?.[0]?.commission_percent || repCommissionPercent || 10;
-            const commissionAmount = deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100));
+            // Use override amount if set by admin, then stored commission amount, otherwise calculate
+            const commissionAmount = deal.commission_override_amount
+              ? Number(deal.commission_override_amount)
+              : (deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100)));
 
             return (
               <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
@@ -2125,13 +2128,18 @@ export default function DealDetailScreen() {
           const canRequestPayment = deal.status === 'complete' && !deal.payment_requested;
 
           if (canRequestPayment) {
-            // Calculate commission for display - use rep's commission percent
+            // Calculate commission for display - use override if set, otherwise calculate
             const rcv = Number(deal.rcv) || 0;
             const salesTax = rcv * 0.0825;
             const baseAmount = rcv - salesTax;
             // Priority: deal_commissions, then rep's default_commission_percent
             const commissionPercent = deal.deal_commissions?.[0]?.commission_percent || repCommissionPercent || 10;
-            const estimatedCommission = baseAmount * (commissionPercent / 100);
+            const calculatedCommission = baseAmount * (commissionPercent / 100);
+            // Use override amount if set by admin
+            const estimatedCommission = deal.commission_override_amount
+              ? Number(deal.commission_override_amount)
+              : calculatedCommission;
+            const hasOverride = !!deal.commission_override_amount;
 
             return (
               <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
@@ -2145,20 +2153,34 @@ export default function DealDetailScreen() {
 
                 {/* Commission Summary */}
                 <View style={[styles.commissionSummary, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border }]}>
+                  {hasOverride && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, padding: 8, backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.1)', borderRadius: 6 }}>
+                      <Ionicons name="information-circle" size={16} color="#F59E0B" />
+                      <Text style={{ fontSize: 12, color: isDark ? '#FCD34D' : '#92400E', flex: 1 }}>
+                        Commission adjusted by admin{deal.commission_override_reason ? `: ${deal.commission_override_reason}` : ''}
+                      </Text>
+                    </View>
+                  )}
                   <View style={styles.commissionSummaryRow}>
                     <Text style={[styles.commissionSummaryLabel, { color: colors.mutedForeground }]}>Deal Value (RCV)</Text>
                     <Text style={[styles.commissionSummaryValue, { color: colors.foreground }]}>${rcv.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                   </View>
-                  <View style={styles.commissionSummaryRow}>
-                    <Text style={[styles.commissionSummaryLabel, { color: colors.mutedForeground }]}>Less: Sales Tax (8.25%)</Text>
-                    <Text style={[styles.commissionSummaryValue, { color: '#EF4444' }]}>-${salesTax.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
-                  </View>
-                  <View style={styles.commissionSummaryRow}>
-                    <Text style={[styles.commissionSummaryLabel, { color: colors.mutedForeground }]}>Commission Rate</Text>
-                    <Text style={[styles.commissionSummaryValue, { color: colors.foreground }]}>{commissionPercent}%</Text>
-                  </View>
+                  {!hasOverride && (
+                    <>
+                      <View style={styles.commissionSummaryRow}>
+                        <Text style={[styles.commissionSummaryLabel, { color: colors.mutedForeground }]}>Less: Sales Tax (8.25%)</Text>
+                        <Text style={[styles.commissionSummaryValue, { color: '#EF4444' }]}>-${salesTax.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                      </View>
+                      <View style={styles.commissionSummaryRow}>
+                        <Text style={[styles.commissionSummaryLabel, { color: colors.mutedForeground }]}>Commission Rate</Text>
+                        <Text style={[styles.commissionSummaryValue, { color: colors.foreground }]}>{commissionPercent}%</Text>
+                      </View>
+                    </>
+                  )}
                   <View style={[styles.commissionSummaryRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 8 }]}>
-                    <Text style={[styles.commissionSummaryLabel, { fontWeight: '700', color: colors.foreground }]}>Estimated Commission</Text>
+                    <Text style={[styles.commissionSummaryLabel, { fontWeight: '700', color: colors.foreground }]}>
+                      {hasOverride ? 'Adjusted Commission' : 'Estimated Commission'}
+                    </Text>
                     <Text style={[styles.commissionSummaryValue, { fontSize: 18, fontWeight: '700', color: '#22C55E' }]}>${estimatedCommission.toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                   </View>
                 </View>
@@ -4298,11 +4320,28 @@ export default function DealDetailScreen() {
                     <Text style={[styles.formulaText, { color: colors.mutedForeground }]}>(RCV - Sales Tax) × Commission % = Commission</Text>
                   </View>
 
+                  {/* Commission Override Banner - show if admin adjusted */}
+                  {deal.commission_override_amount && (
+                    <View style={{ backgroundColor: isDark ? 'rgba(245, 158, 11, 0.2)' : 'rgba(245, 158, 11, 0.1)', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)', borderRadius: 8, padding: 12, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <Ionicons name="information-circle" size={16} color="#F59E0B" />
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: isDark ? '#FCD34D' : '#92400E' }}>Commission Adjusted by Admin</Text>
+                      </View>
+                      {deal.commission_override_reason && (
+                        <Text style={{ fontSize: 12, color: isDark ? '#FCD34D' : '#92400E', marginTop: 2 }}>Reason: {deal.commission_override_reason}</Text>
+                      )}
+                    </View>
+                  )}
+
                   {/* Commission Amount */}
                   <View style={styles.commissionTotal}>
                     <Text style={styles.commissionTotalLabel}>Your Commission</Text>
                     <Text style={styles.commissionTotalValue}>
-                      ${(Number(deal.deal_commissions?.[0]?.commission_amount) || ((Number(deal.rcv) || (Number(deal.acv || 0) + Number(deal.depreciation || 0))) * 0.9175 * ((deal.deal_commissions?.[0]?.commission_percent || repCommissionPercent) / 100))).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ${(
+                        deal.commission_override_amount
+                          ? Number(deal.commission_override_amount)
+                          : (Number(deal.deal_commissions?.[0]?.commission_amount) || ((Number(deal.rcv) || (Number(deal.acv || 0) + Number(deal.depreciation || 0))) * 0.9175 * ((deal.deal_commissions?.[0]?.commission_percent || repCommissionPercent) / 100)))
+                      ).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </Text>
                   </View>
 
@@ -5937,7 +5976,7 @@ export default function DealDetailScreen() {
 
       {/* Completion Form Signature Modal - FINAL COMPLETION & WALK-THROUGH RECORD */}
       <Modal visible={showCompletionFormSignature} animationType="slide">
-        <SafeAreaView style={styles.signatureModalContainer}>
+        <SafeAreaView style={[styles.signatureModalContainer, { backgroundColor: colors.background }]}>
           <View style={[styles.signatureModalHeader, { paddingTop: 16 }]}>
             <TouchableOpacity onPress={() => {
               setShowCompletionFormSignature(false);
@@ -5946,17 +5985,17 @@ export default function DealDetailScreen() {
               setSection2Initials(null);
               setRepCompletionSignature(null);
               setHomeownerCompletionSignature(null);
-            }} style={styles.signatureCloseBtn}>
-              <Ionicons name="close" size={24} color="#374151" />
+            }} style={styles.signatureCloseBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close" size={24} color={colors.foreground} />
             </TouchableOpacity>
-            <Text style={styles.signatureModalTitle}>Final Completion & Walk-Through</Text>
+            <Text style={[styles.signatureModalTitle, { color: colors.foreground }]}>Final Completion & Walk-Through</Text>
             <View style={{ width: 60 }} />
           </View>
 
           {/* Step indicator */}
           {completionFormStep > 0 && (
-            <View style={styles.signatureStepIndicator}>
-              <Text style={styles.signatureStepText}>Signature {completionFormStep} of 4</Text>
+            <View style={[styles.signatureStepIndicator, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderBottomColor: colors.border }]}>
+              <Text style={[styles.signatureStepText, { color: colors.foreground }]}>Signature {completionFormStep} of 4</Text>
               <View style={styles.signatureStepDots}>
                 {[1, 2, 3, 4].map(step => (
                   <View
@@ -6184,10 +6223,10 @@ export default function DealDetailScreen() {
 
           {/* Step 1: Section 1 Owner Initials */}
           {completionFormStep === 1 && (
-            <View style={styles.signatureStepContainer}>
-              <Text style={styles.signatureStepTitle}>Section 1 - Walk-Through Status</Text>
-              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
-              <Text style={styles.signatureStepDescription}>
+            <View style={[styles.signatureStepContainer, { backgroundColor: colors.background }]}>
+              <Text style={[styles.signatureStepTitle, { color: colors.foreground }]}>Section 1 - Walk-Through Status</Text>
+              <Text style={[styles.signatureStepSubtitle, { color: colors.primary }]}>Owner Initials Required</Text>
+              <Text style={[styles.signatureStepDescription, { color: colors.mutedForeground }]}>
                 Owner acknowledges the walk-through was offered and either completed or declined.
               </Text>
 
@@ -6229,10 +6268,10 @@ export default function DealDetailScreen() {
 
           {/* Step 2: Section 2 Owner Initials */}
           {completionFormStep === 2 && (
-            <View style={styles.signatureStepContainer}>
-              <Text style={styles.signatureStepTitle}>Section 2 - Items Review</Text>
-              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
-              <Text style={styles.signatureStepDescription}>
+            <View style={[styles.signatureStepContainer, { backgroundColor: colors.background }]}>
+              <Text style={[styles.signatureStepTitle, { color: colors.foreground }]}>Section 2 - Items Review</Text>
+              <Text style={[styles.signatureStepSubtitle, { color: colors.primary }]}>Owner Initials Required</Text>
+              <Text style={[styles.signatureStepDescription, { color: colors.mutedForeground }]}>
                 Confirming listed items are complete and accurate, or no issues identified.
               </Text>
 
@@ -6274,10 +6313,10 @@ export default function DealDetailScreen() {
 
           {/* Step 3: Owner Signature */}
           {completionFormStep === 3 && (
-            <View style={styles.signatureStepContainer}>
-              <Text style={styles.signatureStepTitle}>Section 3 - Completion Confirmation</Text>
-              <Text style={styles.signatureStepSubtitle}>Owner Signature</Text>
-              <Text style={styles.signatureStepDescription}>
+            <View style={[styles.signatureStepContainer, { backgroundColor: colors.background }]}>
+              <Text style={[styles.signatureStepTitle, { color: colors.foreground }]}>Section 3 - Completion Confirmation</Text>
+              <Text style={[styles.signatureStepSubtitle, { color: colors.primary }]}>Owner Signature</Text>
+              <Text style={[styles.signatureStepDescription, { color: colors.mutedForeground }]}>
                 Owner confirms all agreed-upon roofing work has been completed.
               </Text>
 
@@ -6319,10 +6358,10 @@ export default function DealDetailScreen() {
 
           {/* Step 4: Titan PRO Signature */}
           {completionFormStep === 4 && (
-            <View style={styles.signatureStepContainer}>
-              <Text style={styles.signatureStepTitle}>Section 3 - Completion Confirmation</Text>
-              <Text style={styles.signatureStepSubtitle}>Titan PRO Signature</Text>
-              <Text style={styles.signatureStepDescription}>
+            <View style={[styles.signatureStepContainer, { backgroundColor: colors.background }]}>
+              <Text style={[styles.signatureStepTitle, { color: colors.foreground }]}>Section 3 - Completion Confirmation</Text>
+              <Text style={[styles.signatureStepSubtitle, { color: colors.primary }]}>Titan PRO Signature</Text>
+              <Text style={[styles.signatureStepDescription, { color: colors.mutedForeground }]}>
                 Representative confirms the work is complete.
               </Text>
 
@@ -6784,6 +6823,11 @@ const styles = StyleSheet.create({
   signatureStepSubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 4 },
   signatureStepDescription: { fontSize: 13, color: '#374151', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 20 },
   signatureStepActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, gap: 12 },
+  signatureStepIndicator: { alignItems: 'center', paddingVertical: 12, backgroundColor: '#F9FAFB', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  signatureStepText: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 8 },
+  signatureStepDots: { flexDirection: 'row', gap: 8 },
+  signatureStepDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
+  signatureStepDotActive: { backgroundColor: staticColors.primary },
   confirmSignatureBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: staticColors.primary, paddingVertical: 14, borderRadius: 10 },
   confirmSignatureText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
   agreementSignatureSection: { marginTop: 16 },

@@ -130,11 +130,21 @@ export default function RepDashboard() {
     let paidCommission = 0;
 
     deals.forEach(deal => {
-      if (deal.deal_commissions && deal.deal_commissions.length > 0) {
-        const commission = deal.deal_commissions[0];
-        const amount = safeNumber(commission.commission_amount);
+      // Use override amount if set by admin, otherwise use stored commission amount
+      let amount = 0;
+
+      if (deal.commission_override_amount) {
+        amount = safeNumber(deal.commission_override_amount);
+      } else if (deal.deal_commissions && deal.deal_commissions.length > 0) {
+        amount = safeNumber(deal.deal_commissions[0].commission_amount);
+      }
+
+      if (amount > 0) {
         totalCommission += amount;
-        if (commission.paid) {
+
+        // Check if commission is paid
+        const isPaid = deal.status === 'paid' || deal.commission_paid || deal.deal_commissions?.[0]?.paid;
+        if (isPaid) {
           paidCommission += amount;
         }
       }

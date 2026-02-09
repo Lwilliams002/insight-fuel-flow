@@ -824,9 +824,11 @@ export default function AdminDealDetailScreen() {
   const commissionLevel = getRepCommissionLevel();
 
   // Use override amount if set, then stored commission amount, otherwise calculate
-  const commissionAmount = deal.commission_override_amount
-    ? deal.commission_override_amount
-    : (deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100)));
+  const commissionAmount = Number(
+    deal.commission_override_amount
+      ? deal.commission_override_amount
+      : (deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100)))
+  ) || 0;
 
   const getNextAction = (): { label: string; status: string; icon: IoniconsName; needsDate?: boolean; isInvoice?: boolean } | null => {
     switch (deal.status) {
@@ -1550,24 +1552,36 @@ export default function AdminDealDetailScreen() {
     </>
   );
 
-  const renderCommissionsTab = () => (
+  const renderCommissionsTab = () => {
+    const isPaid = deal.status === 'paid' || deal.commission_paid;
+
+    return (
     <>
-      <View style={styles.commissionSummaryCard}>
-        <Text style={styles.commissionSummaryLabel}>Commission Due</Text>
-        <Text style={styles.commissionSummaryValue}>${commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
-        <Text style={styles.commissionSummaryPercent}>{commissionPercent}% of ${dealValue.toLocaleString()}</Text>
-        {/* Edit Commission Button */}
-        <TouchableOpacity
-          style={{ marginTop: 12, backgroundColor: '#3B82F6', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
-          onPress={() => {
-            setEditedCommissionAmount(commissionAmount.toFixed(2));
-            setCommissionEditReason('');
-            setShowCommissionEditModal(true);
-          }}
-        >
-          <Ionicons name="create" size={16} color="#FFF" />
-          <Text style={{ color: '#FFF', fontWeight: '600' }}>Edit Commission</Text>
-        </TouchableOpacity>
+      <View style={[styles.commissionSummaryCard, isPaid && { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderColor: '#22C55E' }]}>
+        <Text style={[styles.commissionSummaryLabel, isPaid && { color: '#059669' }]}>
+          {isPaid ? 'Commission Paid' : 'Commission Due'}
+        </Text>
+        <Text style={[styles.commissionSummaryValue, isPaid && { color: '#059669' }]}>
+          ${commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+        </Text>
+        <Text style={styles.commissionSummaryPercent}>
+          {commissionPercent}% of ${dealValue.toLocaleString()}
+          {isPaid && deal.commission_paid_date && ` • Paid ${format(new Date(deal.commission_paid_date), 'MMM d, yyyy')}`}
+        </Text>
+        {/* Edit Commission Button - only show if not paid */}
+        {!isPaid && (
+          <TouchableOpacity
+            style={{ marginTop: 12, backgroundColor: '#3B82F6', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+            onPress={() => {
+              setEditedCommissionAmount(commissionAmount.toFixed(2));
+              setCommissionEditReason('');
+              setShowCommissionEditModal(true);
+            }}
+          >
+            <Ionicons name="create" size={16} color="#FFF" />
+            <Text style={{ color: '#FFF', fontWeight: '600' }}>Edit Commission</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Commission Override Info */}
@@ -1659,6 +1673,7 @@ export default function AdminDealDetailScreen() {
       </View>
     </>
   );
+  };
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
