@@ -31,7 +31,7 @@ const statusConfig: Record<DealStatus, { label: string; variant: 'default' | 'se
   install_scheduled: { label: 'Scheduled', variant: 'outline' },
   installed: { label: 'Installed', variant: 'default' },
   // COLLECT PHASE
-  invoice_sent: { label: 'Invoice Sent', variant: 'outline' },
+invoice_sent: { label: 'RCV Sent', variant: 'outline' },
   depreciation_collected: { label: 'Depreciation Collected', variant: 'default' },
   complete: { label: 'Complete', variant: 'default' },
   // OTHER

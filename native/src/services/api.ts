@@ -24,20 +24,38 @@ async function fetchApi<T>(
     ...options.headers,
   };
 
+  const url = `${awsConfig.api.baseUrl}${endpoint}`;
+  console.log('[fetchApi] Starting request to:', url);
+
   try {
-    const response = await fetch(`${awsConfig.api.baseUrl}${endpoint}`, {
+    // Add timeout to prevent hanging requests
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    const response = await fetch(url, {
       ...options,
       headers,
+      signal: controller.signal,
     });
 
+    clearTimeout(timeoutId);
+    console.log('[fetchApi] Response status:', response.status);
+
     const json = await response.json();
+    console.log('[fetchApi] Response received for:', endpoint);
 
     if (!response.ok) {
+      console.error('[fetchApi] Error response:', json);
       return { error: json.error || `HTTP ${response.status}` };
     }
 
     return { data: json.data };
   } catch (error) {
+    if (error instanceof Error && error.name === 'AbortError') {
+      console.error('[fetchApi] Request timed out for:', endpoint);
+      return { error: 'Request timed out' };
+    }
+    console.error('[fetchApi] Error for', endpoint, ':', error);
     return { error: error instanceof Error ? error.message : 'Unknown error' };
   }
 }
@@ -54,6 +72,7 @@ export interface Deal {
   zip_code: string | null;
   roof_type: string | null;
   roof_squares: number | null;
+  roofing_system_type: string | null;
   stories: number | null;
   homeowner_name: string;
   homeowner_phone: string | null;
@@ -64,6 +83,7 @@ export interface Deal {
   policy_number: string | null;
   claim_number: string | null;
   date_of_loss: string | null;
+  date_type: string | null; // 'loss' or 'discovery'
   deductible: number | null;
   inspection_date: string | null;
   rcv: number | null;
@@ -73,6 +93,8 @@ export interface Deal {
   adjuster_phone: string | null;
   adjuster_email: string | null;
   adjuster_meeting_date: string | null;
+  adjuster_not_assigned: boolean | null;
+  adjuster_notes: string | null;
   contract_signed: boolean;
   signed_date: string | null;
   signature_url: string | null;
@@ -130,6 +152,9 @@ export interface Deal {
   // Commission payment fields
   commission_paid: boolean | null;
   commission_paid_date: string | null;
+  commission_override_amount: number | null;
+  commission_override_reason: string | null;
+  commission_override_date: string | null;
   deal_commissions?: DealCommission[];
 }
 
@@ -165,6 +190,8 @@ export interface Pin {
   document_url: string | null;
   image_url: string | null;
   contract_url: string | null;
+  utility_url: string | null;
+  inspection_images: string[] | null;
   assigned_closer_id: string | null;
   outcome: string | null;
   outcome_notes: string | null;
@@ -180,10 +207,14 @@ export interface Rep {
   user_id: string;
   email?: string;
   full_name?: string;
+  account_type?: 'admin' | 'rep' | 'crew';
   commission_level: string;
   default_commission_percent: number;
   can_self_gen: boolean;
+  manager_id?: string | null;
   active: boolean;
+  training_completed: boolean;
+  avatar_url?: string | null;
   created_at: string;
 }
 
@@ -242,7 +273,12 @@ export const pinsApi = {
 // ============ REPS API ============
 
 export const repsApi = {
-  list: () => fetchApi<Rep[]>('/reps'),
+  list: (accountType?: AccountType) => {
+    const params = accountType ? `?account_type=${accountType}` : '';
+    const url = `/reps${params}`;
+    console.log('[repsApi.list] Calling:', url);
+    return fetchApi<Rep[]>(url);
+  },
 
   get: (id: string) => fetchApi<Rep>(`/reps/${id}`),
 
@@ -253,6 +289,9 @@ export const repsApi = {
       method: 'PUT',
       body: JSON.stringify(rep),
     }),
+
+  delete: (id: string) =>
+    fetchApi<void>(`/reps/${id}`, { method: 'DELETE' }),
 };
 
 // ============ UPLOAD API ============
@@ -357,6 +396,95 @@ export async function uploadFile(
   }
 }
 
+// Upload large files using presigned URLs (bypasses API Gateway payload limit)
+export async function uploadLargeFile(
+  fileUri: string,
+  fileName: string,
+  fileType: string,
+  category: string,
+  dealId?: string,
+): Promise<{ url: string; key: string } | null> {
+  try {
+    const token = getIdTokenFn ? await getIdTokenFn() : null;
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    // Build folder path
+    let folder = category;
+    if (dealId) folder = `deals/${dealId}/${category}`;
+
+    console.log('[uploadLargeFile] Getting presigned URL for:', fileName);
+
+    // Step 1: Get presigned upload URL from our API
+    const urlResponse = await fetch(`${awsConfig.api.baseUrl}/upload/url`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        fileName,
+        fileType,
+        folder,
+      }),
+    });
+
+    if (!urlResponse.ok) {
+      const errorText = await urlResponse.text();
+      console.error('[uploadLargeFile] Failed to get presigned URL:', errorText);
+      throw new Error('Failed to get upload URL');
+    }
+
+    const responseJson = await urlResponse.json();
+    // API wraps response in { data: ... }
+    const urlData = responseJson.data || responseJson;
+    const { uploadUrl, key, downloadUrl } = urlData as {
+      uploadUrl: string;
+      key: string;
+      downloadUrl: string
+    };
+    console.log('[uploadLargeFile] Got presigned URL, key:', key);
+    console.log('[uploadLargeFile] Upload URL:', uploadUrl?.substring(0, 100) + '...');
+
+    // Step 2: Upload file directly using expo-file-system
+    // This handles local file URIs better than fetch
+    const FileSystem = require('expo-file-system');
+
+    try {
+      console.log('[uploadLargeFile] Starting upload from:', fileUri.substring(0, 50) + '...');
+
+      const uploadResult = await FileSystem.uploadAsync(uploadUrl, fileUri, {
+        httpMethod: 'PUT',
+        uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        headers: {
+          'Content-Type': fileType,
+        },
+      });
+
+      console.log('[uploadLargeFile] Upload result status:', uploadResult.status);
+
+      if (uploadResult.status < 200 || uploadResult.status >= 300) {
+        console.error('[uploadLargeFile] Upload failed with status:', uploadResult.status, uploadResult.body);
+        throw new Error(`Upload failed with status: ${uploadResult.status}`);
+      }
+
+      console.log('[uploadLargeFile] Upload successful, key:', key);
+
+      return {
+        url: downloadUrl,
+        key,
+      };
+    } catch (uploadError) {
+      console.error('[uploadLargeFile] Upload error:', uploadError);
+      throw uploadError;
+    }
+  } catch (error) {
+    console.error('[uploadLargeFile] Error:', error);
+    return null;
+  }
+}
+
 // ============ DOWNLOAD API ============
 
 export async function getSignedFileUrl(key: string): Promise<string | null> {
@@ -431,10 +559,74 @@ export async function getSignedFileUrl(key: string): Promise<string | null> {
 
 // ============ ADMIN API ============
 
+export type AccountType = 'admin' | 'rep' | 'crew';
+
+export interface CreateRepParams {
+  email: string;
+  password: string;
+  fullName: string;
+  accountType?: AccountType;
+  commissionLevel?: string;
+  canSelfGen?: boolean;
+  managerId?: string;
+}
+
 export const adminApi = {
+  createRep: (params: CreateRepParams) =>
+    fetchApi<{ message: string; userId: string; rep: Rep }>('/admin/create-rep', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
+  syncReps: () =>
+    fetchApi<{ message: string; synced: number; skipped: number; total: number }>('/admin/sync-reps', {
+      method: 'POST',
+    }),
+
+  completeTraining: (email: string) =>
+    fetchApi<{ message: string; rep_id: string; courses_completed: number }>('/admin/complete-training', {
+      method: 'POST',
+      body: JSON.stringify({ email }),
+    }),
+
   runMigration: () =>
-    fetchApi<{ success: boolean; message: string }>('/admin/init-db', {
+    fetchApi<{ message: string; results: string[] }>('/admin/migrate', {
       method: 'POST',
     }),
 };
 
+// ============ TRAINING API ============
+
+export interface CourseProgress {
+  course_id: string;
+  exam_score: number | null;
+  exam_passed: boolean;
+  completed_at: string | null;
+}
+
+export interface TrainingProgress {
+  training_completed: boolean;
+  courses: CourseProgress[];
+}
+
+export interface ExamSubmission {
+  course_id: string;
+  answers: Record<string, string | number | boolean>;
+}
+
+export interface ExamResult {
+  score: number;
+  passed: boolean;
+  training_completed: boolean;
+  progress: CourseProgress;
+}
+
+export const trainingApi = {
+  getProgress: () => fetchApi<TrainingProgress>('/training'),
+
+  submitExam: (submission: ExamSubmission) =>
+    fetchApi<ExamResult>('/training/submit', {
+      method: 'POST',
+      body: JSON.stringify(submission),
+    }),
+};

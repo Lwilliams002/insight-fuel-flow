@@ -127,8 +127,8 @@ async function createPin(user: any, event: APIGatewayProxyEvent) {
       address, city, state, zip_code,
       latitude, longitude, status, notes,
       appointment_date, appointment_end_date, appointment_all_day,
-      assigned_closer_id, document_url
-    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+      assigned_closer_id, document_url, utility_url, contract_url, image_url, inspection_images
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
     RETURNING *`,
     [
       body.rep_id || repId,
@@ -148,6 +148,10 @@ async function createPin(user: any, event: APIGatewayProxyEvent) {
       body.appointment_all_day || false,
       body.assigned_closer_id,
       body.document_url,
+      body.utility_url,
+      body.contract_url,
+      body.image_url,
+      body.inspection_images,
     ]
   );
 

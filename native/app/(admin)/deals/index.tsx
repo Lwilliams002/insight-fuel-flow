@@ -22,7 +22,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   install_scheduled: { label: 'Scheduled', color: '#06B6D4' },
   installed: { label: 'Installed', color: '#14B8A6' },
   completion_signed: { label: 'Completion Form', color: '#06B6D4' },
-  invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  invoice_sent: { label: 'RCV Sent', color: '#6366F1' },
   depreciation_collected: { label: 'Depreciation', color: '#8B5CF6' },
   complete: { label: 'Complete', color: '#10B981' },
   paid: { label: 'Paid', color: '#059669' },
@@ -153,20 +153,20 @@ export default function AdminDealsScreen() {
         {/* Status Filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.filterScroll}>
           <TouchableOpacity
-            style={[styles.filterChip, !statusFilter && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: isDark ? colors.secondary : '#F3F4F6' }, !statusFilter && styles.filterChipActive]}
             onPress={() => setStatusFilter(null)}
           >
-            <Text style={[styles.filterChipText, !statusFilter && styles.filterChipTextActive]}>
+            <Text style={[styles.filterChipText, { color: isDark ? colors.foreground : '#6B7280' }, !statusFilter && styles.filterChipTextActive]}>
               All ({deals?.length || 0})
             </Text>
           </TouchableOpacity>
           {Object.entries(statusConfig).slice(0, 6).map(([key, config]) => (
             <TouchableOpacity
               key={key}
-              style={[styles.filterChip, statusFilter === key && styles.filterChipActive]}
+              style={[styles.filterChip, { backgroundColor: isDark ? colors.secondary : '#F3F4F6' }, statusFilter === key && styles.filterChipActive]}
               onPress={() => setStatusFilter(statusFilter === key ? null : key)}
             >
-              <Text style={[styles.filterChipText, statusFilter === key && styles.filterChipTextActive]}>
+              <Text style={[styles.filterChipText, { color: isDark ? colors.foreground : '#6B7280' }, statusFilter === key && styles.filterChipTextActive]}>
                 {config.label} ({statusCounts[key] || 0})
               </Text>
             </TouchableOpacity>
@@ -183,9 +183,9 @@ export default function AdminDealsScreen() {
         }
       >
         {filteredDeals.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Ionicons name="document-text-outline" size={40} color="#9CA3AF" />
-            <Text style={styles.emptyText}>
+          <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+            <Ionicons name="document-text-outline" size={40} color={colors.mutedForeground} />
+            <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
               {searchQuery ? `No deals found matching "${searchQuery}"` : 'No deals found'}
             </Text>
           </View>
@@ -198,7 +198,7 @@ export default function AdminDealsScreen() {
               <TouchableOpacity
                 key={deal.id}
                 activeOpacity={0.7}
-                style={[styles.dealCard, hasPendingPayment && styles.dealCardPendingPayment]}
+                style={[styles.dealCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }, hasPendingPayment && styles.dealCardPendingPayment]}
                 onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
               >
                 {hasPendingPayment && (
@@ -210,29 +210,29 @@ export default function AdminDealsScreen() {
                 <View style={styles.dealContent}>
                   <View style={styles.dealInfo}>
                     <View style={styles.dealHeader}>
-                      <Text style={styles.dealName}>{deal.homeowner_name}</Text>
+                      <Text style={[styles.dealName, { color: colors.foreground }]}>{deal.homeowner_name}</Text>
                       <View style={[styles.badge, { borderColor: config.color }]}>
                         <Text style={[styles.badgeText, { color: config.color }]}>
                           {config.label}
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.dealAddress} numberOfLines={1}>
+                    <Text style={[styles.dealAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                       {deal.address}
                       {deal.city && `, ${deal.city}`}
                     </Text>
                     <View style={styles.dealFooter}>
-                      <Text style={styles.dealPrice}>
+                      <Text style={[styles.dealPrice, { color: colors.foreground }]}>
                         ${(deal.rcv || deal.total_price || 0).toLocaleString()}
                       </Text>
                       {deal.rep_name && (
-                        <Text style={styles.repName}>
-                          <Ionicons name="person" size={12} color="#9CA3AF" /> {deal.rep_name}
+                        <Text style={[styles.repName, { color: colors.mutedForeground }]}>
+                          <Ionicons name="person" size={12} color={colors.mutedForeground} /> {deal.rep_name}
                         </Text>
                       )}
                     </View>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
                 </View>
               </TouchableOpacity>
             );

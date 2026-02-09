@@ -36,6 +36,15 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     // Insurance agreement upload
     await safeAddColumn('deals', 'insurance_agreement_url', 'TEXT', results);
 
+    // Date of loss field
+    await safeAddColumn('deals', 'date_of_loss', 'DATE', results);
+
+    // Date type field (loss or discovery)
+    await safeAddColumn('deals', 'date_type', 'TEXT', results);
+
+    // Adjuster not assigned flag
+    await safeAddColumn('deals', 'adjuster_not_assigned', 'BOOLEAN', results);
+
     // Inspection photos
     await safeAddColumn('deals', 'inspection_images', 'TEXT[]', results);
 
@@ -68,6 +77,52 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
     await safeAddColumn('rep_pins', 'contract_url', 'TEXT', results);
 
     // ==========================================
+    // COMMISSION OVERRIDE FIELDS (New)
+    // ==========================================
+
+    await safeAddColumn('deals', 'commission_override_amount', 'NUMERIC', results);
+    await safeAddColumn('deals', 'commission_override_reason', 'TEXT', results);
+    await safeAddColumn('deals', 'commission_override_date', 'TIMESTAMP WITH TIME ZONE', results);
+    await safeAddColumn('deals', 'commission_paid', 'BOOLEAN DEFAULT false', results);
+    await safeAddColumn('deals', 'commission_paid_date', 'DATE', results);
+
+    // ==========================================
+    // CREW & ADDITIONAL FIELDS (New)
+    // ==========================================
+
+    await safeAddColumn('deals', 'adjuster_notes', 'TEXT', results);
+    await safeAddColumn('deals', 'install_request_date', 'TIMESTAMP WITH TIME ZONE', results);
+    await safeAddColumn('deals', 'install_request_notes', 'TEXT', results);
+    await safeAddColumn('deals', 'sales_tax_rate', 'NUMERIC DEFAULT 8.25', results);
+    await safeAddColumn('deals', 'roofing_system_type', 'TEXT', results);
+    await safeAddColumn('deals', 'completion_form_url', 'TEXT', results);
+    await safeAddColumn('deals', 'completion_form_signature_url', 'TEXT', results);
+    await safeAddColumn('deals', 'completion_date', 'TIMESTAMP WITH TIME ZONE', results);
+
+    // Add role_type column to profiles for crew support
+    await safeAddColumn('profiles', 'role_type', 'TEXT', results);
+
+    // ==========================================
+    // ADD CREW ENUM VALUE
+    // ==========================================
+
+    try {
+      const crewEnumCheck = await query(
+        `SELECT 1 FROM pg_enum WHERE enumlabel = 'crew' AND enumtypid = 'app_role'::regtype`,
+        []
+      );
+      if (crewEnumCheck.length === 0) {
+        await execute(`ALTER TYPE app_role ADD VALUE IF NOT EXISTS 'crew'`, []);
+        results.push('Added enum value: crew to app_role');
+      } else {
+        results.push('Enum value crew already exists in app_role');
+      }
+    } catch (e: unknown) {
+      const error = e as Error;
+      results.push(`Enum crew in app_role: ${error.message}`);
+    }
+
+    // ==========================================
     // DEAL_DOCUMENTS TABLE
     // ==========================================
 
@@ -88,11 +143,12 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
         )
       `, []);
       results.push('Created table: deal_documents');
-    } catch (e: any) {
-      if (e.message?.includes('already exists')) {
+    } catch (e: unknown) {
+      const error = e as Error;
+      if (error.message?.includes('already exists')) {
         results.push('Table deal_documents already exists');
       } else {
-        results.push(`Error creating deal_documents: ${e.message}`);
+        results.push(`Error creating deal_documents: ${error.message}`);
       }
     }
 
@@ -120,8 +176,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       } else {
         results.push('Enum value collect_acv already exists');
       }
-    } catch (e: any) {
-      results.push(`Enum collect_acv: ${e.message}`);
+    } catch (e: unknown) {
+      const error = e as Error;
+      results.push(`Enum collect_acv: ${error.message}`);
     }
 
     try {
@@ -135,8 +192,9 @@ export async function handler(event: APIGatewayProxyEvent): Promise<APIGatewayPr
       } else {
         results.push('Enum value collect_deductible already exists');
       }
-    } catch (e: any) {
-      results.push(`Enum collect_deductible: ${e.message}`);
+    } catch (e: unknown) {
+      const error = e as Error;
+      results.push(`Enum collect_deductible: ${error.message}`);
     }
 
     return success({
@@ -154,11 +212,12 @@ async function safeAddColumn(table: string, column: string, type: string, result
   try {
     await execute(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}`, []);
     results.push(`Added column: ${table}.${column}`);
-  } catch (e: any) {
-    if (e.message?.includes('already exists')) {
+  } catch (e: unknown) {
+    const error = e as Error;
+    if (error.message?.includes('already exists')) {
       results.push(`Column ${table}.${column} already exists`);
     } else {
-      results.push(`Error adding ${table}.${column}: ${e.message}`);
+      results.push(`Error adding ${table}.${column}: ${error.message}`);
     }
   }
 }
@@ -167,11 +226,12 @@ async function safeCreateIndex(name: string, table: string, column: string, resu
   try {
     await execute(`CREATE INDEX IF NOT EXISTS ${name} ON ${table}(${column})`, []);
     results.push(`Created index: ${name}`);
-  } catch (e: any) {
-    if (e.message?.includes('already exists')) {
+  } catch (e: unknown) {
+    const error = e as Error;
+    if (error.message?.includes('already exists')) {
       results.push(`Index ${name} already exists`);
     } else {
-      results.push(`Error creating index ${name}: ${e.message}`);
+      results.push(`Error creating index ${name}: ${error.message}`);
     }
   }
 }

@@ -417,17 +417,17 @@ export default function CalendarScreen() {
 
         {/* Stats */}
         <View style={[styles.statsRow, { borderTopColor: colors.border }]}>
-          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#FFF7ED' }]}>
+          <View style={styles.statItem}>
             <Ionicons name="today" size={16} color="#F59E0B" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.todayAppts}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Today</Text>
           </View>
-          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#F3E8FF' }]}>
+          <View style={styles.statItem}>
             <Ionicons name="calendar" size={16} color="#8B5CF6" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.thisWeekAppts}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>This Week</Text>
           </View>
-          <View style={[styles.statItem, { backgroundColor: isDark ? colors.secondary : '#EFF6FF' }]}>
+          <View style={styles.statItem}>
             <Ionicons name="list" size={16} color="#3B82F6" />
             <Text style={[styles.statValue, { color: colors.foreground }]}>{stats.totalAppts}</Text>
             <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Total</Text>
@@ -789,7 +789,15 @@ export default function CalendarScreen() {
                           display="spinner"
                           onChange={(event, date) => {
                             if (date) {
-                              setAppointmentForm(prev => ({ ...prev, appointment_time: format(date, 'HH:mm') }));
+                              const newStartTime = format(date, 'HH:mm');
+                              // Auto-set end time to 1 hour after start time
+                              const endDate = new Date(date.getTime() + 60 * 60 * 1000);
+                              const newEndTime = format(endDate, 'HH:mm');
+                              setAppointmentForm(prev => ({
+                                ...prev,
+                                appointment_time: newStartTime,
+                                appointment_end_time: newEndTime
+                              }));
                             }
                             if (Platform.OS === 'android') setShowStartTimePicker(false);
                           }}

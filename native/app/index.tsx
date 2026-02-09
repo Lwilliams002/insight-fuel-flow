@@ -24,8 +24,12 @@ export default function Index() {
       console.log('[Index] Admin user, going to admin dashboard');
       router.replace('/(admin)/dashboard');
     } else if (role === 'rep') {
-      console.log('[Index] Rep user, going to rep dashboard');
+      // Rep layout will check training status and redirect if needed
+      console.log('[Index] Rep user, going to rep section');
       router.replace('/(rep)/dashboard');
+    } else if (role === 'crew') {
+      console.log('[Index] Crew user, going to crew dashboard');
+      router.replace('/(crew)/dashboard');
     } else {
       console.log('[Index] No role, going to login');
       router.replace('/(auth)/login');

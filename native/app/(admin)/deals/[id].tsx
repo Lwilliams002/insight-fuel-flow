@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, TextInput, Modal, Linking, Image, Dimensions, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, StyleSheet, TextInput, Modal, Linking, Image, Dimensions, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -36,7 +36,7 @@ const milestones: { status: string; label: string; icon: IoniconsName; phase: st
   { status: 'install_scheduled', label: 'Install Sched.', icon: 'calendar', phase: 'build' },
   { status: 'installed', label: 'Installed', icon: 'home', phase: 'build' },
   { status: 'completion_signed', label: 'Completion Form', icon: 'create', phase: 'finalizing' },
-  { status: 'invoice_sent', label: 'Invoice Sent', icon: 'send', phase: 'finalizing' },
+  { status: 'invoice_sent', label: 'RCV Sent', icon: 'send', phase: 'finalizing' },
   { status: 'depreciation_collected', label: 'Depreciation', icon: 'cash', phase: 'finalizing' },
   { status: 'complete', label: 'Complete', icon: 'trophy', phase: 'complete' },
   { status: 'paid', label: 'Paid', icon: 'checkmark-done', phase: 'complete' },
@@ -70,7 +70,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   install_scheduled: { label: 'Install Scheduled', color: '#06B6D4' },
   installed: { label: 'Installed', color: '#14B8A6' },
   completion_signed: { label: 'Completion Signed', color: '#06B6D4' },
-  invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  invoice_sent: { label: 'RCV Sent', color: '#6366F1' },
   depreciation_collected: { label: 'Depreciation Collected', color: '#8B5CF6' },
   complete: { label: 'Complete', color: '#10B981' },
   paid: { label: 'Paid', color: '#059669' },
@@ -172,6 +172,17 @@ export default function AdminDealDetailScreen() {
   const [htmlViewerContent, setHtmlViewerContent] = useState('');
   const [htmlViewerTitle, setHtmlViewerTitle] = useState('');
 
+  // Commission editing
+  const [showCommissionEditModal, setShowCommissionEditModal] = useState(false);
+  const [editedCommissionAmount, setEditedCommissionAmount] = useState('');
+  const [commissionEditReason, setCommissionEditReason] = useState('');
+
+  // Lost statement viewing
+  const [loadingLostStatement, setLoadingLostStatement] = useState(false);
+
+  // Crew selection dropdown
+  const [showCrewDropdown, setShowCrewDropdown] = useState(false);
+
   const { data: deal, isLoading, error, refetch } = useQuery({
     queryKey: ['deal', id],
     queryFn: async () => {
@@ -187,6 +198,19 @@ export default function AdminDealDetailScreen() {
     queryFn: async () => {
       const response = await repsApi.list();
       if (response.error) throw new Error(response.error);
+      return response.data || [];
+    },
+  });
+
+  // Fetch crew leads for the crew assignment dropdown
+  const { data: crewLeads } = useQuery({
+    queryKey: ['reps', 'crew'],
+    queryFn: async () => {
+      console.log('[DealDetail] Fetching crew leads...');
+      const response = await repsApi.list('crew');
+      console.log('[DealDetail] Crew leads response:', JSON.stringify(response));
+      if (response.error) throw new Error(response.error);
+      console.log('[DealDetail] Crew leads count:', response.data?.length || 0);
       return response.data || [];
     },
   });
@@ -611,7 +635,7 @@ export default function AdminDealDetailScreen() {
           await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share Invoice' });
         }
 
-        Alert.alert('Success', 'Invoice generated and sent! Deal status updated to Invoice Sent.');
+        Alert.alert('Success', 'Invoice generated and sent! Deal status updated to RCV Sent.');
       } else {
         Alert.alert('Error', 'Failed to upload invoice');
       }
@@ -649,6 +673,60 @@ export default function AdminDealDetailScreen() {
         }
       ]
     );
+  };
+
+  // Handle editing commission amount with reason
+  const handleSaveCommissionEdit = async () => {
+    if (!commissionEditReason.trim()) {
+      Alert.alert('Error', 'A reason is required when editing commission amount.');
+      return;
+    }
+
+    const newAmount = parseFloat(editedCommissionAmount);
+    if (isNaN(newAmount) || newAmount < 0) {
+      Alert.alert('Error', 'Please enter a valid commission amount.');
+      return;
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        commission_override_amount: newAmount,
+        commission_override_reason: commissionEditReason.trim(),
+        commission_override_date: new Date().toISOString(),
+      });
+
+      Alert.alert('Success', 'Commission amount updated successfully.');
+      setShowCommissionEditModal(false);
+      setEditedCommissionAmount('');
+      setCommissionEditReason('');
+    } catch (error) {
+      Alert.alert('Error', 'Failed to update commission: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+  };
+
+  // View lost statement helper
+  const handleViewLostStatement = async () => {
+    if (!deal?.lost_statement_url) {
+      Alert.alert('No Lost Statement', 'Lost statement has not been uploaded for this deal.');
+      return;
+    }
+
+    setLoadingLostStatement(true);
+    try {
+      const signedUrl = await getSignedFileUrl(deal.lost_statement_url);
+      if (signedUrl) {
+        await WebBrowser.openBrowserAsync(signedUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.PAGE_SHEET,
+        });
+      } else {
+        Alert.alert('Error', 'Could not load lost statement');
+      }
+    } catch (error) {
+      console.error('Error viewing lost statement:', error);
+      Alert.alert('Error', 'Failed to open lost statement');
+    } finally {
+      setLoadingLostStatement(false);
+    }
   };
 
   if (isLoading) {
@@ -745,8 +823,10 @@ export default function AdminDealDetailScreen() {
   const commissionPercent = getRepCommissionPercent();
   const commissionLevel = getRepCommissionLevel();
 
-  // Use stored commission amount if available, otherwise calculate
-  const commissionAmount = deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100));
+  // Use override amount if set, then stored commission amount, otherwise calculate
+  const commissionAmount = deal.commission_override_amount
+    ? deal.commission_override_amount
+    : (deal.deal_commissions?.[0]?.commission_amount || (baseAmount * (commissionPercent / 100)));
 
   const getNextAction = (): { label: string; status: string; icon: IoniconsName; needsDate?: boolean; isInvoice?: boolean } | null => {
     switch (deal.status) {
@@ -776,20 +856,20 @@ export default function AdminDealDetailScreen() {
 
   const renderOverviewTab = () => (
     <>
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="home" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Property Information</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Property Information</Text>
         </View>
         <View style={styles.infoGrid}>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Homeowner</Text>
-            <Text style={styles.infoValueLarge}>{deal.homeowner_name}</Text>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Homeowner</Text>
+            <Text style={[styles.infoValueLarge, { color: colors.foreground }]}>{deal.homeowner_name}</Text>
           </View>
           <View style={styles.infoItem}>
-            <Text style={styles.infoLabel}>Address</Text>
-            <Text style={styles.infoValue}>{deal.address}</Text>
-            {deal.city && <Text style={styles.infoValueSub}>{deal.city}, {deal.state} {deal.zip_code}</Text>}
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Address</Text>
+            <Text style={[styles.infoValue, { color: colors.foreground }]}>{deal.address}</Text>
+            {deal.city && <Text style={[styles.infoValueSub, { color: colors.mutedForeground }]}>{deal.city}, {deal.state} {deal.zip_code}</Text>}
           </View>
           {deal.homeowner_phone && (
             <TouchableOpacity style={styles.contactRow} onPress={handleCall}>
@@ -806,48 +886,48 @@ export default function AdminDealDetailScreen() {
         </View>
         {(deal.roof_type || deal.roof_squares) && (
           <View style={styles.propertyDetails}>
-            {deal.roof_type && <View style={styles.propertyTag}><Text style={styles.propertyTagText}>{deal.roof_type}</Text></View>}
-            {deal.roof_squares && <View style={styles.propertyTag}><Text style={styles.propertyTagText}>{deal.roof_squares} sq</Text></View>}
-            {deal.stories && <View style={styles.propertyTag}><Text style={styles.propertyTagText}>{deal.stories} story</Text></View>}
+            {deal.roof_type && <View style={[styles.propertyTag, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Text style={[styles.propertyTagText, { color: colors.foreground }]}>{deal.roof_type}</Text></View>}
+            {deal.roof_squares && <View style={[styles.propertyTag, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Text style={[styles.propertyTagText, { color: colors.foreground }]}>{deal.roof_squares} sq</Text></View>}
+            {deal.stories && <View style={[styles.propertyTag, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Text style={[styles.propertyTagText, { color: colors.foreground }]}>{deal.stories} story</Text></View>}
           </View>
         )}
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="shield-checkmark" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Insurance Details</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Insurance Details</Text>
         </View>
         <View style={styles.infoGrid}>
-          {deal.insurance_company && <View style={styles.infoRow}><Text style={styles.infoLabel}>Insurance</Text><Text style={styles.infoValue}>{deal.insurance_company}</Text></View>}
-          {deal.claim_number && <View style={styles.infoRow}><Text style={styles.infoLabel}>Claim #</Text><Text style={styles.infoValueMono}>{deal.claim_number}</Text></View>}
-          {deal.policy_number && <View style={styles.infoRow}><Text style={styles.infoLabel}>Policy #</Text><Text style={styles.infoValueMono}>{deal.policy_number}</Text></View>}
-          {deal.date_of_loss && <View style={styles.infoRow}><Text style={styles.infoLabel}>Date of Loss</Text><Text style={styles.infoValue}>{format(new Date(deal.date_of_loss), 'MMM d, yyyy')}</Text></View>}
+          {deal.insurance_company && <View style={styles.infoRow}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Insurance</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{deal.insurance_company}</Text></View>}
+          {deal.claim_number && <View style={styles.infoRow}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Claim #</Text><Text style={[styles.infoValueMono, { color: colors.foreground }]}>{deal.claim_number}</Text></View>}
+          {deal.policy_number && <View style={styles.infoRow}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Policy #</Text><Text style={[styles.infoValueMono, { color: colors.foreground }]}>{deal.policy_number}</Text></View>}
+          {deal.date_of_loss && <View style={styles.infoRow}><Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Date of Loss</Text><Text style={[styles.infoValue, { color: colors.foreground }]}>{format(new Date(deal.date_of_loss), 'MMM d, yyyy')}</Text></View>}
           {deal.approval_type && (
             <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Approval</Text>
+              <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Approval</Text>
               <View style={styles.approvalBadge}><Text style={styles.approvalBadgeText}>{deal.approval_type === 'full' ? 'Full' : deal.approval_type === 'partial' ? 'Partial' : 'Sale'}</Text></View>
             </View>
           )}
         </View>
         {deal.adjuster_name && (
-          <View style={styles.adjusterSection}>
-            <Text style={styles.subSectionTitle}>Adjuster</Text>
-            <Text style={styles.infoValue}>{deal.adjuster_name}</Text>
-            {deal.adjuster_phone && <Text style={styles.infoValueSub}>{deal.adjuster_phone}</Text>}
+          <View style={[styles.adjusterSection, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
+            <Text style={[styles.subSectionTitle, { color: colors.mutedForeground }]}>Adjuster</Text>
+            <Text style={[styles.infoValue, { color: colors.foreground }]}>{deal.adjuster_name}</Text>
+            {deal.adjuster_phone && <Text style={[styles.infoValueSub, { color: colors.mutedForeground }]}>{deal.adjuster_phone}</Text>}
           </View>
         )}
       </View>
 
       {/* Sales Rep Section with Reassign */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="person" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Sales Rep</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Sales Rep</Text>
         </View>
         <View style={styles.repRow}>
           <View style={styles.repInfo}>
-            <Text style={styles.repName}>{repName}</Text>
+            <Text style={[styles.repName, { color: colors.foreground }]}>{repName}</Text>
             {commissionLevel && (
               <View style={styles.repLevelBadge}>
                 <Text style={styles.repLevelText}>{commissionLevel}</Text>
@@ -866,57 +946,57 @@ export default function AdminDealDetailScreen() {
 
       {/* Material Specifications Section */}
       {(deal.material_category || deal.material_color || deal.drip_edge || deal.vent_color) && (
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="construct" size={20} color={staticColors.primary} />
-            <Text style={styles.sectionTitle}>Material Specifications</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Material Specifications</Text>
           </View>
           <View style={styles.materialGrid}>
             {deal.material_category && (
-              <View style={styles.materialItem}>
-                <Text style={styles.materialLabel}>Category</Text>
-                <Text style={styles.materialValue}>{deal.material_category}</Text>
+              <View style={[styles.materialItem, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                <Text style={[styles.materialLabel, { color: colors.mutedForeground }]}>Category</Text>
+                <Text style={[styles.materialValue, { color: colors.foreground }]}>{deal.material_category}</Text>
               </View>
             )}
             {deal.material_type && (
-              <View style={styles.materialItem}>
-                <Text style={styles.materialLabel}>Type</Text>
-                <Text style={styles.materialValue}>{deal.material_type}</Text>
+              <View style={[styles.materialItem, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                <Text style={[styles.materialLabel, { color: colors.mutedForeground }]}>Type</Text>
+                <Text style={[styles.materialValue, { color: colors.foreground }]}>{deal.material_type}</Text>
               </View>
             )}
             {deal.material_color && (
-              <View style={styles.materialItem}>
-                <Text style={styles.materialLabel}>Color</Text>
-                <Text style={styles.materialValue}>{deal.material_color}</Text>
+              <View style={[styles.materialItem, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                <Text style={[styles.materialLabel, { color: colors.mutedForeground }]}>Color</Text>
+                <Text style={[styles.materialValue, { color: colors.foreground }]}>{deal.material_color}</Text>
               </View>
             )}
             {deal.drip_edge && (
-              <View style={styles.materialItem}>
-                <Text style={styles.materialLabel}>Drip Edge</Text>
-                <Text style={styles.materialValue}>{deal.drip_edge}</Text>
+              <View style={[styles.materialItem, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                <Text style={[styles.materialLabel, { color: colors.mutedForeground }]}>Drip Edge</Text>
+                <Text style={[styles.materialValue, { color: colors.foreground }]}>{deal.drip_edge}</Text>
               </View>
             )}
             {deal.vent_color && (
-              <View style={styles.materialItem}>
-                <Text style={styles.materialLabel}>Vent Color</Text>
-                <Text style={styles.materialValue}>{deal.vent_color}</Text>
+              <View style={[styles.materialItem, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                <Text style={[styles.materialLabel, { color: colors.mutedForeground }]}>Vent Color</Text>
+                <Text style={[styles.materialValue, { color: colors.foreground }]}>{deal.vent_color}</Text>
               </View>
             )}
           </View>
         </View>
       )}
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="time" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Timeline</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Timeline</Text>
         </View>
         <View style={styles.timeline}>
-          {deal.created_at && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={styles.timelineLabel}>Created</Text><Text style={styles.timelineDate}>{format(new Date(deal.created_at), 'MMM d, yyyy')}</Text></View>}
-          {deal.inspection_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={styles.timelineLabel}>Inspection</Text><Text style={styles.timelineDate}>{format(new Date(deal.inspection_date), 'MMM d, yyyy')}</Text></View>}
-          {deal.signed_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={styles.timelineLabel}>Signed</Text><Text style={styles.timelineDate}>{format(new Date(deal.signed_date), 'MMM d, yyyy')}</Text></View>}
-          {deal.install_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={styles.timelineLabel}>Install</Text><Text style={styles.timelineDate}>{format(new Date(deal.install_date), 'MMM d, yyyy')}</Text></View>}
-          {deal.completion_date && <View style={styles.timelineItem}><View style={[styles.timelineDot, { backgroundColor: '#22C55E' }]} /><Text style={styles.timelineLabel}>Completed</Text><Text style={styles.timelineDate}>{format(new Date(deal.completion_date), 'MMM d, yyyy')}</Text></View>}
+          {deal.created_at && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={[styles.timelineLabel, { color: colors.foreground }]}>Created</Text><Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{format(new Date(deal.created_at), 'MMM d, yyyy')}</Text></View>}
+          {deal.inspection_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={[styles.timelineLabel, { color: colors.foreground }]}>Inspection</Text><Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{format(new Date(deal.inspection_date), 'MMM d, yyyy')}</Text></View>}
+          {deal.signed_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={[styles.timelineLabel, { color: colors.foreground }]}>Signed</Text><Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{format(new Date(deal.signed_date), 'MMM d, yyyy')}</Text></View>}
+          {deal.install_date && <View style={styles.timelineItem}><View style={styles.timelineDot} /><Text style={[styles.timelineLabel, { color: colors.foreground }]}>Install</Text><Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{format(new Date(deal.install_date), 'MMM d, yyyy')}</Text></View>}
+          {deal.completion_date && <View style={styles.timelineItem}><View style={[styles.timelineDot, { backgroundColor: '#22C55E' }]} /><Text style={[styles.timelineLabel, { color: colors.foreground }]}>Completed</Text><Text style={[styles.timelineDate, { color: colors.mutedForeground }]}>{format(new Date(deal.completion_date), 'MMM d, yyyy')}</Text></View>}
         </View>
       </View>
 
@@ -927,32 +1007,32 @@ export default function AdminDealDetailScreen() {
 
         if (!canSetInstallDate) {
           return (
-            <View style={styles.sectionCard}>
+            <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="calendar" size={20} color="#9CA3AF" />
                 <Text style={[styles.sectionTitle, { color: '#9CA3AF' }]}>Installation Schedule</Text>
               </View>
-              <View style={styles.installDateLocked}>
-                <Ionicons name="lock-closed" size={24} color="#9CA3AF" />
-                <Text style={styles.installDateLockedText}>Install schedule can be set once deal reaches "Ready for Install" status</Text>
+              <View style={[styles.installDateLocked, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                <Ionicons name="lock-closed" size={24} color={colors.mutedForeground} />
+                <Text style={[styles.installDateLockedText, { color: colors.mutedForeground }]}>Install schedule can be set once deal reaches "Ready for Install" status</Text>
               </View>
             </View>
           );
         }
 
         return (
-          <View style={styles.sectionCard}>
+          <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="calendar" size={20} color={staticColors.primary} />
-              <Text style={styles.sectionTitle}>Installation Schedule</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Installation Schedule</Text>
             </View>
             <View style={styles.installDateContainer}>
               {deal.install_date ? (
                 <View>
                   <View style={styles.installDateDisplay}>
                     <View style={styles.installDateInfo}>
-                      <Text style={styles.installDateLabel}>Scheduled Date</Text>
-                      <Text style={styles.installDateValue}>{format(new Date(deal.install_date), 'EEEE, MMMM d, yyyy')}</Text>
+                      <Text style={[styles.installDateLabel, { color: colors.mutedForeground }]}>Scheduled Date</Text>
+                      <Text style={[styles.installDateValue, { color: colors.foreground }]}>{format(new Date(deal.install_date), 'EEEE, MMMM d, yyyy')}</Text>
                     </View>
                     <TouchableOpacity
                       style={styles.editInstallDateBtn}
@@ -963,17 +1043,17 @@ export default function AdminDealDetailScreen() {
                     </TouchableOpacity>
                   </View>
                   {(deal as any).install_time && (
-                    <View style={styles.installDetailRow}>
-                      <Ionicons name="time-outline" size={16} color="#6B7280" />
-                      <Text style={styles.installDetailLabel}>Time:</Text>
-                      <Text style={styles.installDetailValue}>{(deal as any).install_time}</Text>
+                    <View style={[styles.installDetailRow, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
+                      <Ionicons name="time-outline" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.installDetailLabel, { color: colors.mutedForeground }]}>Time:</Text>
+                      <Text style={[styles.installDetailValue, { color: colors.foreground }]}>{(deal as any).install_time}</Text>
                     </View>
                   )}
                   {(deal as any).crew_assignment && (
-                    <View style={styles.installDetailRow}>
-                      <Ionicons name="people-outline" size={16} color="#6B7280" />
-                      <Text style={styles.installDetailLabel}>Crew:</Text>
-                      <Text style={styles.installDetailValue}>{(deal as any).crew_assignment}</Text>
+                    <View style={[styles.installDetailRow, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
+                      <Ionicons name="people-outline" size={16} color={colors.mutedForeground} />
+                      <Text style={[styles.installDetailLabel, { color: colors.mutedForeground }]}>Crew:</Text>
+                      <Text style={[styles.installDetailValue, { color: colors.foreground }]}>{(deal as any).crew_assignment}</Text>
                     </View>
                   )}
                 </View>
@@ -992,12 +1072,12 @@ export default function AdminDealDetailScreen() {
       })()}
 
       {deal.notes && (
-        <View style={styles.sectionCard}>
+        <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
           <View style={styles.sectionHeader}>
             <Ionicons name="document-text" size={20} color={staticColors.primary} />
-            <Text style={styles.sectionTitle}>Notes</Text>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Notes</Text>
           </View>
-          <Text style={styles.notesText}>{deal.notes}</Text>
+          <Text style={[styles.notesText, { color: colors.foreground }]}>{deal.notes}</Text>
         </View>
       )}
     </>
@@ -1006,10 +1086,10 @@ export default function AdminDealDetailScreen() {
   const renderFinancialsTab = () => (
     <>
       {/* Approval Section */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="shield-checkmark" size={20} color={deal?.approved_date ? '#22C55E' : '#F59E0B'} />
-          <Text style={styles.sectionTitle}>Financial Approval</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Financial Approval</Text>
         </View>
 
         {deal?.approval_type && deal?.approved_date ? (
@@ -1034,56 +1114,87 @@ export default function AdminDealDetailScreen() {
           </View>
         ) : (
           <View>
-            <Text style={styles.approvalDescription}>
+            <Text style={[styles.approvalDescription, { color: colors.mutedForeground }]}>
               Review and edit the financial details below, then approve. Once approved, these values will be locked and commission will be calculated.
             </Text>
+
+            {/* View Lost Statement Button */}
+            <TouchableOpacity
+              style={[
+                styles.viewLostStatementBtn,
+                {
+                  backgroundColor: deal?.lost_statement_url ? 'rgba(59, 130, 246, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+                  borderColor: deal?.lost_statement_url ? '#3B82F6' : '#9CA3AF'
+                }
+              ]}
+              onPress={handleViewLostStatement}
+              disabled={!deal?.lost_statement_url || loadingLostStatement}
+            >
+              {loadingLostStatement ? (
+                <ActivityIndicator size="small" color="#3B82F6" />
+              ) : (
+                <>
+                  <Ionicons
+                    name={deal?.lost_statement_url ? "document-text" : "document-text-outline"}
+                    size={18}
+                    color={deal?.lost_statement_url ? '#3B82F6' : '#9CA3AF'}
+                  />
+                  <Text style={[
+                    styles.viewLostStatementBtnText,
+                    { color: deal?.lost_statement_url ? '#3B82F6' : '#9CA3AF' }
+                  ]}>
+                    {deal?.lost_statement_url ? 'View Lost Statement' : 'No Lost Statement Uploaded'}
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
 
             {/* Editable Financial Fields */}
             <View style={styles.financialEditGrid}>
               <View style={styles.financialEditRow}>
                 <View style={styles.financialEditField}>
-                  <Text style={styles.financialEditLabel}>RCV</Text>
+                  <Text style={[styles.financialEditLabel, { color: colors.foreground }]}>RCV</Text>
                   <TextInput
-                    style={styles.financialEditInput}
+                    style={[styles.financialEditInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                     value={financialForm.rcv}
                     onChangeText={(v) => setFinancialForm({ ...financialForm, rcv: v })}
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={styles.financialEditField}>
-                  <Text style={styles.financialEditLabel}>ACV</Text>
+                  <Text style={[styles.financialEditLabel, { color: colors.foreground }]}>ACV</Text>
                   <TextInput
-                    style={styles.financialEditInput}
+                    style={[styles.financialEditInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                     value={financialForm.acv}
                     onChangeText={(v) => setFinancialForm({ ...financialForm, acv: v })}
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="decimal-pad"
                   />
                 </View>
               </View>
               <View style={styles.financialEditRow}>
                 <View style={styles.financialEditField}>
-                  <Text style={styles.financialEditLabel}>Deductible</Text>
+                  <Text style={[styles.financialEditLabel, { color: colors.foreground }]}>Deductible</Text>
                   <TextInput
-                    style={styles.financialEditInput}
+                    style={[styles.financialEditInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                     value={financialForm.deductible}
                     onChangeText={(v) => setFinancialForm({ ...financialForm, deductible: v })}
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="decimal-pad"
                   />
                 </View>
                 <View style={styles.financialEditField}>
-                  <Text style={styles.financialEditLabel}>Depreciation</Text>
+                  <Text style={[styles.financialEditLabel, { color: colors.foreground }]}>Depreciation</Text>
                   <TextInput
-                    style={styles.financialEditInput}
+                    style={[styles.financialEditInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                     value={financialForm.depreciation}
                     onChangeText={(v) => setFinancialForm({ ...financialForm, depreciation: v })}
                     placeholder="0.00"
-                    placeholderTextColor="#9CA3AF"
+                    placeholderTextColor={colors.mutedForeground}
                     keyboardType="decimal-pad"
                   />
                 </View>
@@ -1118,42 +1229,42 @@ export default function AdminDealDetailScreen() {
       </View>
 
       <View style={styles.financialSummary}>
-        <View style={styles.summaryCard}><Text style={styles.summaryLabel}>RCV</Text><Text style={styles.summaryValue}>${calculatedRCV.toLocaleString()}</Text></View>
-        <View style={styles.summaryCard}><Text style={styles.summaryLabel}>ACV</Text><Text style={styles.summaryValue}>${numAcv.toLocaleString()}</Text></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>RCV</Text><Text style={[styles.summaryValue, { color: colors.foreground }]}>${calculatedRCV.toLocaleString()}</Text></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>ACV</Text><Text style={[styles.summaryValue, { color: colors.foreground }]}>${numAcv.toLocaleString()}</Text></View>
       </View>
       <View style={styles.financialSummary}>
-        <View style={styles.summaryCard}><Text style={styles.summaryLabel}>Deductible</Text><Text style={[styles.summaryValue, { color: '#EF4444' }]}>${(deal.deductible || 0).toLocaleString()}</Text></View>
-        <View style={styles.summaryCard}><Text style={styles.summaryLabel}>Depreciation</Text><Text style={styles.summaryValue}>${numDepreciation.toLocaleString()}</Text></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Deductible</Text><Text style={[styles.summaryValue, { color: '#EF4444' }]}>${(deal.deductible || 0).toLocaleString()}</Text></View>
+        <View style={[styles.summaryCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}><Text style={[styles.summaryLabel, { color: colors.mutedForeground }]}>Depreciation</Text><Text style={[styles.summaryValue, { color: colors.foreground }]}>${numDepreciation.toLocaleString()}</Text></View>
       </View>
-      <View style={styles.totalCard}>
-        <Text style={styles.totalLabel}>Total Contract Value</Text>
+      <View style={[styles.totalCard, { borderColor: staticColors.primary + '30' }]}>
+        <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>Total Contract Value</Text>
         <Text style={styles.totalValue}>${dealValue.toLocaleString()}</Text>
       </View>
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="cash" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Payment Status</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Status</Text>
         </View>
         <View style={styles.paymentChecklist}>
           <View style={styles.paymentItem}>
             <Ionicons name={deal.acv_receipt_url ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={deal.acv_receipt_url ? '#22C55E' : '#D1D5DB'} />
             <View style={styles.paymentItemContent}>
-              <Text style={styles.paymentItemLabel}>ACV Collected</Text>
-              <Text style={styles.paymentItemStatus}>{deal.acv_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
+              <Text style={[styles.paymentItemLabel, { color: colors.foreground }]}>ACV Collected</Text>
+              <Text style={[styles.paymentItemStatus, { color: colors.mutedForeground }]}>{deal.acv_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
             </View>
           </View>
           <View style={styles.paymentItem}>
             <Ionicons name={deal.deductible_receipt_url ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={deal.deductible_receipt_url ? '#22C55E' : '#D1D5DB'} />
             <View style={styles.paymentItemContent}>
-              <Text style={styles.paymentItemLabel}>Deductible Collected</Text>
-              <Text style={styles.paymentItemStatus}>{deal.deductible_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
+              <Text style={[styles.paymentItemLabel, { color: colors.foreground }]}>Deductible Collected</Text>
+              <Text style={[styles.paymentItemStatus, { color: colors.mutedForeground }]}>{deal.deductible_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
             </View>
           </View>
           <View style={styles.paymentItem}>
             <Ionicons name={deal.depreciation_receipt_url ? 'checkmark-circle' : 'ellipse-outline'} size={24} color={deal.depreciation_receipt_url ? '#22C55E' : '#D1D5DB'} />
             <View style={styles.paymentItemContent}>
-              <Text style={styles.paymentItemLabel}>Depreciation Collected</Text>
-              <Text style={styles.paymentItemStatus}>{deal.depreciation_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
+              <Text style={[styles.paymentItemLabel, { color: colors.foreground }]}>Depreciation Collected</Text>
+              <Text style={[styles.paymentItemStatus, { color: colors.mutedForeground }]}>{deal.depreciation_receipt_url ? 'Receipt uploaded' : 'No receipt'}</Text>
             </View>
           </View>
         </View>
@@ -1163,10 +1274,10 @@ export default function AdminDealDetailScreen() {
 
   const renderDocumentsTab = () => (
     <>
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="create" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Contract Signature</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Contract Signature</Text>
         </View>
         {deal.contract_signed ? (
           <>
@@ -1193,15 +1304,15 @@ export default function AdminDealDetailScreen() {
       </View>
 
       {/* Insurance Agreement Section */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="document-text" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Insurance Agreement</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Insurance Agreement</Text>
         </View>
         <View style={styles.documentList}>
           {/* Signed Agreement (full document with signature) */}
           <TouchableOpacity
-            style={styles.documentItem}
+            style={[styles.documentItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
             onPress={() => handleViewDocument(deal.agreement_document_url, 'Signed Agreement')}
             disabled={!deal.contract_signed || !deal.agreement_document_url}
           >
@@ -1210,7 +1321,7 @@ export default function AdminDealDetailScreen() {
               size={20}
               color={deal.contract_signed ? '#22C55E' : '#9CA3AF'}
             />
-            <Text style={[styles.documentName, !deal.contract_signed && styles.documentNameMissing]}>
+            <Text style={[styles.documentName, { color: colors.foreground }, !deal.contract_signed && styles.documentNameMissing]}>
               Signed Agreement
             </Text>
             {deal.contract_signed && deal.agreement_document_url ? (
@@ -1230,7 +1341,7 @@ export default function AdminDealDetailScreen() {
 
           {/* Uploaded Insurance Agreement */}
           <TouchableOpacity
-            style={styles.documentItem}
+            style={[styles.documentItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
             onPress={() => handleViewDocument(deal.insurance_agreement_url, 'Uploaded Agreement')}
             disabled={!deal.insurance_agreement_url}
           >
@@ -1239,7 +1350,7 @@ export default function AdminDealDetailScreen() {
               size={20}
               color={deal.insurance_agreement_url ? staticColors.primary : '#9CA3AF'}
             />
-            <Text style={[styles.documentName, !deal.insurance_agreement_url && styles.documentNameMissing]}>
+            <Text style={[styles.documentName, { color: colors.foreground }, !deal.insurance_agreement_url && styles.documentNameMissing]}>
               Uploaded Agreement
             </Text>
             {deal.insurance_agreement_url ? (
@@ -1248,20 +1359,20 @@ export default function AdminDealDetailScreen() {
                 <Text style={styles.viewButtonText}>View</Text>
               </View>
             ) : (
-              <Text style={styles.documentMissing}>Not uploaded</Text>
+              <Text style={[styles.documentMissing, { color: colors.mutedForeground }]}>Not uploaded</Text>
             )}
           </TouchableOpacity>
         </View>
       </View>
 
       {/* Lost Statement Section */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="document-attach" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Lost Statement</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Lost Statement</Text>
         </View>
         <TouchableOpacity
-          style={styles.documentItem}
+          style={[styles.documentItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
           onPress={() => handleViewDocument(deal.lost_statement_url, 'Lost Statement')}
           disabled={!deal.lost_statement_url}
         >
@@ -1270,7 +1381,7 @@ export default function AdminDealDetailScreen() {
             size={20}
             color={deal.lost_statement_url ? staticColors.primary : '#9CA3AF'}
           />
-          <Text style={[styles.documentName, !deal.lost_statement_url && styles.documentNameMissing]}>
+          <Text style={[styles.documentName, { color: colors.foreground }, !deal.lost_statement_url && styles.documentNameMissing]}>
             Insurance Lost Statement
           </Text>
           {deal.lost_statement_url ? (
@@ -1279,16 +1390,16 @@ export default function AdminDealDetailScreen() {
               <Text style={styles.viewButtonText}>View</Text>
             </View>
           ) : (
-            <Text style={styles.documentMissing}>Not uploaded</Text>
+            <Text style={[styles.documentMissing, { color: colors.mutedForeground }]}>Not uploaded</Text>
           )}
         </TouchableOpacity>
       </View>
 
       {/* Receipts Section */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="receipt" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Receipts</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Receipts</Text>
         </View>
         <View style={styles.documentList}>
           {[
@@ -1298,19 +1409,19 @@ export default function AdminDealDetailScreen() {
           ].map((doc) => (
             <TouchableOpacity
               key={doc.name}
-              style={styles.documentItem}
+              style={[styles.documentItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
               onPress={() => handleViewDocument(doc.url, doc.name)}
               disabled={!doc.url}
             >
               <Ionicons name={doc.url ? 'document' : 'document-outline'} size={20} color={doc.url ? staticColors.primary : '#9CA3AF'} />
-              <Text style={[styles.documentName, !doc.url && styles.documentNameMissing]}>{doc.name}</Text>
+              <Text style={[styles.documentName, { color: colors.foreground }, !doc.url && styles.documentNameMissing]}>{doc.name}</Text>
               {doc.url ? (
                 <View style={styles.viewButton}>
                   <Ionicons name="eye" size={16} color={staticColors.primary} />
                   <Text style={styles.viewButtonText}>View</Text>
                 </View>
               ) : (
-                <Text style={styles.documentMissing}>Not uploaded</Text>
+                <Text style={[styles.documentMissing, { color: colors.mutedForeground }]}>Not uploaded</Text>
               )}
             </TouchableOpacity>
           ))}
@@ -1318,49 +1429,49 @@ export default function AdminDealDetailScreen() {
       </View>
 
       {/* Other Documents Section */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="folder" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Documents</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Documents</Text>
         </View>
         <View style={styles.documentList}>
           <TouchableOpacity
-            style={styles.documentItem}
+            style={[styles.documentItem, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}
             onPress={() => handleViewDocument(deal.invoice_url, 'Invoice')}
             disabled={!deal.invoice_url}
           >
             <Ionicons name={deal.invoice_url ? 'document' : 'document-outline'} size={20} color={deal.invoice_url ? staticColors.primary : '#9CA3AF'} />
-            <Text style={[styles.documentName, !deal.invoice_url && styles.documentNameMissing]}>Invoice</Text>
+            <Text style={[styles.documentName, { color: colors.foreground }, !deal.invoice_url && styles.documentNameMissing]}>Invoice</Text>
             {deal.invoice_url ? (
               <View style={styles.viewButton}>
                 <Ionicons name="eye" size={16} color={staticColors.primary} />
                 <Text style={styles.viewButtonText}>View</Text>
               </View>
             ) : (
-              <Text style={styles.documentMissing}>Not uploaded</Text>
+              <Text style={[styles.documentMissing, { color: colors.mutedForeground }]}>Not uploaded</Text>
             )}
           </TouchableOpacity>
 
           {/* Permit with upload option */}
-          <View style={styles.documentItemWithAction}>
+          <View style={[styles.documentItemWithAction, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }]}>
             <TouchableOpacity
               style={styles.documentItemMain}
               onPress={() => handleViewDocument(deal.permit_file_url, 'Permit')}
               disabled={!deal.permit_file_url}
             >
               <Ionicons name={deal.permit_file_url ? 'document' : 'document-outline'} size={20} color={deal.permit_file_url ? staticColors.primary : '#9CA3AF'} />
-              <Text style={[styles.documentName, !deal.permit_file_url && styles.documentNameMissing]}>Permit</Text>
+              <Text style={[styles.documentName, { color: colors.foreground }, !deal.permit_file_url && styles.documentNameMissing]}>Permit</Text>
               {deal.permit_file_url ? (
                 <View style={styles.viewButton}>
                   <Ionicons name="eye" size={16} color={staticColors.primary} />
                   <Text style={styles.viewButtonText}>View</Text>
                 </View>
               ) : (
-                <Text style={styles.documentMissing}>Not uploaded</Text>
+                <Text style={[styles.documentMissing, { color: colors.mutedForeground }]}>Not uploaded</Text>
               )}
             </TouchableOpacity>
             <TouchableOpacity
-              style={styles.uploadButton}
+              style={[styles.uploadButton, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}
               onPress={handleUploadPermit}
               disabled={uploadingPermit}
             >
@@ -1378,14 +1489,14 @@ export default function AdminDealDetailScreen() {
       </View>
 
       {/* Photos Section with View Button */}
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="images" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Photos</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Photos</Text>
         </View>
         <View style={styles.photoGrid}>
           <TouchableOpacity
-            style={styles.photoCard}
+            style={[styles.photoCard, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
             onPress={() => handleViewPhotos(deal.inspection_images, 'inspection')}
             disabled={!deal.inspection_images?.length || loadingImages}
           >
@@ -1393,14 +1504,14 @@ export default function AdminDealDetailScreen() {
               <Ionicons name="search" size={24} color={deal.inspection_images?.length ? staticColors.primary : '#9CA3AF'} />
             </View>
             <Text style={styles.photoCountNumber}>{deal.inspection_images?.length || 0}</Text>
-            <Text style={styles.photoCountLabel}>Inspection</Text>
+            <Text style={[styles.photoCountLabel, { color: colors.mutedForeground }]}>Inspection</Text>
             {deal.inspection_images?.length ? (
               <Text style={styles.photoViewText}>Tap to view</Text>
             ) : null}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.photoCard}
+            style={[styles.photoCard, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
             onPress={() => handleViewPhotos(deal.install_images, 'install')}
             disabled={!deal.install_images?.length || loadingImages}
           >
@@ -1408,14 +1519,14 @@ export default function AdminDealDetailScreen() {
               <Ionicons name="construct" size={24} color={deal.install_images?.length ? staticColors.primary : '#9CA3AF'} />
             </View>
             <Text style={styles.photoCountNumber}>{deal.install_images?.length || 0}</Text>
-            <Text style={styles.photoCountLabel}>Install</Text>
+            <Text style={[styles.photoCountLabel, { color: colors.mutedForeground }]}>Install</Text>
             {deal.install_images?.length ? (
               <Text style={styles.photoViewText}>Tap to view</Text>
             ) : null}
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={styles.photoCard}
+            style={[styles.photoCard, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
             onPress={() => handleViewPhotos(deal.completion_images, 'completion')}
             disabled={!deal.completion_images?.length || loadingImages}
           >
@@ -1423,16 +1534,16 @@ export default function AdminDealDetailScreen() {
               <Ionicons name="checkmark-done" size={24} color={deal.completion_images?.length ? staticColors.primary : '#9CA3AF'} />
             </View>
             <Text style={styles.photoCountNumber}>{deal.completion_images?.length || 0}</Text>
-            <Text style={styles.photoCountLabel}>Completion</Text>
+            <Text style={[styles.photoCountLabel, { color: colors.mutedForeground }]}>Completion</Text>
             {deal.completion_images?.length ? (
               <Text style={styles.photoViewText}>Tap to view</Text>
             ) : null}
           </TouchableOpacity>
         </View>
         {loadingImages && (
-          <View style={styles.loadingOverlay}>
+          <View style={[styles.loadingOverlay, { backgroundColor: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }]}>
             <ActivityIndicator size="large" color={staticColors.primary} />
-            <Text style={styles.loadingText}>Loading photos...</Text>
+            <Text style={[styles.loadingText, { color: colors.mutedForeground }]}>Loading photos...</Text>
           </View>
         )}
       </View>
@@ -1445,7 +1556,38 @@ export default function AdminDealDetailScreen() {
         <Text style={styles.commissionSummaryLabel}>Commission Due</Text>
         <Text style={styles.commissionSummaryValue}>${commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text>
         <Text style={styles.commissionSummaryPercent}>{commissionPercent}% of ${dealValue.toLocaleString()}</Text>
+        {/* Edit Commission Button */}
+        <TouchableOpacity
+          style={{ marginTop: 12, backgroundColor: '#3B82F6', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+          onPress={() => {
+            setEditedCommissionAmount(commissionAmount.toFixed(2));
+            setCommissionEditReason('');
+            setShowCommissionEditModal(true);
+          }}
+        >
+          <Ionicons name="create" size={16} color="#FFF" />
+          <Text style={{ color: '#FFF', fontWeight: '600' }}>Edit Commission</Text>
+        </TouchableOpacity>
       </View>
+
+      {/* Commission Override Info */}
+      {deal.commission_override_amount && (
+        <View style={[styles.sectionCard, { backgroundColor: '#FEF3C7', borderColor: '#F59E0B' }]}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="information-circle" size={20} color="#F59E0B" />
+            <Text style={[styles.sectionTitle, { color: '#92400E' }]}>Commission Adjusted</Text>
+          </View>
+          <Text style={{ color: '#92400E', fontSize: 13, marginBottom: 4 }}>
+            Original: ${(baseAmount * (commissionPercent / 100)).toLocaleString(undefined, { minimumFractionDigits: 2 })} → Adjusted: ${deal.commission_override_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </Text>
+          <Text style={{ color: '#78350F', fontSize: 12 }}>Reason: {deal.commission_override_reason}</Text>
+          {deal.commission_override_date && (
+            <Text style={{ color: '#92400E', fontSize: 11, marginTop: 4 }}>
+              Adjusted on {format(new Date(deal.commission_override_date), 'MMM d, yyyy')}
+            </Text>
+          )}
+        </View>
+      )}
 
       {/* Commission Paid Card */}
       {(deal.status === 'paid' || deal.commission_paid) && (
@@ -1476,42 +1618,42 @@ export default function AdminDealDetailScreen() {
         </View>
       )}
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="person" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Sales Rep</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Sales Rep</Text>
         </View>
-        <Text style={styles.repDetailName}>{repName}</Text>
+        <Text style={[styles.repDetailName, { color: colors.foreground }]}>{repName}</Text>
         {commissionLevel && (
           <View style={styles.commissionLevelBadge}>
             <Text style={styles.commissionLevelText}>{commissionLevel} Level</Text>
           </View>
         )}
-        <View style={styles.commissionBreakdown}>
-          <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Commission Rate</Text><Text style={styles.breakdownValue}>{commissionPercent}%</Text></View>
-          <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Deal Value (RCV)</Text><Text style={styles.breakdownValue}>${dealValue.toLocaleString()}</Text></View>
-          <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Sales Tax (8.25%)</Text><Text style={[styles.breakdownValue, { color: '#EF4444' }]}>-${salesTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
-          <View style={styles.breakdownRow}><Text style={styles.breakdownLabel}>Base Amount</Text><Text style={styles.breakdownValue}>${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
-          <View style={[styles.breakdownRow, styles.breakdownTotal]}><Text style={styles.breakdownLabelBold}>Commission</Text><Text style={styles.breakdownValueBold}>${commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
+        <View style={[styles.commissionBreakdown, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+          <View style={styles.breakdownRow}><Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Commission Rate</Text><Text style={[styles.breakdownValue, { color: colors.foreground }]}>{commissionPercent}%</Text></View>
+          <View style={styles.breakdownRow}><Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Deal Value (RCV)</Text><Text style={[styles.breakdownValue, { color: colors.foreground }]}>${dealValue.toLocaleString()}</Text></View>
+          <View style={styles.breakdownRow}><Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Sales Tax (8.25%)</Text><Text style={[styles.breakdownValue, { color: '#EF4444' }]}>-${salesTax.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
+          <View style={styles.breakdownRow}><Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Base Amount</Text><Text style={[styles.breakdownValue, { color: colors.foreground }]}>${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
+          <View style={[styles.breakdownRow, styles.breakdownTotal, { borderTopColor: isDark ? colors.border : '#E5E7EB' }]}><Text style={[styles.breakdownLabelBold, { color: colors.foreground }]}>Commission</Text><Text style={styles.breakdownValueBold}>${commissionAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</Text></View>
         </View>
       </View>
 
-      <View style={styles.sectionCard}>
+      <View style={[styles.sectionCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.sectionHeader}>
           <Ionicons name="wallet" size={20} color={staticColors.primary} />
-          <Text style={styles.sectionTitle}>Status</Text>
+          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Status</Text>
         </View>
         <View style={styles.commissionStatus}>
           {deal.status === 'paid' || deal.commission_paid ? (
             <><Ionicons name="checkmark-done-circle" size={32} color="#059669" /><Text style={[styles.commissionStatusTitle, { color: '#059669' }]}>Paid</Text></>
           ) : isComplete ? (
             deal.payment_requested ? (
-              <><Ionicons name="time" size={32} color="#F59E0B" /><Text style={styles.commissionStatusTitle}>Pending Approval</Text></>
+              <><Ionicons name="time" size={32} color="#F59E0B" /><Text style={[styles.commissionStatusTitle, { color: colors.foreground }]}>Pending Approval</Text></>
             ) : (
-              <><Ionicons name="hourglass" size={32} color="#6B7280" /><Text style={styles.commissionStatusTitle}>Awaiting Request</Text></>
+              <><Ionicons name="hourglass" size={32} color={colors.mutedForeground} /><Text style={[styles.commissionStatusTitle, { color: colors.foreground }]}>Awaiting Request</Text></>
             )
           ) : (
-            <><Ionicons name="lock-closed" size={32} color="#6B7280" /><Text style={styles.commissionStatusTitle}>Deal Not Complete</Text></>
+            <><Ionicons name="lock-closed" size={32} color={colors.mutedForeground} /><Text style={[styles.commissionStatusTitle, { color: colors.foreground }]}>Deal Not Complete</Text></>
           )}
         </View>
       </View>
@@ -1519,14 +1661,14 @@ export default function AdminDealDetailScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={24} color="#374151" />
+          <Ionicons name="arrow-back" size={24} color={colors.foreground} />
         </TouchableOpacity>
         <View style={styles.headerTitle}>
-          <Text style={styles.headerName} numberOfLines={1}>{deal.homeowner_name}</Text>
-          <Text style={styles.headerAddress} numberOfLines={1}>{deal.address}</Text>
+          <Text style={[styles.headerName, { color: colors.foreground }]} numberOfLines={1}>{deal.homeowner_name}</Text>
+          <Text style={[styles.headerAddress, { color: colors.mutedForeground }]} numberOfLines={1}>{deal.address}</Text>
         </View>
         <TouchableOpacity onPress={() => setShowStatusModal(true)}>
           <View style={[styles.statusBadge, { backgroundColor: config.color + '20', borderColor: config.color }]}>
@@ -1536,15 +1678,15 @@ export default function AdminDealDetailScreen() {
       </View>
 
       {/* Milestone Progress Section - matching rep view */}
-      <View style={styles.progressSection}>
+      <View style={[styles.progressSection, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
         <View style={styles.progressHeader}>
           <View style={styles.progressTitleRow}>
-            <Text style={styles.progressTitle}>Deal Progress</Text>
+            <Text style={[styles.progressTitle, { color: colors.foreground }]}>Deal Progress</Text>
             <View style={[styles.phaseBadge, { backgroundColor: phaseColors[currentPhase] + '20' }]}>
               <Text style={[styles.phaseBadgeText, { color: phaseColors[currentPhase] }]}>{phaseLabels[currentPhase]}</Text>
             </View>
           </View>
-          <Text style={[styles.progressPercent, { color: isComplete ? '#22C55E' : staticColors.primary }]}>{progress}%</Text>
+          <Text style={[styles.progressPercent, { color: isComplete ? '#22C55E' : staticColors.primary }]}>{config.label}</Text>
         </View>
 
         {/* Horizontal Milestone Tracker */}
@@ -1607,8 +1749,9 @@ export default function AdminDealDetailScreen() {
                 {/* Label */}
                 <Text style={[
                   styles.milestoneLabel,
+                  { color: isDark ? '#FFFFFF' : '#374151' },
                   isCurrent && styles.milestoneLabelCurrent,
-                  isFuture && styles.milestoneLabelFuture,
+                  isFuture && [styles.milestoneLabelFuture, { color: isDark ? '#9CA3AF' : '#9CA3AF' }],
                 ]} numberOfLines={2}>
                   {milestone.label}
                 </Text>
@@ -1617,6 +1760,7 @@ export default function AdminDealDetailScreen() {
                 {timestamp ? (
                   <Text style={[
                     styles.milestoneTimestamp,
+                    { color: isDark ? '#9CA3AF' : '#6B7280' },
                     isCurrent && styles.milestoneTimestampCurrent,
                   ]}>
                     {timestamp}
@@ -1637,10 +1781,10 @@ export default function AdminDealDetailScreen() {
         </View>
       </View>
 
-      <View style={styles.quickActionsRow}>
-        <TouchableOpacity onPress={handleCall} style={styles.quickActionBtnSmall}><Ionicons name="call" size={18} color="#3B82F6" /></TouchableOpacity>
-        <TouchableOpacity onPress={handleEmail} style={styles.quickActionBtnSmall}><Ionicons name="mail" size={18} color="#8B5CF6" /></TouchableOpacity>
-        <TouchableOpacity onPress={handleDirections} style={styles.quickActionBtnSmall}><Ionicons name="navigate" size={18} color="#22C55E" /></TouchableOpacity>
+      <View style={[styles.quickActionsRow, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
+        <TouchableOpacity onPress={handleCall} style={[styles.quickActionBtnSmall, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Ionicons name="call" size={18} color="#3B82F6" /></TouchableOpacity>
+        <TouchableOpacity onPress={handleEmail} style={[styles.quickActionBtnSmall, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Ionicons name="mail" size={18} color="#8B5CF6" /></TouchableOpacity>
+        <TouchableOpacity onPress={handleDirections} style={[styles.quickActionBtnSmall, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}><Ionicons name="navigate" size={18} color="#22C55E" /></TouchableOpacity>
         {nextAction && !isComplete && (
           <TouchableOpacity
             style={[styles.nextActionBtnSmall, nextAction.isInvoice && { backgroundColor: '#3B82F6' }]}
@@ -1650,7 +1794,7 @@ export default function AdminDealDetailScreen() {
                 // Generate and send invoice
                 Alert.alert(
                   'Generate Invoice',
-                  'This will generate an invoice PDF and advance the deal to "Invoice Sent" status.',
+                  'This will generate an invoice PDF and advance the deal to "RCV Sent" status.',
                   [
                     { text: 'Cancel', style: 'cancel' },
                     { text: 'Generate', onPress: handleGenerateInvoice }
@@ -1671,11 +1815,11 @@ export default function AdminDealDetailScreen() {
         )}
       </View>
 
-      <View style={styles.tabContainer}>
+      <View style={[styles.tabContainer, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         {(['overview', 'financials', 'documents', 'commissions'] as TabType[]).map((tab) => (
           <TouchableOpacity key={tab} style={[styles.tab, activeTab === tab && styles.tabActive]} onPress={() => setActiveTab(tab)}>
-            <Ionicons name={tab === 'overview' ? 'home' : tab === 'financials' ? 'cash' : tab === 'documents' ? 'folder' : 'wallet'} size={16} color={activeTab === tab ? staticColors.primary : '#6B7280'} />
-            <Text style={[styles.tabText, activeTab === tab && styles.tabTextActive]}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</Text>
+            <Ionicons name={tab === 'overview' ? 'home' : tab === 'financials' ? 'cash' : tab === 'documents' ? 'folder' : 'wallet'} size={16} color={activeTab === tab ? staticColors.primary : colors.mutedForeground} />
+            <Text style={[styles.tabText, { color: colors.mutedForeground }, activeTab === tab && styles.tabTextActive]}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -1696,28 +1840,28 @@ export default function AdminDealDetailScreen() {
             setShowInstallDateModal(false);
           }
         }}>
-          <View style={styles.installScheduleModalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>{deal.install_date ? 'Edit Installation Schedule' : 'Schedule Installation'}</Text>
-            <Text style={styles.modalSubtitle}>Select installation date, time, and crew assignment</Text>
+          <View style={[styles.installScheduleModalContent, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>{deal.install_date ? 'Edit Installation Schedule' : 'Schedule Installation'}</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Select installation date, time, and crew assignment</Text>
 
             {/* Date Field with Picker */}
             <View style={styles.installFieldGroup}>
-              <Text style={styles.installFieldLabel}>Installation Date *</Text>
+              <Text style={[styles.installFieldLabel, { color: colors.foreground }]}>Installation Date *</Text>
               <TouchableOpacity
-                style={styles.datePickerButton}
+                style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
                 onPress={() => {
                   setShowTimePicker(false);
                   setShowDatePicker(!showDatePicker);
                 }}
               >
                 <Ionicons name="calendar" size={20} color={staticColors.primary} />
-                <Text style={styles.datePickerButtonText}>
+                <Text style={[styles.datePickerButtonText, { color: colors.foreground }]}>
                   {format(installDate, 'EEEE, MMMM d, yyyy')}
                 </Text>
-                <Ionicons name={showDatePicker ? "chevron-up" : "chevron-down"} size={18} color="#6B7280" />
+                <Ionicons name={showDatePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
               {showDatePicker && (
-                <View style={styles.inlinePicker}>
+                <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
                   <DateTimePicker
                     value={installDate}
                     mode="date"
@@ -1736,22 +1880,22 @@ export default function AdminDealDetailScreen() {
 
             {/* Time Field with Picker */}
             <View style={styles.installFieldGroup}>
-              <Text style={styles.installFieldLabel}>Installation Time</Text>
+              <Text style={[styles.installFieldLabel, { color: colors.foreground }]}>Installation Time</Text>
               <TouchableOpacity
-                style={styles.datePickerButton}
+                style={[styles.datePickerButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
                 onPress={() => {
                   setShowDatePicker(false);
                   setShowTimePicker(!showTimePicker);
                 }}
               >
                 <Ionicons name="time" size={20} color={staticColors.primary} />
-                <Text style={styles.datePickerButtonText}>
+                <Text style={[styles.datePickerButtonText, { color: colors.foreground }]}>
                   {format(installTime, 'h:mm a')}
                 </Text>
-                <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={18} color="#6B7280" />
+                <Ionicons name={showTimePicker ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
               </TouchableOpacity>
               {showTimePicker && (
-                <View style={styles.inlinePicker}>
+                <View style={[styles.inlinePicker, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
                   <DateTimePicker
                     value={installTime}
                     mode="time"
@@ -1769,18 +1913,70 @@ export default function AdminDealDetailScreen() {
 
             {/* Crew Field */}
             <View style={styles.installFieldGroup}>
-              <Text style={styles.installFieldLabel}>Crew Assignment</Text>
-              <TextInput
-                style={styles.dateInput}
-                value={crewAssignment}
-                onChangeText={setCrewAssignment}
-                placeholder="e.g., Team Alpha, John's Crew"
-                placeholderTextColor="#9CA3AF"
-              />
+              <Text style={[styles.installFieldLabel, { color: colors.foreground }]}>Crew Assignment</Text>
+              <TouchableOpacity
+                style={[styles.dateInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                onPress={() => setShowCrewDropdown(!showCrewDropdown)}
+              >
+                <Text style={{ color: crewAssignment ? colors.foreground : colors.mutedForeground }}>
+                  {crewAssignment || 'Select Crew Lead'}
+                </Text>
+                <Ionicons name={showCrewDropdown ? "chevron-up" : "chevron-down"} size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+
+              {showCrewDropdown && (
+                <View style={[styles.dropdownContainer, { backgroundColor: isDark ? colors.secondary : '#FFFFFF', borderColor: colors.border }]}>
+                  <ScrollView style={{ maxHeight: 200 }} nestedScrollEnabled>
+                    {/* Option to clear selection */}
+                    <TouchableOpacity
+                      style={[styles.dropdownItem, { borderBottomColor: colors.border }]}
+                      onPress={() => {
+                        setCrewAssignment('');
+                        setShowCrewDropdown(false);
+                      }}
+                    >
+                      <Text style={{ color: colors.mutedForeground, fontStyle: 'italic' }}>None (Unassigned)</Text>
+                    </TouchableOpacity>
+
+                    {crewLeads && crewLeads.length > 0 ? (
+                      crewLeads.map((crew) => (
+                        <TouchableOpacity
+                          key={crew.id}
+                          style={[styles.dropdownItem, { borderBottomColor: colors.border }]}
+                          onPress={() => {
+                            setCrewAssignment(crew.full_name || crew.email);
+                            setShowCrewDropdown(false);
+                          }}
+                        >
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <View style={[styles.crewAvatar, { backgroundColor: staticColors.primary }]}>
+                              <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '600' }}>
+                                {(crew.full_name || crew.email || '?').charAt(0).toUpperCase()}
+                              </Text>
+                            </View>
+                            <View>
+                              <Text style={{ color: colors.foreground, fontWeight: '500' }}>{crew.full_name || 'Unnamed Crew'}</Text>
+                              <Text style={{ color: colors.mutedForeground, fontSize: 12 }}>{crew.email}</Text>
+                            </View>
+                          </View>
+                          {crewAssignment === (crew.full_name || crew.email) && (
+                            <Ionicons name="checkmark" size={18} color={staticColors.primary} />
+                          )}
+                        </TouchableOpacity>
+                      ))
+                    ) : (
+                      <View style={{ padding: 16, alignItems: 'center' }}>
+                        <Text style={{ color: colors.mutedForeground }}>No crew leads available</Text>
+                        <Text style={{ color: colors.mutedForeground, fontSize: 12, marginTop: 4 }}>Create crew lead accounts in Reps</Text>
+                      </View>
+                    )}
+                  </ScrollView>
+                </View>
+              )}
             </View>
 
             <View style={styles.modalButtons}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => {
+              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={() => {
                 setShowDatePicker(false);
                 setShowTimePicker(false);
                 setShowInstallDateModal(false);
@@ -1821,9 +2017,9 @@ export default function AdminDealDetailScreen() {
 
       <Modal visible={showStatusModal} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowStatusModal(false)}>
-          <View style={styles.statusModalContent}>
-            <Text style={styles.modalTitle}>Set Deal Status</Text>
-            <Text style={styles.modalSubtitle}>Select any status to fix workflow issues</Text>
+          <View style={[styles.statusModalContent, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Set Deal Status</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Select any status to fix workflow issues</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {milestones.map((milestone, index) => {
                 const cfg = statusConfig[milestone.status] || { label: milestone.label, color: '#6B7280' };
@@ -1836,6 +2032,7 @@ export default function AdminDealDetailScreen() {
                     key={milestone.status}
                     style={[
                       styles.statusOption,
+                      { borderBottomColor: isDark ? colors.border : '#F3F4F6' },
                       isCurrent && styles.statusOptionActive,
                     ]}
                     onPress={() => {
@@ -1860,6 +2057,7 @@ export default function AdminDealDetailScreen() {
                     <View style={[styles.statusDot, { backgroundColor: cfg.color }]} />
                     <Text style={[
                       styles.statusOptionText,
+                      { color: colors.foreground },
                       isCurrent && styles.statusOptionTextActive,
                     ]}>
                       {cfg.label}
@@ -1928,26 +2126,26 @@ export default function AdminDealDetailScreen() {
       {/* Approval Modal */}
       <Modal visible={showApprovalModal} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowApprovalModal(false)}>
-          <View style={styles.approvalModalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Approve Financial Details</Text>
-            <Text style={styles.modalSubtitle}>Select approval type. This will lock the financial values below.</Text>
+          <View style={[styles.approvalModalContent, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Approve Financial Details</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Select approval type. This will lock the financial values below.</Text>
 
-            <View style={styles.financialPreview}>
+            <View style={[styles.financialPreview, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}>
               <View style={styles.financialPreviewRow}>
-                <Text style={styles.financialPreviewLabel}>RCV</Text>
-                <Text style={styles.financialPreviewValue}>${(parseFloat(financialForm.rcv) || 0).toLocaleString()}</Text>
+                <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>RCV</Text>
+                <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>${(parseFloat(financialForm.rcv) || 0).toLocaleString()}</Text>
               </View>
               <View style={styles.financialPreviewRow}>
-                <Text style={styles.financialPreviewLabel}>ACV</Text>
-                <Text style={styles.financialPreviewValue}>${(parseFloat(financialForm.acv) || 0).toLocaleString()}</Text>
+                <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>ACV</Text>
+                <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>${(parseFloat(financialForm.acv) || 0).toLocaleString()}</Text>
               </View>
               <View style={styles.financialPreviewRow}>
-                <Text style={styles.financialPreviewLabel}>Deductible</Text>
-                <Text style={styles.financialPreviewValue}>${(parseFloat(financialForm.deductible) || 0).toLocaleString()}</Text>
+                <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>Deductible</Text>
+                <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>${(parseFloat(financialForm.deductible) || 0).toLocaleString()}</Text>
               </View>
               <View style={styles.financialPreviewRow}>
-                <Text style={styles.financialPreviewLabel}>Depreciation</Text>
-                <Text style={styles.financialPreviewValue}>${(parseFloat(financialForm.depreciation) || 0).toLocaleString()}</Text>
+                <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>Depreciation</Text>
+                <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>${(parseFloat(financialForm.depreciation) || 0).toLocaleString()}</Text>
               </View>
             </View>
 
@@ -1960,7 +2158,7 @@ export default function AdminDealDetailScreen() {
               ].map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={styles.approvalOption}
+                  style={[styles.approvalOption, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border }]}
                   onPress={() => {
                     // Save financial values and approve
                     updateMutation.mutate({
@@ -1976,14 +2174,14 @@ export default function AdminDealDetailScreen() {
                   }}
                 >
                   <Ionicons name={option.icon} size={24} color={staticColors.primary} />
-                  <Text style={styles.approvalOptionText}>{option.label}</Text>
-                  <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+                  <Text style={[styles.approvalOptionText, { color: colors.foreground }]}>{option.label}</Text>
+                  <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
                 </TouchableOpacity>
               ))}
             </View>
 
-            <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowApprovalModal(false)}>
-              <Text style={styles.modalCancelText}>Cancel</Text>
+            <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={() => setShowApprovalModal(false)}>
+              <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -2008,12 +2206,69 @@ export default function AdminDealDetailScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Commission Edit Modal */}
+      <Modal visible={showCommissionEditModal} transparent animationType="slide">
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowCommissionEditModal(false)}>
+            <View style={[styles.approvalModalContent, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]} onStartShouldSetResponder={() => true}>
+              <Text style={[styles.modalTitle, { color: colors.foreground }]}>Edit Commission</Text>
+              <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Adjust the commission amount. A reason is required.</Text>
+
+              <View style={{ marginTop: 16 }}>
+                <Text style={[styles.installFieldLabel, { color: colors.foreground }]}>Commission Amount *</Text>
+                <TextInput
+                  style={[styles.financialInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
+                  value={editedCommissionAmount}
+                  onChangeText={setEditedCommissionAmount}
+                  keyboardType="decimal-pad"
+                  placeholder="0.00"
+                  placeholderTextColor={colors.mutedForeground}
+                />
+              </View>
+
+              <View style={{ marginTop: 16 }}>
+                <Text style={[styles.installFieldLabel, { color: colors.foreground }]}>Reason for Adjustment *</Text>
+                <TextInput
+                  style={[styles.financialInput, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border, color: colors.foreground, minHeight: 80, textAlignVertical: 'top' }]}
+                  value={commissionEditReason}
+                  onChangeText={setCommissionEditReason}
+                  placeholder="Enter reason for commission adjustment..."
+                  placeholderTextColor={colors.mutedForeground}
+                  multiline
+                  numberOfLines={3}
+                />
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 12, marginTop: 20 }}>
+                <TouchableOpacity
+                  style={[styles.modalCancelBtn, { flex: 1, backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}
+                  onPress={() => setShowCommissionEditModal(false)}
+                >
+                  <Text style={[styles.modalCancelText, { color: colors.mutedForeground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, backgroundColor: staticColors.primary, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                  onPress={handleSaveCommissionEdit}
+                  disabled={updateMutation.isPending}
+                >
+                  {updateMutation.isPending ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <Text style={{ color: '#FFF', fontWeight: '600' }}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </Modal>
+
       {/* Reassign Modal */}
       <Modal visible={showReassignModal} transparent animationType="slide">
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setShowReassignModal(false)}>
-          <View style={styles.reassignModalContent} onStartShouldSetResponder={() => true}>
-            <Text style={styles.modalTitle}>Reassign Deal</Text>
-            <Text style={styles.modalSubtitle}>Select a rep to reassign this deal to</Text>
+          <View style={[styles.reassignModalContent, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]} onStartShouldSetResponder={() => true}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Reassign Deal</Text>
+            <Text style={[styles.modalSubtitle, { color: colors.mutedForeground }]}>Select a rep to reassign this deal to</Text>
 
             <ScrollView style={styles.repsList} showsVerticalScrollIndicator={false}>
               {reps?.filter(r => r.active).map((rep) => {
@@ -2025,6 +2280,7 @@ export default function AdminDealDetailScreen() {
                     key={rep.id}
                     style={[
                       styles.repOption,
+                      { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: colors.border },
                       isSelected && styles.repOptionSelected,
                       isCurrentRep && styles.repOptionCurrent,
                     ]}
@@ -2032,16 +2288,16 @@ export default function AdminDealDetailScreen() {
                     disabled={isCurrentRep}
                   >
                     <View style={styles.repOptionInfo}>
-                      <Text style={[styles.repOptionName, isCurrentRep && { color: '#9CA3AF' }]}>
+                      <Text style={[styles.repOptionName, { color: colors.foreground }, isCurrentRep && { color: colors.mutedForeground }]}>
                         {rep.full_name || rep.email || 'Unknown Rep'}
                       </Text>
-                      <Text style={styles.repOptionLevel}>
+                      <Text style={[styles.repOptionLevel, { color: colors.mutedForeground }]}>
                         {rep.commission_level?.charAt(0).toUpperCase() + rep.commission_level?.slice(1)} • {rep.default_commission_percent || commissionLevelPercentages[rep.commission_level] || 10}%
                       </Text>
                     </View>
                     {isCurrentRep ? (
-                      <View style={styles.currentRepBadge}>
-                        <Text style={styles.currentRepBadgeText}>Current</Text>
+                      <View style={[styles.currentRepBadge, { backgroundColor: isDark ? colors.border : '#E5E7EB' }]}>
+                        <Text style={[styles.currentRepBadgeText, { color: colors.mutedForeground }]}>Current</Text>
                       </View>
                     ) : isSelected ? (
                       <Ionicons name="checkmark-circle" size={24} color={staticColors.primary} />
@@ -2054,7 +2310,7 @@ export default function AdminDealDetailScreen() {
             </ScrollView>
 
             <View style={styles.reassignModalFooter}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => {
+              <TouchableOpacity style={[styles.modalCancelBtn, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]} onPress={() => {
                 setShowReassignModal(false);
                 setSelectedRepId(null);
               }}>
@@ -2395,4 +2651,13 @@ const styles = StyleSheet.create({
   commissionPaidHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
   commissionPaidTitle: { fontSize: 18, fontWeight: '700', color: '#059669' },
   commissionPaidText: { fontSize: 14, color: '#047857', lineHeight: 20 },
+
+  // View Lost Statement Button
+  viewLostStatementBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 10, borderWidth: 1.5, marginBottom: 16 },
+  viewLostStatementBtnText: { fontSize: 15, fontWeight: '600' },
+
+  // Crew Dropdown Styles
+  dropdownContainer: { marginTop: 4, borderRadius: 10, borderWidth: 1, overflow: 'hidden' },
+  dropdownItem: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 14, paddingVertical: 12, borderBottomWidth: 1 },
+  crewAvatar: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
 });

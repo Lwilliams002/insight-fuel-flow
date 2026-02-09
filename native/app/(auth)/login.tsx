@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../src/contexts/AuthContext';
 
 export default function LoginScreen() {
@@ -24,6 +25,13 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [selectedAccountType, setSelectedAccountType] = useState<'admin' | 'rep' | 'crew' | null>(null);
+
+  const accountTypes = [
+    { value: 'rep' as const, label: 'Sales Rep', icon: 'person' as const },
+    { value: 'admin' as const, label: 'Admin', icon: 'shield-checkmark' as const },
+    { value: 'crew' as const, label: 'Crew', icon: 'construct' as const },
+  ];
 
   // Navigate when user is authenticated
   useEffect(() => {
@@ -33,6 +41,8 @@ export default function LoginScreen() {
         router.replace('/(admin)/dashboard');
       } else if (role === 'rep') {
         router.replace('/(rep)/dashboard');
+      } else if (role === 'crew') {
+        router.replace('/(crew)/dashboard');
       }
     }
   }, [user, role, router]);
@@ -98,6 +108,8 @@ export default function LoginScreen() {
                   value={newPassword}
                   onChangeText={setNewPassword}
                   autoCapitalize="none"
+                  textContentType="oneTimeCode"
+                  autoComplete="off"
                 />
               </View>
 
@@ -144,44 +156,98 @@ export default function LoginScreen() {
 
           {/* Form */}
           <View style={styles.form}>
+            {/* Account Type Selection - Always visible */}
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your email"
-                placeholderTextColor="#9CA3AF"
-                keyboardType="email-address"
-                autoCapitalize="none"
-                autoCorrect={false}
-                value={email}
-                onChangeText={setEmail}
-              />
+              <Text style={styles.label}>Select Account Type</Text>
+              <View style={styles.accountTypeCards}>
+                {accountTypes.map((type) => (
+                  <TouchableOpacity
+                    key={type.value}
+                    style={[
+                      styles.accountTypeCard,
+                      selectedAccountType === type.value && styles.accountTypeCardActive
+                    ]}
+                    onPress={() => setSelectedAccountType(type.value)}
+                  >
+                    <View style={[
+                      styles.accountTypeIconContainer,
+                      selectedAccountType === type.value && styles.accountTypeIconContainerActive
+                    ]}>
+                      <Ionicons
+                        name={type.icon}
+                        size={24}
+                        color={selectedAccountType === type.value ? "#C9A24D" : "#6B7280"}
+                      />
+                    </View>
+                    <Text style={[
+                      styles.accountTypeCardText,
+                      selectedAccountType === type.value && styles.accountTypeCardTextActive
+                    ]}>
+                      {type.label}
+                    </Text>
+                    {selectedAccountType === type.value && (
+                      <View style={styles.accountTypeCheckmark}>
+                        <Ionicons name="checkmark-circle" size={20} color="#C9A24D" />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             </View>
 
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your password"
-                placeholderTextColor="#9CA3AF"
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                autoCapitalize="none"
-              />
-            </View>
+            {/* Email and Password - Only visible after account type is selected */}
+            {selectedAccountType && (
+              <>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    placeholderTextColor="#9CA3AF"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={setEmail}
+                  />
+                </View>
 
-            <TouchableOpacity
-              style={[styles.button, loading && styles.buttonDisabled]}
-              onPress={handleSignIn}
-              disabled={loading}
-            >
-              {loading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <Text style={styles.buttonText}>Sign In</Text>
-              )}
-            </TouchableOpacity>
+                <View style={styles.inputContainer}>
+                  <Text style={styles.label}>Password</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry
+                    value={password}
+                    onChangeText={setPassword}
+                    autoCapitalize="none"
+                    textContentType="oneTimeCode"
+                    autoComplete="off"
+                  />
+                </View>
+
+                {/* Forgot Password Link */}
+                <TouchableOpacity
+                  style={styles.forgotPasswordButton}
+                  onPress={() => router.push('/(auth)/forgot-password')}
+                >
+                  <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.button, loading && styles.buttonDisabled]}
+                  onPress={handleSignIn}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <ActivityIndicator color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.buttonText}>Sign In</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
           </View>
 
           {/* Footer */}
@@ -302,6 +368,60 @@ const styles = StyleSheet.create({
   footerText: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  forgotPasswordButton: {
+    alignSelf: 'flex-end',
+    marginTop: -8,
+    marginBottom: 16,
+    paddingVertical: 4,
+  },
+  forgotPasswordText: {
+    color: '#C9A24D',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  accountTypeCards: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  accountTypeCard: {
+    flex: 1,
+    backgroundColor: '#1A2A3A',
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#374151',
+    padding: 16,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  accountTypeCardActive: {
+    borderColor: '#C9A24D',
+    backgroundColor: 'rgba(201, 162, 77, 0.1)',
+  },
+  accountTypeIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#374151',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+  accountTypeIconContainerActive: {
+    backgroundColor: 'rgba(201, 162, 77, 0.2)',
+  },
+  accountTypeCardText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#9CA3AF',
+  },
+  accountTypeCardTextActive: {
+    color: '#FFFFFF',
+  },
+  accountTypeCheckmark: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
   },
 });
 

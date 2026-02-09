@@ -6,7 +6,8 @@ import * as Location from 'expo-location';
 import { useQuery } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { pinsApi, Pin } from '../../src/services/api';
-import { colors } from '../../src/constants/config';
+import { colors as staticColors } from '../../src/constants/config';
+import { useTheme } from '../../src/contexts/ThemeContext';
 
 type MapType = 'standard' | 'satellite' | 'hybrid';
 
@@ -21,6 +22,7 @@ const pinColors: Record<string, string> = {
 
 export default function AdminMapScreen() {
   const mapRef = useRef<MapView>(null);
+  const { colors, isDark } = useTheme();
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -118,8 +120,8 @@ export default function AdminMapScreen() {
       {/* Top Controls */}
       <SafeAreaView style={styles.topControls} edges={['top']}>
         <View style={styles.headerRow}>
-          <View style={styles.pinCount}>
-            <Text style={styles.pinCountText}>
+          <View style={[styles.pinCount, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <Text style={[styles.pinCountText, { color: colors.foreground }]}>
               {filteredPins?.length || 0} / {pins?.length || 0} Pins
             </Text>
           </View>
@@ -128,10 +130,10 @@ export default function AdminMapScreen() {
         {/* Status Filter */}
         <View style={styles.filterRow}>
           <TouchableOpacity
-            style={[styles.filterChip, !statusFilter && styles.filterChipActive]}
+            style={[styles.filterChip, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }, !statusFilter && { backgroundColor: colors.primary }]}
             onPress={() => setStatusFilter(null)}
           >
-            <Text style={[styles.filterChipText, !statusFilter && styles.filterChipTextActive]}>
+            <Text style={[styles.filterChipText, { color: isDark ? colors.foreground : '#374151' }, !statusFilter && styles.filterChipTextActive]}>
               All
             </Text>
           </TouchableOpacity>
@@ -140,6 +142,7 @@ export default function AdminMapScreen() {
               key={status}
               style={[
                 styles.filterChip,
+                { backgroundColor: isDark ? colors.muted : '#FFFFFF' },
                 statusFilter === status && { backgroundColor: color },
               ]}
               onPress={() => setStatusFilter(statusFilter === status ? null : status)}
@@ -148,6 +151,7 @@ export default function AdminMapScreen() {
               <Text
                 style={[
                   styles.filterChipText,
+                  { color: isDark ? colors.foreground : '#374151' },
                   statusFilter === status && styles.filterChipTextActive,
                 ]}
               >
@@ -161,17 +165,17 @@ export default function AdminMapScreen() {
       {/* Bottom Controls */}
       <SafeAreaView style={styles.bottomControls} edges={['bottom']}>
         <View style={styles.controlsRow}>
-          <TouchableOpacity onPress={centerOnUser} style={styles.locationButton}>
-            <Ionicons name="navigate" size={20} color={colors.secondary} />
+          <TouchableOpacity onPress={centerOnUser} style={[styles.locationButton, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <Ionicons name="navigate" size={20} color={colors.primary} />
           </TouchableOpacity>
 
-          <TouchableOpacity onPress={toggleMapType} style={styles.mapTypeButton}>
+          <TouchableOpacity onPress={toggleMapType} style={[styles.mapTypeButton, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
             <Ionicons
               name={mapType === 'standard' ? 'globe-outline' : mapType === 'satellite' ? 'earth' : 'layers'}
               size={20}
-              color={colors.secondary}
+              color={colors.primary}
             />
-            <Text style={styles.mapTypeText}>
+            <Text style={[styles.mapTypeText, { color: colors.foreground }]}>
               {mapType === 'standard' ? 'Standard' : mapType === 'satellite' ? 'Satellite' : 'Hybrid'}
             </Text>
           </TouchableOpacity>
@@ -180,29 +184,29 @@ export default function AdminMapScreen() {
 
       {/* Selected Pin Card */}
       {selectedPin && (
-        <View style={styles.pinCard}>
+        <View style={[styles.pinCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
           <View style={styles.pinCardRow}>
             <View style={styles.pinCardInfo}>
-              <Text style={styles.pinCardName}>
+              <Text style={[styles.pinCardName, { color: colors.foreground }]}>
                 {selectedPin.homeowner_name || 'Unknown'}
               </Text>
-              <Text style={styles.pinCardAddress} numberOfLines={1}>
+              <Text style={[styles.pinCardAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
                 {selectedPin.address || 'No address'}
               </Text>
               <View style={styles.pinCardMeta}>
                 <View style={styles.pinCardStatus}>
                   <View style={[styles.statusDot, { backgroundColor: pinColors[selectedPin.status] }]} />
-                  <Text style={styles.statusLabel}>{selectedPin.status}</Text>
+                  <Text style={[styles.statusLabel, { color: colors.mutedForeground }]}>{selectedPin.status}</Text>
                 </View>
                 {selectedPin.rep_name && (
-                  <Text style={styles.repName}>
-                    <Ionicons name="person" size={12} color="#9CA3AF" /> {selectedPin.rep_name}
+                  <Text style={[styles.repName, { color: colors.mutedForeground }]}>
+                    <Ionicons name="person" size={12} color={colors.mutedForeground} /> {selectedPin.rep_name}
                   </Text>
                 )}
               </View>
             </View>
             <TouchableOpacity onPress={() => setSelectedPin(null)}>
-              <Ionicons name="close" size={24} color="#9CA3AF" />
+              <Ionicons name="close" size={24} color={colors.mutedForeground} />
             </TouchableOpacity>
           </View>
         </View>
@@ -266,7 +270,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   filterChipActive: {
-    backgroundColor: colors.primary,
+    backgroundColor: staticColors.primary,
   },
   filterChipText: {
     fontSize: 12,
@@ -325,7 +329,7 @@ const styles = StyleSheet.create({
   mapTypeText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.secondary,
+    color: staticColors.secondary,
   },
   pinCard: {
     position: 'absolute',

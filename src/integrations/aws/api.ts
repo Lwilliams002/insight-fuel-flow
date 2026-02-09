@@ -126,6 +126,7 @@ export interface Deal {
   roof_squares: number | null;
   roof_squares_with_waste: number | null;
   stories: number | null;
+  roofing_system_type: string | null;
 
   // Material details for ACV receipt
   material_category: string | null;  // Single, Metal, Architectural, Architectural Metal
@@ -157,6 +158,8 @@ export interface Deal {
   adjuster_phone: string | null;
   adjuster_email: string | null;
   adjuster_meeting_date: string | null;
+  adjuster_notes: string | null;
+  adjuster_not_assigned: boolean | null;
 
   // Contract & documents
   contract_signed: boolean | null;
@@ -222,8 +225,17 @@ export interface Deal {
   depreciation_collected_date: string | null;
   complete_date: string | null;
 
+  // Rep assignment
+  rep_id: string | null;
+  rep_name: string | null;
+
   // Commissions
   deal_commissions?: DealCommission[];
+  commission_paid: boolean | null;
+  commission_paid_date: string | null;
+  commission_override_amount: number | null;
+  commission_override_reason: string | null;
+  commission_override_date: string | null;
 }
 
 export interface DealCommission {

@@ -211,6 +211,31 @@ export default function ProfileScreen() {
           You'll receive reminders 30 minutes before appointments and events.
         </Text>
 
+        {/* Training Section */}
+        <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 20 }]}>Learning</Text>
+        <View style={[styles.menuCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+          <TouchableOpacity
+            style={[styles.menuItem, styles.menuItemBorder, { borderBottomColor: colors.border }]}
+            onPress={() => router.push('/(rep)/training')}
+          >
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="school" size={20} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.foreground }]}>Training Center</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.menuItem}
+            onPress={() => router.push('/(rep)/coaching')}
+          >
+            <View style={styles.menuItemLeft}>
+              <Ionicons name="clipboard" size={20} color={colors.primary} />
+              <Text style={[styles.menuItemText, { color: colors.foreground }]}>Coaching Logs</Text>
+            </View>
+            <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        </View>
+
         {/* Settings Section */}
         <Text style={[styles.sectionTitle, { color: colors.mutedForeground, marginTop: 20 }]}>Settings</Text>
         <View style={[styles.menuCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>

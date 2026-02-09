@@ -136,6 +136,20 @@
     "aws:cdk:path": "InsightFuelFlow-Auth-dev/RepGroup"
    }
   },
+  "CrewGroup": {
+   "Type": "AWS::Cognito::UserPoolGroup",
+   "Properties": {
+    "Description": "Installation crew leads",
+    "GroupName": "crew",
+    "Precedence": 3,
+    "UserPoolId": {
+     "Ref": "UserPool6BA7E5F2"
+    }
+   },
+   "Metadata": {
+    "aws:cdk:path": "InsightFuelFlow-Auth-dev/CrewGroup"
+   }
+  },
   "CDKMetadata": {
    "Type": "AWS::CDK::Metadata",
    "Properties": {

@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { dealsApi, Deal, repsApi } from '@/integrations/aws/api';
@@ -142,6 +142,38 @@ function MaterialSpecificationsForm({
   const [dripEdge, setDripEdge] = useState(deal.drip_edge || '');
   const [ventColor, setVentColor] = useState(deal.vent_color || '');
   const [hasChanges, setHasChanges] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [lastSaved, setLastSaved] = useState<Date | null>(null);
+  const autosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Autosave function
+  const triggerAutosave = useCallback(() => {
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+    autosaveTimeoutRef.current = setTimeout(() => {
+      setIsSaving(true);
+      onSave({
+        material_category: materialCategory || null,
+        material_type: materialType || null,
+        material_color: materialColor || null,
+        drip_edge: dripEdge || null,
+        vent_color: ventColor || null,
+      });
+      setHasChanges(false);
+      setLastSaved(new Date());
+      setIsSaving(false);
+    }, 1500); // Autosave after 1.5 seconds of inactivity
+  }, [materialCategory, materialType, materialColor, dripEdge, ventColor, onSave]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (autosaveTimeoutRef.current) {
+        clearTimeout(autosaveTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Check if there are unsaved changes
   const checkChanges = () => {
@@ -155,6 +187,10 @@ function MaterialSpecificationsForm({
   };
 
   const handleSave = () => {
+    if (autosaveTimeoutRef.current) {
+      clearTimeout(autosaveTimeoutRef.current);
+    }
+    setIsSaving(true);
     onSave({
       material_category: materialCategory || null,
       material_type: materialType || null,
@@ -163,10 +199,33 @@ function MaterialSpecificationsForm({
       vent_color: ventColor || null,
     });
     setHasChanges(false);
+    setLastSaved(new Date());
+    setIsSaving(false);
   };
 
   return (
     <div className="space-y-4">
+      {/* Autosave indicator */}
+      <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <span className="flex items-center gap-1">
+          {isSaving ? (
+            <>
+              <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
+              Saving...
+            </>
+          ) : hasChanges ? (
+            <>
+              <div className="w-2 h-2 bg-orange-500 rounded-full" />
+              Unsaved changes (autosave in 1.5s)
+            </>
+          ) : lastSaved ? (
+            <>
+              <div className="w-2 h-2 bg-green-500 rounded-full" />
+              Saved {lastSaved.toLocaleTimeString()}
+            </>
+          ) : null}
+        </span>
+      </div>
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
           <Label className="text-xs text-muted-foreground">Material Category</Label>
@@ -174,8 +233,8 @@ function MaterialSpecificationsForm({
             value={materialCategory}
             onValueChange={(value) => {
               setMaterialCategory(value);
-              checkChanges();
               setHasChanges(true);
+              triggerAutosave();
             }}
           >
             <SelectTrigger>
@@ -198,6 +257,7 @@ function MaterialSpecificationsForm({
               onChange={(e) => {
                 setMaterialType(e.target.value);
                 setHasChanges(true);
+                triggerAutosave();
               }}
             />
           </div>
@@ -210,6 +270,7 @@ function MaterialSpecificationsForm({
             onChange={(e) => {
               setMaterialColor(e.target.value);
               setHasChanges(true);
+              triggerAutosave();
             }}
           />
         </div>
@@ -221,6 +282,7 @@ function MaterialSpecificationsForm({
             onChange={(e) => {
               setDripEdge(e.target.value);
               setHasChanges(true);
+              triggerAutosave();
             }}
           />
         </div>
@@ -232,14 +294,15 @@ function MaterialSpecificationsForm({
             onChange={(e) => {
               setVentColor(e.target.value);
               setHasChanges(true);
+              triggerAutosave();
             }}
           />
         </div>
       </div>
       {hasChanges && (
-        <Button onClick={handleSave} className="w-full">
+        <Button onClick={handleSave} className="w-full" disabled={isSaving}>
           <Save className="w-4 h-4 mr-2" />
-          Save Material Specifications
+          {isSaving ? 'Saving...' : 'Save Material Specifications'}
         </Button>
       )}
     </div>
@@ -266,6 +329,7 @@ export default function DealDetails() {
     state: '',
     zip_code: '',
     roof_type: '',
+    roofing_system_type: '',
     roof_squares: '',
     notes: '',
   });
@@ -359,6 +423,7 @@ export default function DealDetails() {
         state: d.state || '',
         zip_code: d.zip_code || '',
         roof_type: d.roof_type || '',
+        roofing_system_type: d.roofing_system_type || '',
         roof_squares: d.roof_squares?.toString() || '',
         notes: d.notes || '',
       });
@@ -435,6 +500,7 @@ export default function DealDetails() {
       state: overviewForm.state || null,
       zip_code: overviewForm.zip_code || null,
       roof_type: overviewForm.roof_type || null,
+      roofing_system_type: overviewForm.roofing_system_type || null,
       roof_squares: overviewForm.roof_squares ? parseFloat(overviewForm.roof_squares) : null,
       notes: overviewForm.notes || null,
     });
@@ -470,10 +536,220 @@ export default function DealDetails() {
       toast.error('Please provide a signature');
       return;
     }
+
+    // Generate the full agreement HTML document with embedded signature
+    const agreementHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Insurance-Contingent Roofing Agreement - ${deal.homeowner_name}</title>
+  <style>
+    @page { size: letter; margin: 0.5in; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 15px; color: #333; font-size: 11px; line-height: 1.4; }
+    .header { background: #0F1E2E; color: white; padding: 15px; text-align: center; border-radius: 8px; margin-bottom: 15px; display: flex; align-items: center; justify-content: center; gap: 15px; }
+    .header-logo { width: 60px; height: 60px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
+    .header-logo img { max-width: 50px; max-height: 50px; }
+    .header-text h1 { margin: 0; font-size: 18px; letter-spacing: 1px; }
+    .header-text h2 { margin: 5px 0 0; font-size: 12px; font-weight: normal; }
+    .section { margin-bottom: 12px; }
+    .section-title { font-size: 11px; font-weight: 700; color: #111827; margin-bottom: 8px; text-transform: uppercase; border-bottom: 2px solid #0F1E2E; padding-bottom: 3px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 20px; }
+    .info-row { display: flex; border-bottom: 1px solid #eee; padding: 4px 0; font-size: 10px; }
+    .info-label { font-weight: 600; width: 120px; flex-shrink: 0; }
+    .info-value { flex: 1; }
+    .content-text { margin-bottom: 10px; text-align: justify; font-size: 10px; }
+    .fee-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 10px; }
+    .fee-highlight { font-weight: 700; color: #0F1E2E; }
+    .cancel-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 10px; }
+    .notice-box { background: #fef3c7; border: 1px solid #fcd34d; padding: 10px; border-radius: 6px; margin: 10px 0; font-size: 10px; }
+    .notice-title { font-weight: 700; color: #92400e; margin-bottom: 8px; font-size: 11px; }
+    .warning-text { color: #dc2626; font-weight: 600; }
+    .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 15px; }
+    .signature-box { border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
+    .signature-label { font-size: 9px; color: #6b7280; margin-bottom: 3px; }
+    .signature-line { border-bottom: 1px solid #333; min-height: 30px; margin-bottom: 3px; }
+    .signature-image { max-width: 180px; max-height: 50px; }
+    .signature-date { font-size: 9px; color: #6b7280; margin-top: 5px; }
+    .page-break { page-break-before: always; }
+    ul { margin: 8px 0; padding-left: 18px; font-size: 10px; }
+    li { margin-bottom: 5px; }
+  </style>
+</head>
+<body>
+  <!-- PAGE 1 -->
+  <div class="header">
+    <div class="header-logo">
+      <img src="/logo.png" alt="Titan Prime Solutions" onerror="this.style.display='none'" />
+    </div>
+    <div class="header-text">
+      <h1>TITAN PRIME SOLUTIONS</h1>
+      <h2>INSURANCE-CONTINGENT ROOFING AGREEMENT</h2>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Owner & Claim Information</div>
+    <div class="info-grid">
+      <div>
+        <div class="info-row"><span class="info-label">Owner Full Name:</span><span class="info-value">${deal.homeowner_name || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Property Address:</span><span class="info-value">${deal.address || '_______________'}${deal.city ? `, ${deal.city}` : ''}</span></div>
+        <div class="info-row"><span class="info-label">Primary Phone:</span><span class="info-value">${deal.homeowner_phone || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Email Address:</span><span class="info-value">${deal.homeowner_email || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Insurance Carrier:</span><span class="info-value">${deal.insurance_company || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Policy ID:</span><span class="info-value">${deal.policy_number || '_______________'}</span></div>
+      </div>
+      <div>
+        <div class="info-row"><span class="info-label">Claim Reference #:</span><span class="info-value">${deal.claim_number || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Date of Loss:</span><span class="info-value">${deal.date_of_loss ? new Date(deal.date_of_loss).toLocaleDateString() : '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Roofing System:</span><span class="info-value">${deal.roofing_system_type || deal.roof_type || '_______________'}</span></div>
+        <div class="info-row"><span class="info-label">Adjuster Name:</span><span class="info-value">${deal.adjuster_not_assigned ? 'N/A' : (deal.adjuster_name || '_______________')}</span></div>
+        <div class="info-row"><span class="info-label">Adjuster Phone:</span><span class="info-value">${deal.adjuster_not_assigned ? 'N/A' : (deal.adjuster_phone || '_______________')}</span></div>
+        <div class="info-row"><span class="info-label">Prime PRO:</span><span class="info-value">${deal.rep_name || '_______________'}</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Insurance Contingency & Claim Services</div>
+    <p class="content-text">
+      This Agreement is entered into based on the outcome of the insurance claim process. Titan Prime Solutions' scope of work is limited to items approved by the insurer. Owner is responsible for any applicable deductible and for any upgrades, additions, or services not included in the insurer's determination of coverage. Owner agrees to provide Titan Prime Solutions with relevant insurance documentation necessary to perform the work.
+    </p>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Insurance Claim Services Fee (Approval-Based)</div>
+    <p class="content-text">
+      If Owner cancels this Agreement after insurance approval and after Titan Prime Solutions has performed insurance-related services, including inspections, measurements, documentation, claim preparation, or insurer coordination, Owner agrees to pay Titan Prime Solutions a flat claim services fee of <span class="fee-highlight">$1,250</span>. This fee reflects the reasonable value of services rendered and is not based on insurance proceeds.
+    </p>
+    <div class="fee-box">
+      <span class="fee-highlight">$1,250 Claim Services Fee</span> – Owner Initials: ________
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">3-Day Right to Cancel</div>
+    <div class="cancel-box">
+      <p class="content-text" style="margin-bottom: 5px;">
+        Owner may terminate this Agreement within three (3) business days of execution by providing written notice via email to <strong>titanprimesolutionstx@gmail.com</strong>, received no later than the close of business on the third business day following execution.
+      </p>
+      <p class="content-text" style="margin-bottom: 0;">This Agreement is governed by the laws of the State of Texas.</p>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Acceptance</div>
+    <div class="signature-grid">
+      <div class="signature-box">
+        <div class="signature-label">Prime PRO (Printed Name)</div>
+        <div class="signature-line"></div>
+        <div class="signature-label">Signature</div>
+        <div class="signature-line"></div>
+      </div>
+      <div class="signature-box">
+        <div class="signature-label">Property Owner (Printed Name)</div>
+        <div class="signature-line">${deal.homeowner_name || ''}</div>
+        <div class="signature-label">Signature</div>
+        <img src="${signatureDataUrl}" class="signature-image" alt="Owner Signature" />
+        <div class="signature-date">Date Signed: ${new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 2 -->
+  <div class="page-break"></div>
+
+  <div class="notice-box">
+    <div class="notice-title">IMPORTANT NOTICE TO PROPERTY OWNER</div>
+    <ul>
+      <li>Titan Prime Solutions will begin work on the scheduled installation date during normal construction hours and may mobilize crews, equipment, and materials without additional notice.</li>
+      <li>Roof installation requires fastening materials through roof decking in accordance with applicable building codes. As a result, fasteners may be visible from attic or interior roof areas.</li>
+      <li>Authorized representatives of Titan Prime Solutions, including crew members, supervisors, inspectors, and documentation personnel, may access the Property as required to perform or document the work.</li>
+      <li>The Owner is responsible for removing vehicles, personal property, and exterior items from areas surrounding the Property that could be affected by falling debris, including furniture, planters, trailers, and patio or pool items.</li>
+      <li>A dumpster or equipment trailer may be placed in the most accessible area of the Property and may temporarily block driveway or garage access.</li>
+      <li>Construction vibration may occur. The Owner should remove or secure items mounted on interior walls. Titan Prime Solutions is not responsible for damage to unsecured interior items.</li>
+      <li>Certain existing components, including skylights, drywall, ceiling finishes, gutters, stucco, paint, patio covers, or HVAC components, may be affected due to age, prior installation, or vibration. Titan Prime Solutions is not responsible for incidental damage to pre-existing materials resulting from normal and non-negligent construction activities.</li>
+      <li>Construction areas may contain nails, tools, cords, or debris. The Owner is responsible for keeping occupants and visitors clear of work areas. Titan Prime Solutions is not responsible for injuries resulting from failure to do so.</li>
+      <li>Permits may be posted on the Property as required and must remain until inspections are completed.</li>
+      <li>If satellite, internet, or similar services require disconnection or adjustment, the Owner is responsible for coordinating reconnection. Titan Prime Solutions is not responsible for service interruptions or implied solar warranties.</li>
+      <li>The Owner must disclose any concealed utilities, gas lines, electrical lines, refrigerant lines, or other systems beneath the roof decking prior to installation. Titan Prime Solutions is not responsible for damage to undisclosed conditions.</li>
+      <li>Existing HVAC components showing corrosion or deterioration will be reinstalled as-is unless replacement is authorized. Titan Prime Solutions is not responsible for issues related to pre-existing conditions.</li>
+      <li>The Owner is responsible for HOA compliance, including material and color approvals.</li>
+      <li class="warning-text">Replacement of rotted decking, if discovered, will be charged at $3.00 per square foot. Owner Initials: ________</li>
+      <li>Abusive, threatening, or unprofessional conduct toward Contractor personnel will result in immediate suspension of work and termination of the Agreement, with the Owner responsible for costs incurred.</li>
+    </ul>
+  </div>
+
+  <div class="acknowledgment">
+    <div class="ack-title">ACKNOWLEDGMENT – CONSTRUCTION NOTICE</div>
+    <div class="info-row">
+      <span class="info-label">Owner Name:</span>
+      <span class="info-value">${deal.homeowner_name || ''}</span>
+    </div>
+    <div class="info-row">
+      <span class="info-label">Property Address:</span>
+      <span class="info-value">${deal.address || ''}</span>
+    </div>
+    <div class="signature-grid" style="margin-top: 15px;">
+      <div>
+        <div class="signature-label">Owner Signature</div>
+        <img src="${signatureDataUrl}" class="signature-image" alt="Owner Signature" />
+      </div>
+      <div>
+        <div class="signature-label">Date</div>
+        <div>${new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGE 3 -->
+  <div class="page-break"></div>
+
+  <div class="section">
+    <div class="section-title">Notice Regarding Additional Insurance Requests (Supplements)</div>
+    <p class="content-text">
+      During the course of an insurance-related roofing project, additional damage, labor, or materials may be identified that were not included in the insurer's initial estimate. When this occurs, Contractor may submit additional documentation to the insurance company requesting review of those items.
+    </p>
+    <p class="content-text">
+      These requests may be necessary when certain conditions were not visible at the time of the original inspection or when quantities differ from the insurer's original assessment. Examples may include additional roofing layers, damaged decking, required code items, disposal costs, or adjustments resulting from field measurements.
+    </p>
+    <p class="content-text">
+      Insurance coverage decisions are governed by the terms and exclusions of the policy.
+    </p>
+  </div>
+
+  <div class="section" style="margin-top: 20px; padding: 15px; background: #f9fafb; border-radius: 8px;">
+    <div class="section-title">ACKNOWLEDGMENT – INSURANCE SUPPLEMENTS</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
+      <div class="info-row"><span class="info-label">Owner Name:</span><span class="info-value">${deal.homeowner_name || ''}</span></div>
+      <div class="info-row"><span class="info-label">Property Address:</span><span class="info-value">${deal.address || ''}</span></div>
+    </div>
+    <div class="signature-grid">
+      <div>
+        <div class="signature-label">Owner Signature</div>
+        <img src="${signatureDataUrl}" class="signature-image" alt="Owner Signature" />
+      </div>
+      <div>
+        <div class="signature-label">Date</div>
+        <div>${new Date().toLocaleDateString()}</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+    `.trim();
+
+    // Store the agreement document as a data URL (base64 HTML)
+    const agreementBase64 = btoa(unescape(encodeURIComponent(agreementHtml)));
+    const agreementDataUrl = `data:text/html;base64,${agreementBase64}`;
+
     updateDealMutation.mutate({
       contract_signed: true,
-      signed_date: new Date().toISOString(), // Full ISO timestamp
-      agreement_document_url: signatureDataUrl, // Store signature as data URL for now
+      signed_date: new Date().toISOString(),
+      signature_url: signatureDataUrl,
+      agreement_document_url: agreementDataUrl,
     });
     setShowAgreement(false);
     toast.success('Agreement signed successfully!');
@@ -810,6 +1086,14 @@ export default function DealDetails() {
                         />
                       </div>
                     </div>
+                    <div>
+                      <Label>Roofing System Type</Label>
+                      <Input
+                        value={overviewForm.roofing_system_type}
+                        onChange={(e) => setOverviewForm({ ...overviewForm, roofing_system_type: e.target.value })}
+                        placeholder="e.g., Composition Shingle, Metal, Tile"
+                      />
+                    </div>
                   </div>
                 ) : (
                   <>
@@ -821,7 +1105,7 @@ export default function DealDetails() {
                       <div className="grid grid-cols-2 gap-4 pt-2">
                         <div>
                           <p className="text-xs text-muted-foreground">Roof Type</p>
-                          <p className="font-medium capitalize">{deal.roof_type}</p>
+                          <p className="font-medium capitalize">{deal.roofing_system_type || deal.roof_type}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground">Squares</p>
@@ -1193,122 +1477,131 @@ export default function DealDetails() {
                           Sign Agreement
                         </Button>
                       </DialogTrigger>
-                      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                           <DialogTitle className="flex items-center gap-2">
                             <img src="/logo.png" alt="Titan Prime Solutions" className="h-8 w-8" />
-                            Titan Prime Solutions - Insurance Agreement
+                            Insurance-Contingent Roofing Agreement
                           </DialogTitle>
                         </DialogHeader>
 
                         {/* Agreement Content */}
                         <div className="space-y-4 text-sm">
                           <div className="bg-[#0F1E2E] text-white p-4 rounded-lg text-center">
-                            <h2 className="text-xl font-bold">TITAN PRIME SOLUTIONS</h2>
-                            <p className="text-xs opacity-80">INSURED & BONDED</p>
+                            <h2 className="text-xl font-bold tracking-wide">TITAN PRIME SOLUTIONS</h2>
+                            <p className="text-sm mt-1">INSURANCE-CONTINGENT ROOFING AGREEMENT</p>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <Label>Homeowner Name</Label>
-                              <p className="font-medium">{deal.homeowner_name}</p>
-                            </div>
-                            <div>
-                              <Label>Date</Label>
-                              <p className="font-medium">{new Date().toLocaleDateString()}</p>
-                            </div>
-                            <div className="col-span-2">
-                              <Label>Address</Label>
-                              <p className="font-medium">{deal.address}, {deal.city}, {deal.state} {deal.zip_code}</p>
-                            </div>
-                            <div>
-                              <Label>Insurance Company</Label>
-                              <p className="font-medium">{deal.insurance_company || '-'}</p>
-                            </div>
-                            <div>
-                              <Label>Claim Number</Label>
-                              <p className="font-medium">{deal.claim_number || '-'}</p>
+                          {/* Owner & Claim Information */}
+                          <div className="border rounded-lg p-4">
+                            <h3 className="font-semibold text-sm mb-3 uppercase border-b pb-2">Owner & Claim Information</h3>
+                            <div className="grid grid-cols-2 gap-3 text-xs">
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Owner Full Name:</span>
+                                <span className="ml-2 font-medium">{deal.homeowner_name}</span>
+                              </div>
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Primary Phone:</span>
+                                <span className="ml-2 font-medium">{deal.homeowner_phone || '-'}</span>
+                              </div>
+                              <div className="col-span-2 border-b pb-2">
+                                <span className="text-muted-foreground">Property Address:</span>
+                                <span className="ml-2 font-medium">{deal.address}, {deal.city}, {deal.state} {deal.zip_code}</span>
+                              </div>
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Insurance Carrier:</span>
+                                <span className="ml-2 font-medium">{deal.insurance_company || '-'}</span>
+                              </div>
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Claim Reference #:</span>
+                                <span className="ml-2 font-medium">{deal.claim_number || '-'}</span>
+                              </div>
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Adjuster Name:</span>
+                                <span className="ml-2 font-medium">{deal.adjuster_name || '-'}</span>
+                              </div>
+                              <div className="border-b pb-2">
+                                <span className="text-muted-foreground">Adjuster Phone:</span>
+                                <span className="ml-2 font-medium">{deal.adjuster_phone || '-'}</span>
+                              </div>
                             </div>
                           </div>
 
                           <Separator />
 
-                          <div className="prose prose-sm max-w-none">
-                            <h3 className="text-base font-semibold">INSURANCE AGREEMENT</h3>
+                          {/* Insurance Contingency & Claim Services */}
+                          <div>
+                            <h3 className="font-semibold text-sm mb-2 uppercase">Insurance Contingency & Claim Services</h3>
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                              This Agreement is entered into based on the outcome of the insurance claim process. Titan Prime Solutions' scope of work is limited to items approved by the insurer. Owner is responsible for any applicable deductible and for any upgrades, additions, or services not included in the insurer's determination of coverage. Owner agrees to provide Titan Prime Solutions with relevant insurance documentation necessary to perform the work.
+                            </p>
+                          </div>
+
+                          <Separator />
+
+                          {/* Insurance Claim Services Fee */}
+                          <div className="bg-muted/50 p-4 rounded-lg border">
+                            <h3 className="font-semibold text-sm mb-2 uppercase">Insurance Claim Services Fee (Approval-Based)</h3>
+                            <p className="text-xs leading-relaxed text-muted-foreground mb-3">
+                              If Owner cancels this Agreement after insurance approval and after Titan Prime Solutions has performed insurance-related services, including inspections, measurements, documentation, claim preparation, or insurer coordination, Owner agrees to pay Titan Prime Solutions a flat claim services fee of <span className="font-bold text-foreground">$1,250</span>.
+                            </p>
+                            <p className="text-xs leading-relaxed text-muted-foreground mb-3">
+                              This fee reflects the reasonable value of services rendered and is not based on insurance proceeds. The fee becomes due and payable upon cancellation following claim approval.
+                            </p>
+                            <div className="bg-background p-3 rounded border">
+                              <span className="font-bold">$1,250 Claim Services Fee</span> – Owner Initials: ________
+                            </div>
+                          </div>
+
+                          <Separator />
+
+                          {/* 3-Day Right to Cancel */}
+                          <div className="bg-blue-50 dark:bg-blue-950/30 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                            <h3 className="font-semibold text-sm mb-2 uppercase">3-Day Right to Cancel</h3>
                             <p className="text-xs leading-relaxed">
-                              This agreement is contingent upon the approval of your claim by your insurance company.
-                              Upon claim approval, Titan Prime Solutions will perform the repairs or replacements
-                              specified by the "loss statement" provided by your insurance company. Repairs will be
-                              performed for insurance funds only, with the homeowner being responsible for paying their
-                              insurance deductible.
+                              Owner may terminate this Agreement within three (3) business days of execution by providing written notice via email to <span className="font-semibold">titanprimesolutionstx@gmail.com</span>, which must be received no later than the close of business on the third business day following execution of this Agreement.
                             </p>
                             <p className="text-xs leading-relaxed mt-2">
-                              Any material upgrade or additional work authorized by the Homeowner will be an additional
-                              charge to be paid for by the homeowner. The homeowner agrees to provide Titan Prime Solutions
-                              with a copy of the insurance loss statement. In addition, Homeowner will pay Titan Prime Solutions
-                              for any supplemental work approved by the insurance company for the amount of the insurance quote.
-                            </p>
-                            <p className="text-xs leading-relaxed mt-2">
-                              If this agreement is canceled by the Homeowner after the three days right of rescission,
-                              but after approval for the claim, the homeowner agrees to pay Titan Prime Solutions for
-                              20% of the contract price outlined on the insurance loss statement as the "RCV" or
-                              "Replacement Cost Value". This is not as a penalty, but as compensation for claim services
-                              provided by the project manager up to the time of cancellation.
-                            </p>
-                          </div>
-
-                          <div className="bg-muted p-3 rounded-lg">
-                            <h4 className="font-semibold text-sm mb-2">3 DAY RIGHT OF RESCISSION</h4>
-                            <p className="text-xs">
-                              Homeowners shall have the right to cancel this contract within three (3) days after the
-                              signing of the contract. Should the Homeowner decide to cancel the contract, the homeowner
-                              must notify Titan Prime Solutions in writing. The notice of cancellation must be signed
-                              and dated, and Homeowner must clearly state the intention to cancel.
+                              This Agreement is governed by the laws of the State of Texas.
                             </p>
                           </div>
 
                           <Separator />
 
-                          <div className="grid grid-cols-2 gap-4">
-                            <div>
-                              <Label>Square Footage</Label>
-                              <Input
-                                value={agreementForm.squareFootage || deal.roof_squares?.toString() || ''}
-                                onChange={(e) => setAgreementForm({ ...agreementForm, squareFootage: e.target.value })}
-                                placeholder="Square footage"
-                              />
-                            </div>
-                            <div>
-                              <Label>Shingle Color</Label>
-                              <Input
-                                value={agreementForm.shingleColor}
-                                onChange={(e) => setAgreementForm({ ...agreementForm, shingleColor: e.target.value })}
-                                placeholder="e.g., Weathered Wood"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="bg-[#C9A24D]/10 border border-[#C9A24D]/30 p-3 rounded-lg">
-                            <h4 className="font-semibold text-sm mb-2 text-[#C9A24D]">Warranty Information</h4>
-                            <ul className="text-xs space-y-1">
-                              <li>• 5 Year Labor Warranty provided by Titan Prime Solutions</li>
-                              <li>• 30-Year Manufacturer Warranty (No Charge Upgrade) (110 Mph Wind Rated)</li>
-                              <li>• 40 Year Manufacturer Warranty (No Charge Upgrade) (150 Mph Wind Rated) on Metal Panels</li>
+                          {/* Important Notice */}
+                          <div className="bg-amber-50 dark:bg-amber-950/30 p-4 rounded-lg border border-amber-200 dark:border-amber-800">
+                            <h3 className="font-semibold text-sm mb-2 uppercase text-amber-800 dark:text-amber-200">Important Notice to Property Owner</h3>
+                            <ul className="text-xs space-y-2 text-muted-foreground">
+                              <li>• Titan Prime Solutions will begin work on the scheduled installation date during normal construction hours and may mobilize crews, equipment, and materials without additional notice.</li>
+                              <li>• The Owner is responsible for removing vehicles, personal property, and exterior items from areas surrounding the Property that could be affected by falling debris.</li>
+                              <li>• Construction vibration may occur. The Owner should remove or secure items mounted on interior walls. Titan Prime Solutions is not responsible for damage to unsecured interior items.</li>
+                              <li>• Titan Prime Solutions is not responsible for incidental damage to pre-existing materials resulting from normal and non-negligent construction activities.</li>
+                              <li>• The Owner is responsible for HOA compliance, including material and color approvals.</li>
+                              <li className="text-destructive font-semibold">• Replacement of rotted decking, if discovered, will be charged at $3.00 per square foot. Owner Initials: ________</li>
+                              <li>• Abusive, threatening, or unprofessional conduct toward Contractor personnel will result in immediate suspension of work and termination of the Agreement.</li>
                             </ul>
                           </div>
 
-                          <div className="bg-destructive/10 border border-destructive/30 p-3 rounded-lg">
-                            <p className="text-xs text-destructive font-medium">
-                              **ROTTED OSB WILL COST AN ADDITIONAL $3.00 PER SQFT TO REPLACE.
+                          <Separator />
+
+                          {/* Supplements Notice */}
+                          <div>
+                            <h3 className="font-semibold text-sm mb-2 uppercase">Notice Regarding Additional Insurance Requests (Supplements)</h3>
+                            <p className="text-xs leading-relaxed text-muted-foreground">
+                              During the course of an insurance-related roofing project, additional damage, labor, or materials may be identified that were not included in the insurer's initial estimate. When this occurs, Contractor may submit additional documentation to the insurance company requesting review of those items.
+                            </p>
+                            <p className="text-xs leading-relaxed text-muted-foreground mt-2">
+                              Insurance coverage decisions are governed by the terms and exclusions of the policy.
                             </p>
                           </div>
 
                           <Separator />
 
+                          {/* Signature Section */}
                           <div>
-                            <Label className="text-base font-semibold">Homeowner Signature</Label>
-                            <p className="text-xs text-muted-foreground mb-2">
-                              By signing below, I agree to and understand the terms above.
+                            <h3 className="font-semibold text-sm mb-2 uppercase">Acceptance - Property Owner Signature</h3>
+                            <p className="text-xs text-muted-foreground mb-3">
+                              By signing below, I acknowledge that I have read and understand all terms of this Agreement.
                             </p>
                             <SignaturePad
                               onSave={(dataUrl) => setSignatureDataUrl(dataUrl)}

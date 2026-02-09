@@ -5,7 +5,7 @@
 -- ENUMS
 -- ==========================================
 
-CREATE TYPE app_role AS ENUM ('admin', 'rep');
+CREATE TYPE app_role AS ENUM ('admin', 'rep', 'crew');
 
 -- Deal status follows the Sign → Build → Collect workflow from training
 -- SIGN phase: lead → inspection_scheduled → claim_filed → adjuster_scheduled → adjuster_met → approved → signed
@@ -98,6 +98,7 @@ CREATE TABLE deals (
     roof_squares DECIMAL(10,2),        -- Actual squares
     roof_squares_with_waste DECIMAL(10,2), -- Squares + waste
     stories INTEGER DEFAULT 1,
+    roofing_system_type TEXT,            -- e.g., Asphalt Shingles, Metal, Tile
 
     -- Homeowner info
     homeowner_name TEXT NOT NULL,
@@ -113,6 +114,7 @@ CREATE TABLE deals (
     policy_number TEXT,
     claim_number TEXT,
     date_of_loss DATE,                 -- Storm date
+    date_type TEXT,                    -- 'loss' or 'discovery'
     deductible NUMERIC,                -- Homeowner's deductible
 
     -- Inspection scheduling
@@ -128,6 +130,7 @@ CREATE TABLE deals (
     adjuster_phone TEXT,
     adjuster_email TEXT,
     adjuster_meeting_date TIMESTAMP WITH TIME ZONE,
+    adjuster_not_assigned BOOLEAN DEFAULT false, -- True if adjuster not yet assigned
 
     -- Contract & documents
     contract_signed BOOLEAN DEFAULT false,
@@ -193,10 +196,22 @@ CREATE TABLE deals (
     approval_type TEXT,                 -- full, partial, supplement_needed, sale
     approved_date TIMESTAMP WITH TIME ZONE,
     sales_tax NUMERIC,
+    sales_tax_rate NUMERIC DEFAULT 8.25,
 
     -- Rep Assignment
     rep_id UUID,
     rep_name TEXT,
+
+    -- Commission tracking
+    commission_paid BOOLEAN DEFAULT false,
+    commission_paid_date DATE,
+    commission_override_amount NUMERIC,
+    commission_override_reason TEXT,
+    commission_override_date TIMESTAMP WITH TIME ZONE,
+
+    -- Install request tracking
+    install_request_date TIMESTAMP WITH TIME ZONE,
+    install_request_notes TEXT,
 
     -- Calculated totals
     total_contract_value NUMERIC NOT NULL DEFAULT 0,  -- RCV or total job cost
@@ -271,6 +286,10 @@ CREATE TABLE rep_pins (
 
     -- Documents
     document_url TEXT,
+    utility_url TEXT,                   -- Solar bill / utility document
+    contract_url TEXT,                  -- Contract document
+    image_url TEXT,                     -- Primary image
+    inspection_images TEXT[],           -- Inspection photos
 
     created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()

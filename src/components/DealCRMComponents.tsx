@@ -61,7 +61,7 @@ export function DealPipeline({ currentStatus, onStatusChange, deal }: DealPipeli
         <div className="space-y-2">
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Overall Progress</span>
-            <span className="font-medium">{progress}%</span>
+            <span className="font-medium">{config.label}</span>
           </div>
           <Progress value={progress} className="h-2" />
         </div>

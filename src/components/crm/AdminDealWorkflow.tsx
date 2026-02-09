@@ -88,6 +88,11 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
   const [depreciation, setDepreciation] = useState(deal.depreciation || 0);
   const [deductible, setDeductible] = useState(deal.deductible || 0);
 
+  // Commission editing
+  const [isEditingCommission, setIsEditingCommission] = useState(false);
+  const [commissionAmount, setCommissionAmount] = useState(deal.commission_override_amount || 0);
+  const [commissionReason, setCommissionReason] = useState('');
+
   // Sync state when deal prop changes
   useEffect(() => {
     setInstallDate(deal.install_date || '');
@@ -96,11 +101,14 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
     setInvoiceWorkItems(deal.invoice_work_items || '');
     setIsEditingNotes(false);
     setIsEditingFinancials(false);
+    setIsEditingCommission(false);
     setRcv(deal.rcv || 0);
     setAcv(deal.acv || 0);
     setDepreciation(deal.depreciation || 0);
     setDeductible(deal.deductible || 0);
-  }, [deal.id, deal.install_date, deal.adjuster_meeting_date, deal.notes, deal.invoice_work_items, deal.rcv, deal.acv, deal.depreciation, deal.deductible]);
+    setCommissionAmount(deal.commission_override_amount || 0);
+    setCommissionReason('');
+  }, [deal.id, deal.install_date, deal.adjuster_meeting_date, deal.notes, deal.invoice_work_items, deal.rcv, deal.acv, deal.depreciation, deal.deductible, deal.commission_override_amount]);
 
   const currentStepIndex = getStepIndex(deal.status);
   const progress = Math.round(((currentStepIndex + 1) / adminSteps.length) * 100);
@@ -185,7 +193,7 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
         <div className="flex justify-between text-sm">
           <span className="text-muted-foreground">Progress</span>
           <Badge variant={isComplete ? 'default' : 'outline'} className={isComplete ? 'bg-green-500' : ''}>
-            {isComplete ? 'Complete' : `${progress}%`}
+            {isComplete ? 'Complete' : adminSteps[currentStepIndex]?.label || 'In Progress'}
           </Badge>
         </div>
         <Progress value={progress} className="h-2" />
@@ -1089,12 +1097,12 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
               </div>
             )}
 
-            {/* Invoice Sent */}
+            {/* RCV Sent */}
             {deal.invoice_sent_date && (
               <div className="relative">
                 <div className="absolute -left-[21px] w-3 h-3 rounded-full bg-violet-500" />
                 <div className="flex justify-between text-xs">
-                  <span className="font-medium">Invoice Sent</span>
+                  <span className="font-medium">RCV Sent</span>
                   <span className="text-muted-foreground">{format(new Date(deal.invoice_sent_date), 'MMM d, yyyy')}</span>
                 </div>
               </div>
@@ -1235,6 +1243,102 @@ export function AdminDealWorkflow({ deal, onUpdate }: AdminDealWorkflowProps) {
               {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
               Save Work Items
             </Button>
+          )}
+        </div>
+
+        {/* Commission Editing Section */}
+        <div className="p-3 bg-amber-500/10 rounded-lg space-y-2 border border-amber-500/30">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DollarSign className="w-4 h-4 text-amber-600" />
+              <span className="text-sm font-medium">Commission</span>
+            </div>
+            {!isEditingCommission && (
+              <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setIsEditingCommission(true)}>
+                <Edit className="w-3 h-3 mr-1" />
+                Edit
+              </Button>
+            )}
+          </div>
+
+          {/* Show current commission info */}
+          {deal.commission_override_amount ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Adjusted Amount</span>
+                <span className="font-semibold text-amber-600">${deal.commission_override_amount.toLocaleString()}</span>
+              </div>
+              {deal.commission_override_reason && (
+                <div className="text-xs text-muted-foreground">
+                  <span className="font-medium">Reason:</span> {deal.commission_override_reason}
+                </div>
+              )}
+              {deal.commission_override_date && (
+                <div className="text-xs text-muted-foreground">
+                  Adjusted on {format(new Date(deal.commission_override_date), 'MMM d, yyyy')}
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">No commission adjustments</p>
+          )}
+
+          {isEditingCommission && (
+            <div className="space-y-3 pt-2 border-t border-amber-500/20">
+              <div>
+                <Label className="text-xs">New Commission Amount</Label>
+                <Input
+                  type="number"
+                  value={commissionAmount || ''}
+                  onChange={(e) => setCommissionAmount(parseFloat(e.target.value) || 0)}
+                  placeholder="0.00"
+                  className="h-9"
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Reason for Adjustment *</Label>
+                <Textarea
+                  value={commissionReason}
+                  onChange={(e) => setCommissionReason(e.target.value)}
+                  placeholder="Enter reason for commission adjustment..."
+                  className="min-h-[60px] text-sm"
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="flex-1"
+                  onClick={() => {
+                    setCommissionAmount(deal.commission_override_amount || 0);
+                    setCommissionReason('');
+                    setIsEditingCommission(false);
+                  }}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => {
+                    if (!commissionReason.trim()) {
+                      toast.error('A reason is required when editing commission');
+                      return;
+                    }
+                    updateMutation.mutate({
+                      commission_override_amount: commissionAmount,
+                      commission_override_reason: commissionReason.trim(),
+                      commission_override_date: new Date().toISOString(),
+                    });
+                    setIsEditingCommission(false);
+                  }}
+                  disabled={updateMutation.isPending || !commissionReason.trim()}
+                >
+                  {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : null}
+                  Save
+                </Button>
+              </div>
+            </div>
           )}
         </div>
 

@@ -4,9 +4,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
 import MapView, { Marker, PROVIDER_DEFAULT, PROVIDER_GOOGLE, LongPressEvent } from 'react-native-maps';
 import * as Location from 'expo-location';
+import * as DocumentPicker from 'expo-document-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
-import { pinsApi, dealsApi, Pin } from '../../src/services/api';
+import { pinsApi, dealsApi, Pin, uploadFile } from '../../src/services/api';
 import { colors as staticColors } from '../../src/constants/config';
 import { useTheme } from '../../src/contexts/ThemeContext';
 
@@ -42,8 +43,13 @@ export default function MapScreen() {
   const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
   const [mapType, setMapType] = useState<MapType>('standard');
   const [selectedPin, setSelectedPin] = useState<Pin | null>(null);
-  const [uploadLater, setUploadLater] = useState(true);
+  const [uploadLater, setUploadLater] = useState(false);
   const [initialPinIdHandled, setInitialPinIdHandled] = useState<string | null>(null);
+
+  // Filter state for map pins
+  const [statusFilter, setStatusFilter] = useState<PinStatus | 'all'>('all');
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // New pin modal state
   const [showNewPinModal, setShowNewPinModal] = useState(false);
@@ -56,7 +62,9 @@ export default function MapScreen() {
     status: 'lead' as PinStatus,
     notes: '',
   });
+  const [solarBillFile, setSolarBillFile] = useState<{ name: string; uri: string; type: string } | null>(null);
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+  const pinDetailSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const { data: pins, refetch } = useQuery({
     queryKey: ['pins'],
@@ -82,11 +90,11 @@ export default function MapScreen() {
       const pin = pins.find(p => p.id === pinId);
       if (pin) {
         setInitialPinIdHandled(pinId);
-        // Center map on the pin
-        if (mapRef.current && pin.latitude && pin.longitude) {
+        // Center map on the pin - use lat/lng from Pin interface
+        if (mapRef.current && pin.lat && pin.lng) {
           mapRef.current.animateToRegion({
-            latitude: pin.latitude,
-            longitude: pin.longitude,
+            latitude: pin.lat,
+            longitude: pin.lng,
             latitudeDelta: 0.01,
             longitudeDelta: 0.01,
           }, 500);
@@ -154,9 +162,11 @@ export default function MapScreen() {
     mutationFn: async (pinId: string) => {
       const response = await dealsApi.createFromPin(pinId);
       if (response.error) throw new Error(response.error);
+      console.log('[ConvertToDeal] Response:', response.data);
       return response.data;
     },
     onSuccess: async (deal) => {
+      console.log('[ConvertToDeal] Success, deal:', deal);
       await queryClient.invalidateQueries({ queryKey: ['pins'] });
       await queryClient.invalidateQueries({ queryKey: ['deals'] });
       await refetch();
@@ -166,6 +176,9 @@ export default function MapScreen() {
       setSelectedPin(null);
       pinDetailSlideAnim.setValue(SCREEN_HEIGHT);
       
+      // Get the deal ID - handle different response structures
+      const dealId = deal?.id || (deal as any)?.deal?.id;
+
       // Show alert after a brief delay to let modal close
       setTimeout(() => {
         Alert.alert(
@@ -175,11 +188,14 @@ export default function MapScreen() {
             {
               text: 'View Deal',
               onPress: () => {
-                if (deal?.id) {
+                if (dealId) {
                   // Use setTimeout to ensure alert is fully dismissed before navigation
                   setTimeout(() => {
-                    router.push(`/(rep)/deals/${deal.id}`);
+                    router.push(`/(rep)/deals/${dealId}`);
                   }, 100);
+                } else {
+                  // Fallback - navigate to deals list
+                  router.push('/(rep)/deals');
                 }
               },
             },
@@ -203,7 +219,6 @@ export default function MapScreen() {
     status: 'lead' as PinStatus,
     notes: '',
   });
-  const pinDetailSlideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   useEffect(() => {
     (async () => {
@@ -328,8 +343,23 @@ export default function MapScreen() {
     });
   };
 
-  const handleSaveNewPin = () => {
+  const handleSaveNewPin = async () => {
     if (!newPinCoords) return;
+
+    let utilityUrl: string | null = null;
+
+    // Upload solar bill if provided
+    if (solarBillFile && !uploadLater) {
+      try {
+        const uploadResult = await uploadFile(solarBillFile.uri, solarBillFile.name, solarBillFile.type, 'pins');
+        if (uploadResult) {
+          utilityUrl = uploadResult.key;
+        }
+      } catch (error) {
+        console.error('Error uploading solar bill:', error);
+        Alert.alert('Warning', 'Failed to upload solar bill. Pin will be saved without it.');
+      }
+    }
 
     createPinMutation.mutate({
       lat: newPinCoords.latitude,
@@ -340,7 +370,11 @@ export default function MapScreen() {
       homeowner_email: newPinForm.homeowner_email || null,
       address: newPinForm.address || null,
       notes: newPinForm.notes || null,
+      utility_url: utilityUrl,
     });
+
+    // Reset solar bill after save
+    setSolarBillFile(null);
     closeNewPinModal();
   };
 
@@ -358,6 +392,20 @@ export default function MapScreen() {
       });
     }
   };
+
+  // Filter pins based on status and search query
+  const filteredPins = pins?.filter(pin => {
+    // Status filter
+    if (statusFilter !== 'all' && pin.status !== statusFilter) return false;
+    // Search filter
+    if (searchQuery) {
+      const query = searchQuery.toLowerCase();
+      const matchesName = pin.homeowner_name?.toLowerCase().includes(query);
+      const matchesAddress = pin.address?.toLowerCase().includes(query);
+      if (!matchesName && !matchesAddress) return false;
+    }
+    return true;
+  }) || [];
 
   const initialRegion = userLocation
     ? {
@@ -385,7 +433,7 @@ export default function MapScreen() {
         showsMyLocationButton={false}
         onLongPress={handleLongPress}
       >
-        {pins?.map((pin) => (
+        {filteredPins.map((pin) => (
           <Marker
             key={pin.id}
             coordinate={{
@@ -400,8 +448,66 @@ export default function MapScreen() {
 
       {/* Top Controls */}
       <SafeAreaView style={styles.topControls} edges={['top']}>
+        {/* Search and Filter Row */}
+        <View style={styles.searchFilterRow}>
+          {/* Search Input */}
+          <View style={[styles.searchContainer, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <Ionicons name="search" size={18} color={colors.mutedForeground} />
+            <TextInput
+              style={[styles.searchInput, { color: colors.foreground }]}
+              placeholder="Search by name or address..."
+              placeholderTextColor={colors.mutedForeground}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {/* Filter Button */}
+          <TouchableOpacity
+            style={[styles.filterButton, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}
+            onPress={() => setShowFilterDropdown(!showFilterDropdown)}
+          >
+            <Ionicons name="filter" size={18} color={statusFilter !== 'all' ? staticColors.primary : colors.foreground} />
+            {statusFilter !== 'all' && <View style={[styles.filterActiveDot, { backgroundColor: pinColors[statusFilter] }]} />}
+          </TouchableOpacity>
+        </View>
+
+        {/* Filter Dropdown */}
+        {showFilterDropdown && (
+          <View style={[styles.filterDropdown, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
+            <TouchableOpacity
+              style={[styles.filterOption, statusFilter === 'all' && styles.filterOptionActive]}
+              onPress={() => { setStatusFilter('all'); setShowFilterDropdown(false); }}
+            >
+              <Text style={[styles.filterOptionText, { color: colors.foreground }]}>All Pins</Text>
+              {statusFilter === 'all' && <Ionicons name="checkmark" size={18} color={staticColors.primary} />}
+            </TouchableOpacity>
+            {statusOptions.map((option) => (
+              <TouchableOpacity
+                key={option.value}
+                style={[styles.filterOption, statusFilter === option.value && styles.filterOptionActive]}
+                onPress={() => { setStatusFilter(option.value); setShowFilterDropdown(false); }}
+              >
+                <View style={styles.filterOptionRow}>
+                  <View style={[styles.filterOptionDot, { backgroundColor: option.color }]} />
+                  <Text style={[styles.filterOptionText, { color: colors.foreground }]}>{option.label}</Text>
+                </View>
+                {statusFilter === option.value && <Ionicons name="checkmark" size={18} color={staticColors.primary} />}
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* Pin Count */}
         <View style={[styles.pinCount, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
-          <Text style={[styles.pinCountText, { color: colors.foreground }]}>{pins?.length || 0} Pins</Text>
+          <Text style={[styles.pinCountText, { color: colors.foreground }]}>
+            {filteredPins.length}{statusFilter !== 'all' || searchQuery ? ` / ${pins?.length || 0}` : ''} Pins
+          </Text>
         </View>
       </SafeAreaView>
 
@@ -543,6 +649,49 @@ export default function MapScreen() {
                   placeholder="Enter address"
                   placeholderTextColor={colors.mutedForeground}
                 />
+              </View>
+
+              {/* Solar Bill Upload */}
+              <View style={styles.inputGroup}>
+                <Text style={[styles.inputLabel, { color: colors.foreground }]}>Solar Bill (Optional)</Text>
+                {solarBillFile ? (
+                  <View style={[styles.uploadedFile, { backgroundColor: isDark ? colors.muted : '#F0FDF4', borderColor: '#22C55E' }]}>
+                    <View style={styles.uploadedFileInfo}>
+                      <Ionicons name="document-text" size={20} color="#22C55E" />
+                      <Text style={[styles.uploadedFileName, { color: colors.foreground }]} numberOfLines={1}>
+                        {solarBillFile.name}
+                      </Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setSolarBillFile(null)}>
+                      <Ionicons name="close-circle" size={22} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.uploadButton, { backgroundColor: isDark ? colors.muted : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                    onPress={async () => {
+                      try {
+                        const result = await DocumentPicker.getDocumentAsync({
+                          type: ['application/pdf', 'image/*'],
+                          copyToCacheDirectory: true,
+                        });
+                        if (!result.canceled && result.assets && result.assets.length > 0) {
+                          const file = result.assets[0];
+                          setSolarBillFile({
+                            name: file.name,
+                            uri: file.uri,
+                            type: file.mimeType || 'application/pdf',
+                          });
+                        }
+                      } catch (error) {
+                        Alert.alert('Error', 'Failed to pick document');
+                      }
+                    }}
+                  >
+                    <Ionicons name="cloud-upload" size={20} color={colors.primary} />
+                    <Text style={[styles.uploadButtonText, { color: colors.primary }]}>Upload Solar Bill</Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Notes */}
@@ -881,6 +1030,85 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#111827',
   },
+  searchFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  searchContainer: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 14,
+    padding: 0,
+  },
+  filterButton: {
+    width: 44,
+    height: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterActiveDot: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  filterDropdown: {
+    marginBottom: 8,
+    borderRadius: 12,
+    paddingVertical: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  filterOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  filterOptionActive: {
+    backgroundColor: 'rgba(201, 162, 77, 0.1)',
+  },
+  filterOptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  filterOptionDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+  },
+  filterOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
   bottomControls: {
     position: 'absolute',
     bottom: 0,
@@ -1197,6 +1425,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: staticColors.primary,
+  },
+  uploadedFile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  uploadedFileInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flex: 1,
+  },
+  uploadedFileName: {
+    fontSize: 14,
+    fontWeight: '500',
+    flex: 1,
   },
   convertButtonDisabled: {
     backgroundColor: '#9CA3AF',

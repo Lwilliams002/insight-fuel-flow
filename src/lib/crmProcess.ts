@@ -173,7 +173,7 @@ export const dealStatusConfig: Record<DealStatus, StatusConfig> = {
   // COLLECT PHASE (Steps 11-13)
   // ==========================================
   invoice_sent: {
-    label: 'Invoice Sent',
+    label: 'RCV Sent',
     phase: 'finalizing',
     color: '#5C6BC0', // Indigo
     description: 'Invoice sent to insurance for depreciation release',

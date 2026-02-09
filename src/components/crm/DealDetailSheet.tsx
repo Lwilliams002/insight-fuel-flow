@@ -69,7 +69,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   install_scheduled: { label: 'Scheduled', color: 'bg-amber-500' },
   installed: { label: 'Installed', color: 'bg-teal-500' },
   // COLLECT PHASE
-  invoice_sent: { label: 'Invoice Sent', color: 'bg-indigo-500' },
+  invoice_sent: { label: 'RCV Sent', color: 'bg-indigo-500' },
   depreciation_collected: { label: 'Depreciation Collected', color: 'bg-teal-600' },
   complete: { label: 'Complete', color: 'bg-green-500' },
   // OTHER

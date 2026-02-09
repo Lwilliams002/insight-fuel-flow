@@ -1,3 +1,4 @@
+import React from 'react';
 import { View, Text, ScrollView, RefreshControl, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -296,10 +297,10 @@ export default function AdminDashboard() {
             </View>
           </View>
 
-          <View style={styles.statCard}>
+          <View style={[styles.statCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
             <View style={styles.statRow}>
               <View>
-                <Text style={styles.statLabel}>Pay Requests</Text>
+                <Text style={[styles.statLabel, { color: colors.mutedForeground }]}>Pay Requests</Text>
                 <Text style={[styles.statValue, { color: paymentRequests.length > 0 ? '#F59E0B' : '#6B7280' }]}>
                   {paymentRequests.length}
                 </Text>
@@ -311,12 +312,182 @@ export default function AdminDashboard() {
           </View>
         </View>
 
+        {/* Awaiting Financial Approval Section */}
+        {(() => {
+          // Include awaiting_approval, adjuster_met with financials, and claim_filed with financials
+          const awaitingApproval = deals?.filter(d =>
+            d.status === 'awaiting_approval' ||
+            (d.status === 'adjuster_met' && (d.rcv || d.acv)) ||
+            (d.status === 'claim_filed' && (d.rcv || d.acv))
+          ) || [];
+          return (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="time" size={20} color="#F59E0B" />
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Awaiting Financial Approval</Text>
+                </View>
+                {awaitingApproval.length > 0 && (
+                  <View style={[styles.countBadge, { backgroundColor: '#FEF3C7' }]}>
+                    <Text style={[styles.countBadgeText, { color: '#D97706' }]}>{awaitingApproval.length}</Text>
+                  </View>
+                )}
+              </View>
+
+              {awaitingApproval.length === 0 ? (
+                <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+                  <Ionicons name="checkmark-circle" size={40} color="#22C55E" />
+                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>All Caught Up!</Text>
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No deals awaiting financial approval</Text>
+                </View>
+              ) : (
+                awaitingApproval.map((deal) => {
+                  const rcv = calculateRCV(deal);
+                  const repName = deal.rep_name || 'Unknown Rep';
+                  const statusLabel = deal.status === 'awaiting_approval' ? 'Awaiting Approval' :
+                                     deal.status === 'adjuster_met' ? 'Adjuster Met' : 'Claim Filed';
+                  const badgeBgColor = deal.status === 'awaiting_approval' ? '#FEF3C7' :
+                                       deal.status === 'adjuster_met' ? '#DBEAFE' : '#E0E7FF';
+                  const badgeTextColor = deal.status === 'awaiting_approval' ? '#D97706' :
+                                         deal.status === 'adjuster_met' ? '#2563EB' : '#4F46E5';
+
+                  return (
+                    <TouchableOpacity
+                      key={deal.id}
+                      style={[styles.requestCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}
+                      onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.requestCardHeader}>
+                        <View style={styles.requestCardInfo}>
+                          <Text style={[styles.requestCardName, { color: colors.foreground }]}>{deal.homeowner_name}</Text>
+                          <Text style={[styles.requestCardAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                            {deal.address}
+                          </Text>
+                        </View>
+                        <View style={[styles.statusBadge, { backgroundColor: badgeBgColor }]}>
+                          <Text style={[styles.statusBadgeText, { color: badgeTextColor }]}>
+                            {statusLabel}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <View style={[styles.financialPreview, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
+                        <View style={styles.financialPreviewRow}>
+                          <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>RCV</Text>
+                          <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>
+                            ${rcv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
+                        </View>
+                        <View style={styles.financialPreviewRow}>
+                          <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>ACV</Text>
+                          <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>
+                            ${(Number(deal.acv) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
+                        </View>
+                        <View style={styles.financialPreviewRow}>
+                          <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>Deductible</Text>
+                          <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>
+                            ${(Number(deal.deductible) || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          </Text>
+                        </View>
+                        <View style={styles.financialPreviewRow}>
+                          <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>Rep</Text>
+                          <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>{repName}</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.requestCardFooter}>
+                        <TouchableOpacity
+                          style={[styles.viewDealBtn, { backgroundColor: 'rgba(201, 162, 77, 0.1)' }]}
+                          onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
+                        >
+                          <Text style={[styles.viewDealText, { color: staticColors.primary }]}>Review & Approve</Text>
+                          <Ionicons name="chevron-forward" size={16} color={staticColors.primary} />
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
+          );
+        })()}
+
+        {/* Schedule Install Requests Section */}
+        {(() => {
+          const installRequests = deals?.filter(d => d.status === 'materials_selected') || [];
+          return (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <View style={styles.sectionTitleRow}>
+                  <Ionicons name="hammer" size={20} color="#06B6D4" />
+                  <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Schedule Install Requests</Text>
+                </View>
+                {installRequests.length > 0 && (
+                  <View style={[styles.countBadge, { backgroundColor: '#CFFAFE' }]}>
+                    <Text style={[styles.countBadgeText, { color: '#0891B2' }]}>{installRequests.length}</Text>
+                  </View>
+                )}
+              </View>
+
+              {installRequests.length === 0 ? (
+                <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+                  <Ionicons name="checkmark-circle" size={40} color="#22C55E" />
+                  <Text style={[styles.emptyTitle, { color: colors.foreground }]}>All Caught Up!</Text>
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No pending install scheduling requests</Text>
+                </View>
+              ) : (
+                installRequests.map((deal) => (
+                  <TouchableOpacity
+                    key={deal.id}
+                    style={[styles.requestCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border, borderLeftColor: '#06B6D4' }]}
+                    onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
+                    activeOpacity={0.7}
+                  >
+                    <View style={styles.requestCardHeader}>
+                      <View style={styles.requestCardInfo}>
+                        <Text style={[styles.requestCardName, { color: colors.foreground }]}>{deal.homeowner_name}</Text>
+                        <Text style={[styles.requestCardAddress, { color: colors.mutedForeground }]} numberOfLines={1}>
+                          {deal.address}
+                        </Text>
+                      </View>
+                      <View style={[styles.statusBadge, { backgroundColor: '#CFFAFE' }]}>
+                        <Text style={[styles.statusBadgeText, { color: '#0891B2' }]}>Ready to Schedule</Text>
+                      </View>
+                    </View>
+
+                    <View style={[styles.financialPreview, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
+                      <View style={styles.financialPreviewRow}>
+                        <Text style={[styles.financialPreviewLabel, { color: colors.mutedForeground }]}>Materials</Text>
+                        <Text style={[styles.financialPreviewValue, { color: colors.foreground }]}>
+                          {deal.material_category || 'Selected'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={styles.requestCardFooter}>
+                      <TouchableOpacity
+                        style={[styles.viewDealBtn, { backgroundColor: 'rgba(6, 182, 212, 0.1)' }]}
+                        onPress={() => router.push(`/(admin)/deals/${deal.id}`)}
+                      >
+                        <Text style={[styles.viewDealText, { color: '#0891B2' }]}>Schedule Install</Text>
+                        <Ionicons name="chevron-forward" size={16} color="#0891B2" />
+                      </TouchableOpacity>
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
+          );
+        })()}
+
         {/* Commission Payment Requests Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name="cash" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Commission Pay Requests</Text>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Commission Pay Requests</Text>
             </View>
             {paymentRequests.length > 0 && (
               <View style={styles.countBadge}>
@@ -326,10 +497,10 @@ export default function AdminDashboard() {
           </View>
 
           {paymentRequests.length === 0 ? (
-            <View style={styles.emptyCard}>
+            <View style={[styles.emptyCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
               <Ionicons name="checkmark-circle" size={40} color="#22C55E" />
-              <Text style={styles.emptyTitle}>All Caught Up!</Text>
-              <Text style={styles.emptyText}>No pending commission payment requests</Text>
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>All Caught Up!</Text>
+              <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>No pending commission payment requests</Text>
             </View>
           ) : (
             paymentRequests.map((deal) => {
@@ -348,14 +519,14 @@ export default function AdminDashboard() {
                 : 'Rep';
 
               return (
-                <View key={deal.id} style={styles.requestCard}>
+                <View key={deal.id} style={[styles.requestCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
                   <View style={styles.requestHeader}>
                     <View style={styles.requestInfo}>
-                      <Text style={styles.requestName}>{deal.homeowner_name}</Text>
-                      <Text style={styles.requestAddress} numberOfLines={1}>{deal.address}</Text>
+                      <Text style={[styles.requestName, { color: colors.foreground }]}>{deal.homeowner_name}</Text>
+                      <Text style={[styles.requestAddress, { color: colors.mutedForeground }]} numberOfLines={1}>{deal.address}</Text>
                     </View>
                     <View style={styles.requestAmount}>
-                      <Text style={styles.requestAmountLabel}>Commission</Text>
+                      <Text style={[styles.requestAmountLabel, { color: colors.mutedForeground }]}>Commission</Text>
                       <Text style={styles.requestAmountValue}>
                         ${commission.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </Text>
@@ -363,29 +534,29 @@ export default function AdminDashboard() {
                   </View>
 
                   {/* Commission Breakdown */}
-                  <View style={styles.commissionBreakdown}>
+                  <View style={[styles.commissionBreakdown, { backgroundColor: isDark ? colors.secondary : '#F9FAFB' }]}>
                     <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>RCV (Deal Value)</Text>
-                      <Text style={styles.breakdownValue}>${rcv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>RCV (Deal Value)</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${rcv.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                     </View>
                     <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Sales Tax (8.25%)</Text>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Sales Tax (8.25%)</Text>
                       <Text style={[styles.breakdownValue, { color: '#EF4444' }]}>-${salesTax.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                     </View>
                     <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Base Amount</Text>
-                      <Text style={styles.breakdownValue}>${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Base Amount</Text>
+                      <Text style={[styles.breakdownValue, { color: colors.foreground }]}>${baseAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</Text>
                     </View>
                     <View style={styles.breakdownRow}>
-                      <Text style={styles.breakdownLabel}>Commission Rate ({commissionLevelName})</Text>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Commission Rate ({commissionLevelName})</Text>
                       <Text style={[styles.breakdownValue, { color: colors.primary }]}>×{commissionPercent}%</Text>
                     </View>
                   </View>
 
-                  <View style={styles.requestDetails}>
+                  <View style={[styles.requestDetails, { borderTopColor: isDark ? colors.border : '#F3F4F6' }]}>
                     <View style={styles.requestDetailItem}>
-                      <Ionicons name="person" size={14} color="#6B7280" />
-                      <Text style={styles.requestDetailText}>{repName}</Text>
+                      <Ionicons name="person" size={14} color={colors.mutedForeground} />
+                      <Text style={[styles.requestDetailText, { color: colors.mutedForeground }]}>{repName}</Text>
                     </View>
                   </View>
 
@@ -570,6 +741,25 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#F59E0B',
   },
+  requestCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  requestCardInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  requestCardName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#111827',
+  },
+  requestCardAddress: {
+    fontSize: 13,
+    color: '#6B7280',
+    marginTop: 2,
+  },
   requestHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -652,12 +842,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: colors.primary,
+    borderColor: staticColors.primary,
   },
   viewDealText: {
     fontSize: 14,
     fontWeight: '600',
-    color: colors.primary,
+    color: staticColors.primary,
   },
   approveBtn: {
     flex: 1,
@@ -673,5 +863,35 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#FFF',
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  financialPreview: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    gap: 6,
+  },
+  financialPreviewRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  financialPreviewLabel: {
+    fontSize: 13,
+  },
+  financialPreviewValue: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  requestCardFooter: {
+    marginTop: 12,
   },
 });

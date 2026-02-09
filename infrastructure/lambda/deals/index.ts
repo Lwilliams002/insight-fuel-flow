@@ -331,18 +331,18 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
     'address', 'city', 'state', 'zip_code',
 
     // Property details
-    'roof_type', 'roof_squares', 'roof_squares_with_waste', 'stories',
+    'roof_type', 'roof_squares', 'roof_squares_with_waste', 'stories', 'roofing_system_type',
 
     // Status & notes
     'status', 'total_price', 'notes',
 
     // Insurance info
-    'insurance_company', 'policy_number', 'claim_number', 'date_of_loss', 'deductible',
+    'insurance_company', 'policy_number', 'claim_number', 'date_of_loss', 'date_type', 'deductible',
     'inspection_date',
     'rcv', 'acv', 'depreciation', 'sales_tax',
 
     // Adjuster info
-    'adjuster_name', 'adjuster_phone', 'adjuster_email', 'adjuster_meeting_date',
+    'adjuster_name', 'adjuster_phone', 'adjuster_email', 'adjuster_meeting_date', 'adjuster_not_assigned',
 
     // Contract & signature
     'contract_signed', 'signed_date', 'agreement_document_url',
@@ -399,6 +399,10 @@ async function updateDeal(dealId: string, user: any, event: APIGatewayProxyEvent
 
     // Commission
     'commission_paid', 'commission_paid_date',
+    'commission_override_amount', 'commission_override_reason', 'commission_override_date',
+
+    // Adjuster notes
+    'adjuster_notes',
   ];
 
   for (const field of allowedFields) {

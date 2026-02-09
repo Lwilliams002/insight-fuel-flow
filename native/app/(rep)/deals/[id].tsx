@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, StyleSheet, TextInput, Modal, Image, FlatList, Dimensions, RefreshControl } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Linking, Alert, StyleSheet, TextInput, Modal, Image, FlatList, Dimensions, RefreshControl, Platform, KeyboardAvoidingView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,9 +10,11 @@ import * as DocumentPicker from 'expo-document-picker';
 import * as WebBrowser from 'expo-web-browser';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import * as FileSystem from 'expo-file-system';
 import { WebView } from 'react-native-webview';
 import SignatureCanvas from 'react-native-signature-canvas';
-import { dealsApi, Deal, uploadFile, getSignedFileUrl, repsApi } from '../../../src/services/api';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { dealsApi, Deal, uploadFile, uploadLargeFile, getSignedFileUrl, repsApi } from '../../../src/services/api';
 import { colors as staticColors } from '../../../src/constants/config';
 import { InspectionReport } from '../../../src/components/InspectionReport';
 import { PaymentReceipt, ReceiptType } from '../../../src/components/PaymentReceipt';
@@ -97,8 +99,7 @@ const milestones = [
   { status: 'lead', label: 'Lead', icon: 'person', phase: 'sign' },
   { status: 'inspection_scheduled', label: 'Inspected', icon: 'camera', phase: 'sign' },
   { status: 'claim_filed', label: 'Claim Filed', icon: 'document-text', phase: 'sign' },
-  { status: 'signed', label: 'Signed', icon: 'create', phase: 'sign' },
-  { status: 'adjuster_met', label: 'Adjuster Met', icon: 'people', phase: 'sign' },
+  { status: 'adjuster_met', label: 'Adjuster Sched.', icon: 'people', phase: 'sign' },
   { status: 'awaiting_approval', label: 'Awaiting Appr.', icon: 'time', phase: 'sign' },
   { status: 'approved', label: 'Approved', icon: 'checkmark-circle', phase: 'build' },
   { status: 'acv_collected', label: 'ACV Collected', icon: 'cash', phase: 'build' },
@@ -107,8 +108,8 @@ const milestones = [
   { status: 'install_scheduled', label: 'Install Sched.', icon: 'calendar', phase: 'build' },
   { status: 'installed', label: 'Installed', icon: 'home', phase: 'build' },
   { status: 'completion_signed', label: 'Completion Form', icon: 'create', phase: 'finalizing' },
-  { status: 'invoice_sent', label: 'Invoice Sent', icon: 'send', phase: 'finalizing' },
-  { status: 'depreciation_collected', label: 'Depreciation', icon: 'cash', phase: 'finalizing' },
+  { status: 'invoice_sent', label: 'RCV Sent', icon: 'send', phase: 'finalizing' },
+  { status: 'depreciation_collected', label: 'Dep. Collected', icon: 'cash', phase: 'finalizing' },
   { status: 'complete', label: 'Complete', icon: 'trophy', phase: 'complete' },
   { status: 'paid', label: 'Paid', icon: 'checkmark-done', phase: 'complete' },
 ];
@@ -146,6 +147,7 @@ const workflowSteps: WorkflowStep[] = [
       { field: 'insurance_company', label: 'Insurance Company', type: 'text' },
       { field: 'policy_number', label: 'Policy Number', type: 'text' },
       { field: 'claim_number', label: 'Claim Number', type: 'text' },
+      { field: 'date_of_loss', label: 'Date of Loss', type: 'date' },
       { field: 'adjuster_name', label: 'Adjuster Name', type: 'text' },
       { field: 'adjuster_phone', label: 'Adjuster Phone', type: 'phone' },
       { field: 'adjuster_meeting_date', label: 'Adjuster Appointment Date', type: 'date' },
@@ -154,33 +156,26 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     status: 'claim_filed',
-    label: 'Meet Adjuster',
-    description: 'Meet adjuster at appointment to inspect the roof',
-    icon: 'people',
-    requiredFields: [],
-  },
-  {
-    status: 'signed',
-    label: 'Awaiting Insurance Decision',
-    description: 'Waiting for insurance approval/denial/partial approval',
-    icon: 'time',
+    label: 'Enter Financial Details',
+    description: 'Upload lost statement, enter insurance values, and schedule adjuster appointment',
+    icon: 'document-text',
     requiredFields: [],
   },
   {
     status: 'adjuster_met',
-    label: 'Awaiting Admin Approval',
-    description: 'Upload loss statement. Wait for admin to approve financials (RCV, ACV, deductible, depreciation)',
-    icon: 'time',
+    label: 'Adjuster Scheduled',
+    description: 'Adjuster appointment scheduled. Confirm when meeting is complete.',
+    icon: 'people',
     requiredFields: [],
-    adminOnly: true, // Admin must approve financials
+    adminOnly: false, // Rep can confirm meeting happened
   },
   {
     status: 'awaiting_approval',
-    label: 'Approved',
-    description: 'Insurance approved! Admin reviewed financials.',
-    icon: 'checkmark-circle',
+    label: 'Awaiting Admin Approval',
+    description: 'Waiting for admin to approve financials.',
+    icon: 'time',
     requiredFields: [],
-    adminOnly: true,
+    adminOnly: true, // Admin must approve financials
   },
   {
     status: 'approved',
@@ -232,7 +227,7 @@ const workflowSteps: WorkflowStep[] = [
   },
   {
     status: 'completion_signed',
-    label: 'Invoice Sent',
+    label: 'RCV Sent',
     description: 'Final invoice sent to insurance for depreciation (if applicable)',
     icon: 'send',
     requiredFields: [],
@@ -293,9 +288,8 @@ function isStepComplete(deal: Deal, step: WorkflowStep): boolean {
 const statusConfig: Record<string, { label: string; color: string; description: string; nextAction: string }> = {
   lead: { label: 'Lead', color: '#4A6FA5', description: 'Take inspection photos and show report', nextAction: 'Upload Photos' },
   inspection_scheduled: { label: 'Inspected', color: '#5C6BC0', description: 'Inspection complete', nextAction: 'File Claim' },
-  claim_filed: { label: 'Claim Filed', color: '#7E57C2', description: 'Claim filed, agreement signed', nextAction: 'Meet Adjuster' },
-  signed: { label: 'Signed', color: '#66BB6A', description: 'Agreement signed', nextAction: 'Wait for Approval' },
-  adjuster_met: { label: 'Adjuster Met', color: '#EC407A', description: 'Adjuster inspected roof', nextAction: 'Wait for Decision' },
+  claim_filed: { label: 'Claim Filed', color: '#7E57C2', description: 'Claim filed, agreement signed', nextAction: 'Schedule Adjuster' },
+  adjuster_met: { label: 'Adjuster Scheduled', color: '#EC407A', description: 'Adjuster appointment scheduled', nextAction: 'Wait for Decision' },
   awaiting_approval: { label: 'Awaiting Approval', color: '#F59E0B', description: 'Waiting for admin to approve financials', nextAction: 'Upload Loss Statement' },
   approved: { label: 'Approved', color: '#26A69A', description: 'Insurance approved!', nextAction: 'Collect ACV' },
   acv_collected: { label: 'ACV Collected', color: '#FFA726', description: 'ACV payment collected', nextAction: 'Collect Deductible' },
@@ -304,7 +298,7 @@ const statusConfig: Record<string, { label: string; color: string; description: 
   install_scheduled: { label: 'Install Scheduled', color: '#8D6E63', description: 'Installation date is set', nextAction: 'Wait for Crew' },
   installed: { label: 'Installed', color: '#78909C', description: 'Installation completed', nextAction: 'Get Completion Form' },
   completion_signed: { label: 'Completion Form Signed', color: '#06B6D4', description: 'Homeowner signed completion', nextAction: 'Wait for Invoice' },
-  invoice_sent: { label: 'Invoice Sent', color: '#5C6BC0', description: 'Invoice sent to insurance', nextAction: 'Collect Depreciation' },
+  invoice_sent: { label: 'RCV Sent', color: '#5C6BC0', description: 'RCV sent to insurance', nextAction: 'Collect Depreciation' },
   depreciation_collected: { label: 'Depreciation Collected', color: '#26A69A', description: 'Final payment collected', nextAction: 'Request Commission' },
   complete: { label: 'Complete', color: '#2E7D32', description: 'Job complete! 🎉', nextAction: 'Wait for Payment' },
   paid: { label: 'Paid', color: '#059669', description: 'Commission paid! 💰', nextAction: '' },
@@ -435,6 +429,7 @@ export default function DealDetailScreen() {
   const [receiptType, setReceiptType] = useState<ReceiptType>('acv');
   const [showHtmlViewer, setShowHtmlViewer] = useState(false);
   const [htmlViewerContent, setHtmlViewerContent] = useState<string>('');
+  const [hideCommission, setHideCommission] = useState(true); // Hide commission by default when presenting to homeowner
   const [htmlViewerTitle, setHtmlViewerTitle] = useState<string>('');
 
   // Form state
@@ -472,8 +467,13 @@ export default function DealDetailScreen() {
     vent_color: '',
   });
 
+  // Autosave state for materials
+  const [materialsLastSaved, setMaterialsLastSaved] = useState<Date | null>(null);
+  const [materialsSaving, setMaterialsSaving] = useState(false);
+  const materialsAutosaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // Workflow form state for step completion
-  const [workflowForm, setWorkflowForm] = useState<Record<string, string | number | null>>({});
+  const [workflowForm, setWorkflowForm] = useState<Record<string, string | number | boolean | null>>({});
   const [savingWorkflow, setSavingWorkflow] = useState(false);
   const [showSignaturePad, setShowSignaturePad] = useState(false);
   const [showCompletionFormSignature, setShowCompletionFormSignature] = useState(false);
@@ -492,6 +492,32 @@ export default function DealDetailScreen() {
   const [completionFormHtmlContent, setCompletionFormHtmlContent] = useState<string | null>(null);
   const [signedRepCompletionSigUrl, setSignedRepCompletionSigUrl] = useState<string | null>(null);
   const [signedHomeownerCompletionSigUrl, setSignedHomeownerCompletionSigUrl] = useState<string | null>(null);
+
+  // Completion form additional state - for new form fields
+  const [completionFormStep, setCompletionFormStep] = useState(0); // 0=reading, 1=section1 initials, 2=section2 initials, 3=owner sig, 4=titan pro sig
+  const [crewLeadName, setCrewLeadName] = useState('');
+  const [walkThroughType, setWalkThroughType] = useState<'in_person' | 'virtual' | 'declined' | null>(null);
+  const [individualsOwners, setIndividualsOwners] = useState('');
+  const [individualsTitanPro, setIndividualsTitanPro] = useState('');
+  const [individualsOthers, setIndividualsOthers] = useState('');
+  const [section1Initials, setSection1Initials] = useState<string | null>(null);
+  const [section2Initials, setSection2Initials] = useState<string | null>(null);
+  const [reviewItems, setReviewItems] = useState('');
+  const completionFormSignatureRef = useRef<any>(null);
+
+  // Agreement signature state - multiple signatures/initials
+  const [agreementStep, setAgreementStep] = useState(0); // 0=reading, 1-6=signing steps
+  const [feeInitials, setFeeInitials] = useState<string | null>(null);
+  const [repSignature, setRepSignature] = useState<string | null>(null);
+  const [ownerSignature, setOwnerSignature] = useState<string | null>(null);
+  const [deckingInitials, setDeckingInitials] = useState<string | null>(null);
+  const [constructionSignature, setConstructionSignature] = useState<string | null>(null);
+  const [supplementsSignature, setSupplementsSignature] = useState<string | null>(null);
+  const agreementSignatureRef = useRef<any>(null);
+
+  // Date picker states
+  const [showDateOfLossPicker, setShowDateOfLossPicker] = useState(false);
+  const [dateOfLossPickerValue, setDateOfLossPickerValue] = useState<Date>(new Date());
 
   const { data: deal, isLoading, error, refetch } = useQuery({
     queryKey: ['deal', id],
@@ -580,6 +606,68 @@ export default function DealDetailScreen() {
     },
   });
 
+  // Silent update mutation for autosave (no alerts)
+  const silentUpdateMutation = useMutation({
+    mutationFn: async (updates: Partial<Deal>) => {
+      const response = await dealsApi.update(id, updates);
+      if (response.error) throw new Error(response.error);
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['deal', id] });
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+    },
+  });
+
+  // Autosave effect for materials
+  useEffect(() => {
+    if (!isEditingMaterials || !deal) return;
+
+    // Check if form has changes from saved deal
+    const hasChanges =
+      materialsForm.material_category !== (deal.material_category || '') ||
+      materialsForm.material_type !== (deal.material_type || '') ||
+      materialsForm.material_color !== (deal.material_color || '') ||
+      materialsForm.drip_edge !== (deal.drip_edge || '') ||
+      materialsForm.vent_color !== (deal.vent_color || '');
+
+    if (!hasChanges) return;
+
+    // Clear existing timeout
+    if (materialsAutosaveTimeoutRef.current) {
+      clearTimeout(materialsAutosaveTimeoutRef.current);
+    }
+
+    // Set new autosave timeout (2 seconds after last change)
+    materialsAutosaveTimeoutRef.current = setTimeout(() => {
+      setMaterialsSaving(true);
+      silentUpdateMutation.mutate(
+        {
+          material_category: materialsForm.material_category || null,
+          material_type: materialsForm.material_type || null,
+          material_color: materialsForm.material_color || null,
+          drip_edge: materialsForm.drip_edge || null,
+          vent_color: materialsForm.vent_color || null,
+        },
+        {
+          onSuccess: () => {
+            setMaterialsLastSaved(new Date());
+            setMaterialsSaving(false);
+          },
+          onError: () => {
+            setMaterialsSaving(false);
+          },
+        }
+      );
+    }, 2000);
+
+    return () => {
+      if (materialsAutosaveTimeoutRef.current) {
+        clearTimeout(materialsAutosaveTimeoutRef.current);
+      }
+    };
+  }, [materialsForm, isEditingMaterials, deal]);
+
   const handleSaveOverview = () => {
     updateMutation.mutate({
       homeowner_name: overviewForm.homeowner_name,
@@ -635,170 +723,303 @@ export default function DealDetailScreen() {
     return workflowSteps[nextIndex].status;
   };
 
-  // Handle workflow form field change
-  const handleWorkflowFieldChange = (field: string, value: string | number | null) => {
+  // Debounce timer ref for auto-saving
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Handle workflow form field change - auto-saves to database
+  const handleWorkflowFieldChange = (field: string, value: string | number | boolean | null) => {
     setWorkflowForm(prev => ({ ...prev, [field]: value }));
+
+    // Also update insuranceForm if it's an insurance-related field so the Insurance tab reflects changes
+    const insuranceFields = ['insurance_company', 'policy_number', 'claim_number', 'date_of_loss', 'deductible', 'rcv', 'acv', 'depreciation', 'adjuster_name', 'adjuster_phone'];
+    if (insuranceFields.includes(field)) {
+      setInsuranceForm(prev => ({
+        ...prev,
+        [field]: value !== null ? String(value) : ''
+      }));
+    }
+
+    // Fields that may not exist in database yet - skip auto-save for these
+    // They will be saved when the user clicks "Save & Continue"
+    const newFieldsToSkip = ['date_type', 'adjuster_not_assigned'];
+    if (newFieldsToSkip.includes(field)) {
+      return; // Don't auto-save these fields
+    }
+
+    // Auto-save to database with debounce (500ms delay)
+    if (autoSaveTimerRef.current) {
+      clearTimeout(autoSaveTimerRef.current);
+    }
+
+    autoSaveTimerRef.current = setTimeout(async () => {
+      if (!deal) return;
+      try {
+        // Save just this field to the database
+        await dealsApi.update(deal.id, { [field]: value });
+        // Silently invalidate the cache so next refetch has latest data
+        queryClient.invalidateQueries({ queryKey: ['deal', id] });
+      } catch (error) {
+        console.warn('[Auto-save] Failed to save field:', field, error);
+      }
+    }, 500);
   };
 
-  // Handle signature save
-  const handleSignatureSave = async (signature: string) => {
+  // Cleanup auto-save timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, []);
+
+  // Handle signature save - called after all 6 signatures are collected
+  const handleSignatureSave = async (finalSignature: string) => {
     if (!deal) return;
     setShowSignaturePad(false);
+    setAgreementStep(0);
     setSavingWorkflow(true);
 
+    // Use the collected signatures - capture them before any state changes
+    const feeInitialsSig = feeInitials || '';
+    const repSig = repSignature || '';
+    const ownerSig = ownerSignature || '';
+    const deckingInitialsSig = deckingInitials || '';
+    const constructionSig = constructionSignature || '';
+    const supplementsSig = finalSignature; // This is the last one captured
+
+    console.log('[handleSignatureSave] Signatures collected:', {
+      feeInitials: feeInitialsSig ? 'yes' : 'no',
+      repSignature: repSig ? 'yes' : 'no',
+      ownerSignature: ownerSig ? 'yes' : 'no',
+      deckingInitials: deckingInitialsSig ? 'yes' : 'no',
+      constructionSignature: constructionSig ? 'yes' : 'no',
+      supplementsSignature: supplementsSig ? 'yes' : 'no',
+    });
+
     try {
-      // Upload the signature image
+      // Upload the main owner signature image
       const signatureFileName = `signature-${Date.now()}.png`;
       const signatureUploadResult = await uploadFile(
-        signature,
+        ownerSig,
         signatureFileName,
         'image/png',
         'signatures',
         deal.id
       );
 
-      // Generate the full agreement HTML document with embedded signature
+      // Generate the full agreement HTML document with all embedded signatures
       const agreementHtml = `
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Insurance Agreement - ${deal.homeowner_name}</title>
+  <title>Insurance-Contingent Roofing Agreement - ${deal.homeowner_name}</title>
   <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; font-size: 12px; line-height: 1.5; }
     .header { background: #0F1E2E; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
-    .header h1 { margin: 0; font-size: 24px; }
-    .header p { margin: 5px 0 0; opacity: 0.8; font-size: 12px; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-    .info-item { background: #f9fafb; padding: 12px; border-radius: 6px; }
-    .info-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-    .info-value { font-size: 14px; font-weight: 600; color: #111827; }
+    .header h1 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+    .header h2 { margin: 8px 0 0; font-size: 14px; font-weight: normal; }
+    .divider { text-align: center; margin: 20px 0; color: #666; }
     .section { margin-bottom: 20px; }
-    .section-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-    .section-content { font-size: 12px; color: #4b5563; line-height: 1.6; }
-    .highlight { background: #f3f4f6; padding: 15px; border-radius: 8px; margin: 15px 0; }
-    .warranty { background: rgba(201, 162, 77, 0.1); border: 1px solid rgba(201, 162, 77, 0.3); padding: 15px; border-radius: 8px; }
-    .warranty-title { color: #C9A24D; font-weight: 700; margin-bottom: 8px; }
-    .warning { background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.3); padding: 15px; border-radius: 8px; color: #dc2626; font-weight: 600; }
-    .signature-section { margin-top: 30px; border-top: 2px solid #e5e7eb; padding-top: 20px; }
-    .signature-label { font-size: 12px; color: #6b7280; margin-bottom: 10px; }
-    .signature-image { max-width: 300px; max-height: 100px; border: 1px solid #e5e7eb; border-radius: 4px; }
-    .signature-date { font-size: 12px; color: #6b7280; margin-top: 10px; }
-    .materials { background: #f9fafb; padding: 15px; border-radius: 8px; margin: 15px 0; }
-    .materials-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 10px; text-transform: uppercase; border-bottom: 2px solid #0F1E2E; padding-bottom: 5px; }
+    .info-row { display: flex; border-bottom: 1px solid #ddd; padding: 8px 0; }
+    .info-label { font-weight: 600; width: 180px; flex-shrink: 0; }
+    .info-value { flex: 1; }
+    .content-text { margin-bottom: 15px; text-align: justify; }
+    .fee-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .fee-highlight { font-weight: 700; color: #0F1E2E; }
+    .cancel-box { background: #f0f9ff; border: 1px solid #bae6fd; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .notice-box { background: #fef3c7; border: 1px solid #fcd34d; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .notice-title { font-weight: 700; color: #92400e; margin-bottom: 10px; }
+    .warning-box { background: #fee2e2; border: 1px solid #fecaca; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .warning-text { color: #dc2626; font-weight: 600; }
+    .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+    .signature-box { border: 1px solid #ddd; padding: 15px; border-radius: 8px; }
+    .signature-label { font-size: 11px; color: #6b7280; margin-bottom: 5px; }
+    .signature-line { border-bottom: 1px solid #333; min-height: 30px; margin-bottom: 5px; padding: 5px; }
+    .signature-image { max-width: 200px; max-height: 60px; display: block; margin: 5px 0; }
+    .initials-image { max-width: 100px; max-height: 50px; display: inline-block; margin-left: 10px; }
+    .signature-date { font-size: 11px; color: #6b7280; margin-top: 8px; }
+    .acknowledgment { margin-top: 30px; padding-top: 20px; border-top: 1px dashed #ccc; }
+    .ack-title { font-weight: 700; text-align: center; margin-bottom: 15px; font-size: 14px; }
+    .ack-row { display: flex; align-items: flex-end; gap: 20px; margin-top: 15px; }
+    .ack-sig { flex: 2; }
+    .ack-date { flex: 1; }
+    p { margin: 0 0 12px 0; }
   </style>
 </head>
 <body>
   <div class="header">
     <h1>TITAN PRIME SOLUTIONS</h1>
-    <p>INSURED & BONDED</p>
+    <h2>INSURANCE-CONTINGENT ROOFING AGREEMENT</h2>
   </div>
 
-  <div class="info-grid">
-    <div class="info-item">
-      <div class="info-label">Homeowner Name</div>
-      <div class="info-value">${deal.homeowner_name || '-'}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">Date</div>
-      <div class="info-value">${new Date().toLocaleDateString()}</div>
-    </div>
-    <div class="info-item" style="grid-column: span 2;">
-      <div class="info-label">Address</div>
-      <div class="info-value">${deal.address || ''}${deal.city ? `, ${deal.city}` : ''}${deal.state ? `, ${deal.state}` : ''} ${deal.zip_code || ''}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">Insurance Company</div>
-      <div class="info-value">${deal.insurance_company || '-'}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">Claim Number</div>
-      <div class="info-value">${deal.claim_number || '-'}</div>
+  <div class="section">
+    <div class="section-title">Owner & Claim Information</div>
+    <div class="info-row"><span class="info-label">Owner Full Name:</span><span class="info-value">${deal.homeowner_name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Property Address:</span><span class="info-value">${deal.address || ''}${deal.city ? `, ${deal.city}` : ''}${deal.state ? `, ${deal.state}` : ''}${deal.zip_code ? ` ${deal.zip_code}` : ''}</span></div>
+    <div class="info-row"><span class="info-label">Primary Phone:</span><span class="info-value">${deal.homeowner_phone || ''}</span></div>
+    <div class="info-row"><span class="info-label">Email Address:</span><span class="info-value">${deal.homeowner_email || ''}</span></div>
+    <div class="info-row"><span class="info-label">Insurance Carrier:</span><span class="info-value">${deal.insurance_company || ''}</span></div>
+    <div class="info-row"><span class="info-label">Policy ID:</span><span class="info-value">${deal.policy_number || ''}</span></div>
+    <div class="info-row"><span class="info-label">Claim Reference #:</span><span class="info-value">${deal.claim_number || ''}</span></div>
+    <div class="info-row"><span class="info-label">Reported Date of Loss:</span><span class="info-value">${deal.date_of_loss ? format(new Date(deal.date_of_loss), 'MMMM d, yyyy') : ''}</span></div>
+    <div class="info-row"><span class="info-label">Roofing System Type:</span><span class="info-value">${deal.roofing_system_type || deal.roof_type || deal.material_category || ''}</span></div>
+    <div class="info-row"><span class="info-label">Assigned Adjuster Name:</span><span class="info-value">${deal.adjuster_not_assigned ? 'N/A' : (deal.adjuster_name || '')}</span></div>
+    <div class="info-row"><span class="info-label">Adjuster Phone #:</span><span class="info-value">${deal.adjuster_not_assigned ? 'N/A' : (deal.adjuster_phone || '')}</span></div>
+    <div class="info-row"><span class="info-label">Sales Rep (Prime PRO):</span><span class="info-value">${deal.rep_name || currentRep?.full_name || user?.fullName || ''}</span></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Insurance Contingency & Claim Services</div>
+    <p class="content-text">This Agreement is entered into based on the outcome of the insurance claim process. Titan Prime Solutions' scope of work is limited to items approved by the insurer. Owner is responsible for any applicable deductible and for any upgrades, additions, or services not included in the insurer's determination of coverage. Owner agrees to provide Titan Prime Solutions with relevant insurance documentation necessary to perform the work.</p>
+  </div>
+
+
+  <div class="section">
+    <div class="section-title">Insurance Claim Services Fee (Approval-Based)</div>
+    <p class="content-text">If Owner cancels this Agreement after insurance approval and after Titan Prime Solutions has performed insurance-related services, including inspections, measurements, documentation, claim preparation, or insurer coordination, Owner agrees to pay Titan Prime Solutions a flat claim services fee of <strong>$1,250</strong>.</p>
+    <p class="content-text">This fee reflects the reasonable value of services rendered and is not based on insurance proceeds. The fee becomes due and payable upon cancellation following claim approval.</p>
+    <div class="fee-box">
+      <span class="fee-highlight">$1,250 Claim Services Fee – Owner Initials:</span>
+      ${feeInitialsSig ? `<img src="${feeInitialsSig}" class="initials-image" alt="Fee Initials" />` : '<span style="color:#999;">Not signed</span>'}
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">INSURANCE AGREEMENT</div>
-    <div class="section-content">
-      <p>This agreement is contingent upon the approval of your claim by your insurance company. Upon claim approval, Titan Prime Solutions will perform the repairs or replacements specified by the "loss statement" provided by your insurance company. Repairs will be performed for insurance funds only, with the homeowner being responsible for paying their insurance deductible.</p>
-      <p>Any material upgrade or additional work authorized by the Homeowner will be an additional charge to be paid for by the homeowner. The homeowner agrees to provide Titan Prime Solutions with a copy of the insurance loss statement. In addition, Homeowner will pay Titan Prime Solutions for any supplemental work approved by the insurance company for the amount of the insurance quote.</p>
+    <div class="section-title">3-Day Right to Cancel</div>
+    <div class="cancel-box">
+      <p class="content-text" style="margin-bottom: 10px;">Owner may terminate this Agreement within three (3) business days of execution by providing written notice via email to <strong>titanprimesolutionstx@gmail.com</strong>, which must be received no later than the close of business on the third business day following execution of this Agreement.</p>
+      <p class="content-text" style="margin-bottom: 0;">This Agreement is governed by the laws of the State of Texas.</p>
     </div>
   </div>
 
   <div class="section">
-    <div class="section-title">CANCELLATION POLICY</div>
-    <div class="section-content">
-      <p>If this agreement is canceled by the Homeowner after the three days right of rescission, but after approval for the claim, the homeowner agrees to pay Titan Prime Solutions for 20% of the contract price outlined on the insurance loss statement as the "RCV" or "Replacement Cost Value". This is not as a penalty, but as compensation for claim services provided by the project manager up to the time of cancellation.</p>
-    </div>
-  </div>
-
-  <div class="highlight">
-    <div class="section-title">3 DAY RIGHT OF RESCISSION</div>
-    <div class="section-content">
-      <p>Homeowners shall have the right to cancel this contract within three (3) days after the signing of the contract. Should the Homeowner decide to cancel the contract, the homeowner must notify Titan Prime Solutions in writing. The notice of cancellation must be signed and dated, and Homeowner must clearly state the intention to cancel.</p>
-    </div>
-  </div>
-
-  <div class="materials">
-    <div class="section-title">MATERIAL SPECIFICATIONS</div>
-    <div class="materials-grid">
-      <div class="info-item">
-        <div class="info-label">Category</div>
-        <div class="info-value">${deal.material_category || '-'}</div>
+    <div class="section-title">Acceptance</div>
+    <div class="signature-grid">
+      <div class="signature-box">
+        <div class="signature-label">Prime PRO (Printed Name)</div>
+        <div class="signature-line">${deal.rep_name || currentRep?.full_name || user?.fullName || ''}</div>
+        <div class="signature-label">Signature</div>
+        ${repSig ? `<img src="${repSig}" class="signature-image" alt="Rep Signature" />` : '<div class="signature-line"></div>'}
       </div>
-      <div class="info-item">
-        <div class="info-label">Material Color</div>
-        <div class="info-value">${deal.material_color || '-'}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Drip Edge</div>
-        <div class="info-value">${deal.drip_edge || '-'}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Vent Color</div>
-        <div class="info-value">${deal.vent_color || '-'}</div>
-      </div>
-      <div class="info-item">
-        <div class="info-label">Roof Squares</div>
-        <div class="info-value">${deal.roof_squares || '-'}</div>
+      <div class="signature-box">
+        <div class="signature-label">Property Owner (Printed Name)</div>
+        <div class="signature-line">${deal.homeowner_name || ''}</div>
+        <div class="signature-label">Signature</div>
+        ${ownerSig ? `<img src="${ownerSig}" class="signature-image" alt="Owner Signature" />` : '<div class="signature-line"></div>'}
+        <div class="signature-date">Date Signed: ${format(new Date(), 'MMMM d, yyyy')}</div>
       </div>
     </div>
   </div>
 
-  <div class="warranty">
-    <div class="warranty-title">Warranty Information</div>
-    <ul style="margin: 0; padding-left: 20px; font-size: 12px;">
-      <li>5 Year Labor Warranty provided by Titan Prime Solutions</li>
-      <li>30-Year Manufacturer Warranty (No Charge Upgrade) (110 Mph Wind Rated)</li>
-      <li>40 Year Manufacturer Warranty (No Charge Upgrade) (150 Mph Wind Rated) on Metal Panels</li>
-    </ul>
+
+  <div class="notice-box">
+    <div class="notice-title">IMPORTANT NOTICE TO PROPERTY OWNER</div>
+    <p>Titan Prime Solutions will begin work on the scheduled installation date during normal construction hours and may mobilize crews, equipment, and materials without additional notice.</p>
+    <p>Roof installation requires fastening materials through roof decking in accordance with applicable building codes. As a result, fasteners may be visible from attic or interior roof areas.</p>
+    <p>Authorized representatives of Titan Prime Solutions, including crew members, supervisors, inspectors, and documentation personnel, may access the Property as required to perform or document the work.</p>
+    <p>The Owner is responsible for removing vehicles, personal property, and exterior items from areas surrounding the Property that could be affected by falling debris.</p>
+    <p>A dumpster or equipment trailer may be placed in the most accessible area of the Property and may temporarily block driveway or garage access.</p>
+    <p>Construction vibration may occur. The Owner should remove or secure items mounted on interior walls.</p>
+    <p>Certain existing components, including skylights, drywall, ceiling finishes, gutters, stucco, paint, patio covers, or HVAC components, may be affected due to age, prior installation, or vibration. Titan Prime Solutions is not responsible for incidental damage to pre-existing materials resulting from normal and non-negligent construction activities.</p>
+    <p>Construction areas may contain nails, tools, cords, or debris. The Owner is responsible for keeping occupants and visitors clear of work areas.</p>
+    <p>Permits may be posted on the Property as required and must remain until inspections are completed.</p>
+    <p>If satellite, internet, or similar services require disconnection or adjustment, the Owner is responsible for coordinating reconnection.</p>
+    <p>The Owner must disclose any concealed utilities or systems beneath the roof decking prior to installation.</p>
+    <p>Existing HVAC components showing corrosion or deterioration will be reinstalled as-is unless replacement is authorized.</p>
+    <p>The Owner is responsible for HOA compliance, including material and color approvals.</p>
+    <div class="warning-box">
+      <p class="warning-text" style="margin: 0 0 10px 0;">Replacement of rotted decking, if discovered, will be charged at $3.00 per square foot.</p>
+      <div>
+        <span>Owner Initials:</span>
+        ${deckingInitialsSig ? `<img src="${deckingInitialsSig}" class="initials-image" alt="Decking Initials" />` : '<span style="color:#999;">Not signed</span>'}
+      </div>
+    </div>
+    <p>Abusive or unprofessional conduct toward Contractor personnel may result in suspension of work and termination of the Agreement, with the Owner responsible for costs incurred.</p>
   </div>
 
-  <div class="warning">
-    **ROTTED OSB WILL COST AN ADDITIONAL $3.00 PER SQFT TO REPLACE.
+  <div class="acknowledgment">
+    <div class="ack-title">ACKNOWLEDGMENT – CONSTRUCTION NOTICE</div>
+    <div class="info-row"><span class="info-label">Owner Name:</span><span class="info-value">${deal.homeowner_name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Property Address:</span><span class="info-value">${deal.address || ''}</span></div>
+    <div class="ack-row">
+      <div class="ack-sig">
+        <div class="signature-label">Owner Signature:</div>
+        ${constructionSig ? `<img src="${constructionSig}" class="signature-image" alt="Construction Notice Signature" />` : '<div class="signature-line"></div>'}
+      </div>
+      <div class="ack-date">
+        <div class="signature-label">Date:</div>
+        <div>${format(new Date(), 'MM/dd/yyyy')}</div>
+      </div>
+    </div>
   </div>
 
-  <div class="signature-section">
-    <div class="section-title">HOMEOWNER SIGNATURE</div>
-    <p class="signature-label">By signing below, I agree to and understand the terms above.</p>
-    <img src="${signature}" class="signature-image" alt="Homeowner Signature" />
-    <p class="signature-date">Signed on: ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}</p>
+  <div class="divider">⸻</div>
+
+  <div class="section">
+    <div class="section-title">Notice Regarding Additional Insurance Requests (Supplements)</div>
+    <p class="content-text">During the course of an insurance-related roofing project, additional damage, labor, or materials may be identified that were not included in the insurer's initial estimate. When this occurs, Contractor may submit additional documentation to the insurance company requesting review of those items.</p>
+    <p class="content-text">These requests may be necessary when certain conditions were not visible at the time of the original inspection or when quantities differ from the insurer's original assessment.</p>
+    <p class="content-text">For example, if the insurer's estimate is based on one material quantity, but actual installation requires a greater amount due to roof configuration, waste factors, or hidden conditions, additional documentation may be submitted for the difference.</p>
+    <p class="content-text">Insurance coverage decisions are governed by the terms and exclusions of the policy.</p>
   </div>
+
+  <div class="acknowledgment">
+    <div class="ack-title">ACKNOWLEDGMENT – INSURANCE SUPPLEMENTS</div>
+    <div class="info-row"><span class="info-label">Owner Name:</span><span class="info-value">${deal.homeowner_name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Property Address:</span><span class="info-value">${deal.address || ''}</span></div>
+    <div class="ack-row">
+      <div class="ack-sig">
+        <div class="signature-label">Owner Signature:</div>
+        ${supplementsSig ? `<img src="${supplementsSig}" class="signature-image" alt="Supplements Signature" />` : '<div class="signature-line"></div>'}
+      </div>
+      <div class="ack-date">
+        <div class="signature-label">Date:</div>
+        <div>${format(new Date(), 'MM/dd/yyyy')}</div>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>
       `.trim();
 
-      // Store the agreement document as a data URL (base64 HTML)
-      const agreementBase64 = btoa(unescape(encodeURIComponent(agreementHtml)));
-      const agreementDataUrl = `data:text/html;base64,${agreementBase64}`;
+      // Generate PDF from HTML and upload to Wasabi (like receipts do)
+      let agreementUrl = '';
+      try {
+        const { uri } = await Print.printToFileAsync({ html: agreementHtml });
+        console.log('[handleSignatureSave] Generated PDF at:', uri);
+
+        // Upload PDF to Wasabi
+        const pdfFileName = `agreement-${deal.id}-${Date.now()}.pdf`;
+        const uploadResult = await uploadFile(
+          uri,
+          pdfFileName,
+          'application/pdf',
+          'agreements',
+          deal.id
+        );
+
+        if (uploadResult?.key) {
+          agreementUrl = uploadResult.key;
+          console.log('[handleSignatureSave] Uploaded agreement to:', agreementUrl);
+        }
+      } catch (pdfError) {
+        console.warn('[handleSignatureSave] PDF generation failed, falling back to base64:', pdfError);
+        // Fallback to base64 if PDF generation fails
+        const agreementBase64 = btoa(unescape(encodeURIComponent(agreementHtml)));
+        agreementUrl = `data:text/html;base64,${agreementBase64}`;
+      }
 
       // Update deal with signature and agreement document
       const updates: Partial<Deal> = {
         contract_signed: true,
         signed_date: new Date().toISOString().split('T')[0],
-        signature_url: signatureUploadResult?.key || signature,
-        agreement_document_url: agreementDataUrl, // Store full agreement as base64 HTML
+        signature_url: signatureUploadResult?.key || ownerSig,
+        agreement_document_url: agreementUrl,
       };
 
       const result = await dealsApi.update(deal.id, updates);
@@ -807,15 +1028,230 @@ export default function DealDetailScreen() {
       queryClient.invalidateQueries({ queryKey: ['deals'] });
       queryClient.invalidateQueries({ queryKey: ['deal', id] });
 
-      Alert.alert('Success', 'Contract signed successfully!');
+      // Reset all signature state
+      setFeeInitials(null);
+      setRepSignature(null);
+      setOwnerSignature(null);
+      setDeckingInitials(null);
+      setConstructionSignature(null);
+      setSupplementsSignature(null);
+
+      Alert.alert('Success', 'Agreement signed successfully with all signatures!');
       setSignatureData(null);
       setAgreementScrollEnabled(true);
       refetch();
     } catch (error) {
       console.error('Signature save error:', error);
-      Alert.alert('Error', 'Failed to save signature: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      Alert.alert('Error', 'Failed to save agreement: ' + (error instanceof Error ? error.message : 'Unknown error'));
     } finally {
       setSavingWorkflow(false);
+    }
+  };
+
+  // Handle completion form save - called after all 4 signatures are collected
+  const handleSaveCompletionForm = async (titanProSig: string) => {
+    if (!deal) return;
+    setSavingCompletionForm(true);
+
+    // Capture all signatures before state changes
+    const sec1Initials = section1Initials || '';
+    const sec2Initials = section2Initials || '';
+    const ownerSig = homeownerCompletionSignature || '';
+    const proSig = titanProSig;
+
+    console.log('[Completion Form] Signatures collected:', {
+      section1Initials: sec1Initials ? 'yes' : 'no',
+      section2Initials: sec2Initials ? 'yes' : 'no',
+      ownerSignature: ownerSig ? 'yes' : 'no',
+      titanProSignature: proSig ? 'yes' : 'no',
+    });
+
+    try {
+      const updates: Partial<Deal> = {};
+
+      // Upload owner signature
+      if (ownerSig) {
+        const ownerSigFileName = `homeowner_completion_signature-${Date.now()}.png`;
+        const result = await uploadFile(ownerSig, ownerSigFileName, 'image/png', 'completion_form', deal.id);
+        if (result?.key) {
+          updates.homeowner_completion_signature_url = result.key;
+        }
+      }
+
+      // Upload Titan PRO signature
+      if (proSig) {
+        const proSigFileName = `rep_completion_signature-${Date.now()}.png`;
+        const result = await uploadFile(proSig, proSigFileName, 'image/png', 'completion_form', deal.id);
+        if (result?.key) {
+          updates.completion_form_signature_url = result.key;
+        }
+      }
+
+      // Generate the full completion form HTML document
+      const completionFormHtml = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Final Completion & Walk-Through Record - ${deal.homeowner_name}</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; font-size: 12px; line-height: 1.5; }
+    .header { background: #0F1E2E; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
+    .header h1 { margin: 0; font-size: 20px; letter-spacing: 1px; }
+    .header h2 { margin: 8px 0 0; font-size: 14px; font-weight: normal; }
+    .intro { font-style: italic; margin-bottom: 20px; color: #4b5563; }
+    .divider { text-align: center; margin: 20px 0; color: #666; }
+    .info-row { display: flex; border-bottom: 1px solid #ddd; padding: 8px 0; }
+    .info-label { font-weight: 600; width: 220px; flex-shrink: 0; }
+    .info-value { flex: 1; }
+    .section { margin-bottom: 25px; }
+    .section-title { font-size: 13px; font-weight: 700; color: #111827; margin-bottom: 10px; text-transform: uppercase; border-bottom: 2px solid #0F1E2E; padding-bottom: 5px; }
+    .content-text { margin-bottom: 12px; text-align: justify; }
+    .signature-box { background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; margin: 15px 0; }
+    .signature-label { font-size: 11px; color: #6b7280; margin-bottom: 5px; font-weight: 600; }
+    .signature-image { max-width: 150px; max-height: 50px; display: inline-block; }
+    .signature-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; margin-top: 20px; }
+    .signature-date { font-size: 11px; color: #6b7280; margin-top: 8px; }
+    .review-items { background: #f9fafb; border: 1px solid #e5e7eb; padding: 15px; border-radius: 8px; min-height: 80px; margin: 10px 0; white-space: pre-wrap; }
+    .walkthrough-type { display: inline-block; padding: 4px 12px; border-radius: 4px; font-weight: 600; margin-left: 10px; }
+    .walkthrough-inperson { background: #dcfce7; color: #166534; }
+    .walkthrough-virtual { background: #dbeafe; color: #1e40af; }
+    .walkthrough-declined { background: #fee2e2; color: #991b1b; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>TITAN PRIME SOLUTIONS</h1>
+    <h2>FINAL COMPLETION & WALK-THROUGH RECORD</h2>
+  </div>
+
+  <p class="intro">This record relates to and is incorporated into the Roofing Agreement between Owner and Titan Prime Solutions.</p>
+
+  <div class="section">
+    <div class="info-row"><span class="info-label">Project Address:</span><span class="info-value">${deal.address || ''}${deal.city ? `, ${deal.city}` : ''}${deal.state ? `, ${deal.state}` : ''}${deal.zip_code ? ` ${deal.zip_code}` : ''}</span></div>
+    <div class="info-row"><span class="info-label">Crew Lead Name:</span><span class="info-value">${crewLeadName || ''}</span></div>
+    <div class="info-row"><span class="info-label">Date of Review:</span><span class="info-value">${format(new Date(), 'MMMM d, yyyy')}</span></div>
+    <div class="info-row">
+      <span class="info-label">Walk-Through Conducted:</span>
+      <span class="info-value">
+        <span class="walkthrough-type ${walkThroughType === 'in_person' ? 'walkthrough-inperson' : walkThroughType === 'virtual' ? 'walkthrough-virtual' : 'walkthrough-declined'}">
+          ${walkThroughType === 'in_person' ? '☑ In Person' : walkThroughType === 'virtual' ? '☑ Virtual' : '☑ Declined'}
+        </span>
+      </span>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Individuals Present</div>
+    <div class="info-row"><span class="info-label">Owner(s):</span><span class="info-value">${individualsOwners || deal.homeowner_name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Titan PRO Crew Lead / Representative:</span><span class="info-value">${individualsTitanPro || deal.rep_name || ''}</span></div>
+    <div class="info-row"><span class="info-label">Other(s):</span><span class="info-value">${individualsOthers || ''}</span></div>
+  </div>
+
+  <div class="divider">⸻</div>
+
+  <div class="section">
+    <div class="section-title">SECTION 1 – WALK-THROUGH STATUS</div>
+    <p class="content-text">Owner acknowledges that a final walk-through of the roofing work was offered and either completed or declined at Owner's discretion. If declined, Owner accepts the condition of the work as observed at the time of completion.</p>
+    <p class="content-text">Owner signing below represents and warrants that they have authority to sign on behalf of all owners of the Property.</p>
+    <div class="signature-box" style="display: flex; align-items: center; gap: 20px;">
+      <span class="signature-label">Owner Initials:</span>
+      ${sec1Initials ? `<img src="${sec1Initials}" class="signature-image" alt="Owner Initials" />` : '<span style="color:#999;">Not signed</span>'}
+      <span style="margin-left: auto; font-size: 11px; color: #6b7280;">Date: ${format(new Date(), 'MM/dd/yyyy')}</span>
+    </div>
+  </div>
+
+  <div class="divider">⸻</div>
+
+  <div class="section">
+    <div class="section-title">SECTION 2 – ITEMS REQUIRING REVIEW (IF ANY)</div>
+    <p class="content-text">If Owner believes any portion of the work is incomplete or requires attention, list below:</p>
+    <div class="review-items">${reviewItems || '(No items listed)'}</div>
+    <p class="content-text">Titan Prime Solutions acknowledges receipt of the items listed above and will review them. This section establishes a seven (7) day review and resolution period.</p>
+    <p class="content-text">If no items are listed above, Owner acknowledges that no outstanding issues were identified at the time of review.</p>
+    <div class="signature-box" style="display: flex; align-items: center; gap: 20px;">
+      <span class="signature-label">Owner Initials (confirming listed items are complete and accurate):</span>
+      ${sec2Initials ? `<img src="${sec2Initials}" class="signature-image" alt="Owner Initials" />` : '<span style="color:#999;">Not signed</span>'}
+      <span style="margin-left: auto; font-size: 11px; color: #6b7280;">Date: ${format(new Date(), 'MM/dd/yyyy')}</span>
+    </div>
+  </div>
+
+  <div class="divider">⸻</div>
+
+  <div class="section">
+    <div class="section-title">SECTION 3 – COMPLETION CONFIRMATION</div>
+    <p class="content-text">Owner confirms that all agreed-upon roofing work has been completed in accordance with the Agreement and that the Property is in substantially the same condition as prior to installation, reasonable wear and tear excepted.</p>
+    <p class="content-text">This acknowledgment does not modify, expand, or replace any manufacturer or contractor warranties provided under the Agreement.</p>
+    
+    <div class="signature-grid">
+      <div class="signature-box">
+        <div class="signature-label">Owner Signature</div>
+        ${ownerSig ? `<img src="${ownerSig}" style="max-width: 200px; max-height: 60px; display: block; margin: 5px 0;" alt="Owner Signature" />` : '<div style="border-bottom: 1px solid #333; height: 40px;"></div>'}
+        <div class="signature-date">Date: ${format(new Date(), 'MM/dd/yyyy')}</div>
+      </div>
+      <div class="signature-box">
+        <div class="signature-label">Titan PRO Signature</div>
+        ${proSig ? `<img src="${proSig}" style="max-width: 200px; max-height: 60px; display: block; margin: 5px 0;" alt="Titan PRO Signature" />` : '<div style="border-bottom: 1px solid #333; height: 40px;"></div>'}
+        <div class="signature-date">Date: ${format(new Date(), 'MM/dd/yyyy')}</div>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
+      `.trim();
+
+      // Generate PDF and upload to Wasabi
+      let completionFormUrl = '';
+      try {
+        const { uri } = await Print.printToFileAsync({ html: completionFormHtml });
+        console.log('[Completion Form] Generated PDF at:', uri);
+
+        const pdfFileName = `completion-form-${deal.id}-${Date.now()}.pdf`;
+        const uploadResult = await uploadFile(uri, pdfFileName, 'application/pdf', 'completion_form', deal.id);
+
+        if (uploadResult?.key) {
+          completionFormUrl = uploadResult.key;
+          console.log('[Completion Form] Uploaded to:', completionFormUrl);
+        }
+      } catch (pdfError) {
+        console.warn('[Completion Form] PDF generation failed, falling back to base64:', pdfError);
+        const completionFormBase64 = btoa(unescape(encodeURIComponent(completionFormHtml)));
+        completionFormUrl = `data:text/html;base64,${completionFormBase64}`;
+      }
+
+      updates.completion_form_url = completionFormUrl;
+      updates.status = 'completion_signed';
+      updates.completion_signed_date = new Date().toISOString();
+
+      const result = await dealsApi.update(deal.id, updates);
+      if (result.error) throw new Error(result.error);
+
+      queryClient.invalidateQueries({ queryKey: ['deals'] });
+      queryClient.invalidateQueries({ queryKey: ['deal', id] });
+
+      // Reset all completion form state
+      setCompletionFormStep(0);
+      setSection1Initials(null);
+      setSection2Initials(null);
+      setHomeownerCompletionSignature(null);
+      setRepCompletionSignature(null);
+      setCrewLeadName('');
+      setWalkThroughType(null);
+      setIndividualsOwners('');
+      setIndividualsTitanPro('');
+      setIndividualsOthers('');
+      setReviewItems('');
+
+      setShowCompletionFormSignature(false);
+      Alert.alert('Success', 'Completion form signed successfully!');
+      refetch();
+    } catch (error) {
+      console.error('[Completion Form] Error saving:', error);
+      Alert.alert('Error', 'Failed to save completion form: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    } finally {
+      setSavingCompletionForm(false);
     }
   };
 
@@ -828,11 +1264,31 @@ export default function DealDetailScreen() {
       const currentStep = getCurrentWorkflowStep();
       if (!currentStep) return;
 
-      const updates: Partial<Deal> = { ...workflowForm };
+      // Filter out fields that might not exist in database yet or have invalid values
+      const newFieldsToFilterOut = ['date_type', 'adjuster_not_assigned'];
+      const filteredWorkflowForm = Object.fromEntries(
+        Object.entries(workflowForm).filter(([key, value]) => {
+          // Filter out new fields that may not exist in DB
+          if (newFieldsToFilterOut.includes(key)) return false;
+          // Filter out timestamp fields with invalid string values like "N/A"
+          if (key === 'adjuster_meeting_date' && (value === 'N/A' || value === '')) return false;
+          return true;
+        })
+      );
+
+      const updates: Partial<Deal> = { ...filteredWorkflowForm };
 
       // Check if all requirements for current step will be met after this save
       const simulatedDeal = { ...deal, ...updates };
+      const adjusterNotAssigned = workflowForm.adjuster_not_assigned === true ||
+                                  (workflowForm.adjuster_not_assigned === undefined && deal.adjuster_not_assigned === true);
+
       const allRequirementsMet = currentStep.requiredFields.every(req => {
+        // Skip adjuster fields if adjuster is not assigned
+        if (adjusterNotAssigned && (req.field === 'adjuster_name' || req.field === 'adjuster_phone' || req.field === 'adjuster_meeting_date')) {
+          return true;
+        }
+
         const value = simulatedDeal[req.field];
         if (req.type === 'signature') {
           // Accept either in-app signature OR uploaded agreement document
@@ -893,6 +1349,108 @@ export default function DealDetailScreen() {
       completion: 'completion_images',
     };
 
+    // Multi-photo to PDF conversion helper
+    const captureMultiplePhotosAsPdf = async () => {
+      const permission = await ImagePicker.requestCameraPermissionsAsync();
+      if (!permission.granted) {
+        Alert.alert('Permission required', 'Camera permission is required to take photos');
+        return;
+      }
+
+      const photos: string[] = [];
+      let keepTaking = true;
+
+      while (keepTaking) {
+        const result = await ImagePicker.launchCameraAsync({
+          mediaTypes: ImagePicker.MediaTypeOptions.Images,
+          quality: 0.8,
+          allowsEditing: false,
+        });
+
+        if (!result.canceled && result.assets[0]) {
+          photos.push(result.assets[0].uri);
+
+          // Ask if user wants to take another photo
+          await new Promise<void>((resolve) => {
+            Alert.alert(
+              `${photos.length} Photo(s) Captured`,
+              'Do you want to take another photo?',
+              [
+                {
+                  text: 'Take Another',
+                  onPress: () => resolve(),
+                },
+                {
+                  text: 'Done - Create PDF',
+                  onPress: () => {
+                    keepTaking = false;
+                    resolve();
+                  },
+                },
+              ],
+              { cancelable: false }
+            );
+          });
+        } else {
+          keepTaking = false;
+        }
+      }
+
+      if (photos.length > 0) {
+        setUploadingCategory(category);
+        try {
+          // Convert photos to PDF using expo-print
+          const imagesHtml = photos.map(uri => `
+            <div style="page-break-after: always; text-align: center; padding: 20px;">
+              <img src="${uri}" style="max-width: 100%; max-height: 90vh; object-fit: contain;" />
+            </div>
+          `).join('');
+
+          const html = `
+            <!DOCTYPE html>
+            <html>
+              <head>
+                <meta charset="UTF-8">
+                <style>
+                  @page { margin: 0.5in; }
+                  body { margin: 0; padding: 0; }
+                  div:last-child { page-break-after: avoid; }
+                </style>
+              </head>
+              <body>${imagesHtml}</body>
+            </html>
+          `;
+
+          const { uri: pdfUri } = await Print.printToFileAsync({ html });
+
+          // Upload the PDF
+          const fileName = `${category}_photos_${Date.now()}.pdf`;
+          const result = await uploadFile(pdfUri, fileName, 'application/pdf', category, id);
+
+          if (result) {
+            const currentImages = (deal as any)[fieldMap[category]] || [];
+            const newImages = [...currentImages, result.key];
+            const updates: Partial<Deal> = { [fieldMap[category]]: newImages };
+
+            if (category === 'inspection' && deal?.status === 'lead') {
+              updates.status = 'inspection_scheduled';
+              Alert.alert('Success', `${photos.length} photos converted to PDF and uploaded! Deal moved to next step.`);
+            } else {
+              Alert.alert('Success', `${photos.length} photos converted to PDF and uploaded successfully`);
+            }
+
+            updateMutation.mutate(updates);
+          } else {
+            Alert.alert('Error', 'Failed to upload PDF');
+          }
+        } catch (error) {
+          Alert.alert('Error', 'Failed to create PDF: ' + (error instanceof Error ? error.message : 'Unknown error'));
+        } finally {
+          setUploadingCategory(null);
+        }
+      }
+    };
+
     Alert.alert(
       'Add Photos',
       'Choose an option',
@@ -916,6 +1474,10 @@ export default function DealDetailScreen() {
               await uploadPhoto(result.assets[0].uri, category, fieldMap[category]);
             }
           },
+        },
+        {
+          text: 'Take Multiple → PDF',
+          onPress: captureMultiplePhotosAsPdf,
         },
         {
           text: 'Choose from Library',
@@ -997,7 +1559,7 @@ export default function DealDetailScreen() {
 
     Alert.alert(
       `Upload ${docNames[docType]}`,
-      'Choose an option',
+      docType === 'lost_statement' ? 'Choose an option (you can select multiple photos to combine into a PDF)' : 'Choose an option',
       [
         {
           text: 'Take Photo',
@@ -1088,6 +1650,89 @@ export default function DealDetailScreen() {
             }
           },
         },
+        // Only add "Multiple Photos as PDF" option for lost_statement
+        ...(docType === 'lost_statement' ? [{
+          text: 'Multiple Photos as PDF',
+          onPress: async () => {
+            try {
+              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+              if (!permission.granted) {
+                Alert.alert('Permission required', 'Photo library permission is required');
+                return;
+              }
+
+              const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsMultipleSelection: true,
+                quality: 0.3, // Lower quality to reduce file size
+                selectionLimit: 5, // Limit to 5 photos to keep file size manageable
+              });
+
+              if (!result.canceled && result.assets.length > 0) {
+                setUploadingCategory(docType);
+                console.log('[Multi-photo PDF] Processing', result.assets.length, 'images');
+
+                // Use file URIs directly in HTML (expo-print handles local files)
+                const imagesHtml = result.assets.map((asset, index) => `
+                  <div style="page-break-after: ${index < result.assets.length - 1 ? 'always' : 'auto'}; display: flex; justify-content: center; align-items: center; min-height: 90vh; padding: 20px;">
+                    <img src="${asset.uri}" style="max-width: 100%; max-height: 90vh; object-fit: contain;" />
+                  </div>
+                `).join('');
+
+                const html = `
+                  <!DOCTYPE html>
+                  <html>
+                    <head>
+                      <meta charset="utf-8">
+                      <title>Lost Statement</title>
+                      <style>
+                        body { margin: 0; padding: 0; }
+                        @page { margin: 5mm; }
+                      </style>
+                    </head>
+                    <body>
+                      ${imagesHtml}
+                    </body>
+                  </html>
+                `;
+
+                // Generate PDF
+                const { uri: pdfUri } = await Print.printToFileAsync({ html });
+                console.log('[Multi-photo PDF] Generated PDF at:', pdfUri);
+
+                // Upload the PDF using presigned URL (bypasses API Gateway payload limit)
+                const fileName = `lost_statement_${Date.now()}.pdf`;
+                const uploadResult = await uploadLargeFile(
+                  pdfUri,
+                  fileName,
+                  'application/pdf',
+                  docType,
+                  id
+                );
+
+                if (uploadResult) {
+                  const updateResponse = await dealsApi.update(id, { [fieldMap[docType]]: uploadResult.key });
+                  if (updateResponse.error) {
+                    Alert.alert('Error', updateResponse.error);
+                  } else {
+                    queryClient.invalidateQueries({ queryKey: ['deal', id] });
+                    queryClient.invalidateQueries({ queryKey: ['deals'] });
+                    await refetch();
+                    Alert.alert('Success', `${result.assets.length} photos combined into PDF and uploaded`);
+                  }
+                } else {
+                  Alert.alert('Error', 'Failed to upload PDF');
+                }
+
+                setUploadingCategory(null);
+              }
+            } catch (error) {
+              console.error('Multi-photo upload error:', error);
+              Alert.alert('Error', 'Failed to create PDF from photos');
+              setUploadingCategory(null);
+            }
+          },
+        }] : []),
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -1290,6 +1935,11 @@ export default function DealDetailScreen() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -1307,6 +1957,7 @@ export default function DealDetailScreen() {
       <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -1325,7 +1976,6 @@ export default function DealDetailScreen() {
                 <Text style={styles.phaseBadgeText}>{config.label}</Text>
               </View>
             </View>
-            <Text style={[styles.progressPercent, { color: colors.primary }]}>{progressPercent}%</Text>
           </View>
 
           <Text style={[styles.progressDescription, { color: colors.mutedForeground }]}>{config.description}</Text>
@@ -1549,44 +2199,99 @@ export default function DealDetailScreen() {
 
           // Admin step - show waiting message
           if (isAdminStep) {
-            // Special handling for adjuster_met (Awaiting Approval) - show submitted financials
+            // Special handling for adjuster_met (Adjuster Scheduled) - rep can confirm meeting happened
             if (deal.status === 'adjuster_met') {
               return (
-                <View style={styles.workflowCard}>
+                <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
+                  <View style={styles.workflowCardHeader}>
+                    <Ionicons name="people" size={24} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.workflowCardTitle, { color: colors.foreground }]}>Adjuster Appointment Scheduled</Text>
+                      <Text style={[styles.workflowCardDescription, { color: colors.mutedForeground }]}>
+                        {deal.adjuster_meeting_date
+                          ? `Scheduled for ${format(new Date(deal.adjuster_meeting_date), 'MMMM d, yyyy')}`
+                          : 'Confirm when the adjuster meeting is complete'
+                        }
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* Adjuster Info */}
+                  <View style={[styles.submittedFinancials, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                    <Text style={[styles.submittedFinancialsTitle, { color: colors.foreground }]}>Adjuster Information</Text>
+                    <View style={styles.submittedFinancialsGrid}>
+                      <View style={styles.submittedFinancialItem}>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>Name</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>{deal.adjuster_name || '-'}</Text>
+                      </View>
+                      <View style={styles.submittedFinancialItem}>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>Phone</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>{deal.adjuster_phone || '-'}</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    style={styles.workflowSaveButton}
+                    onPress={() => {
+                      updateMutation.mutate({
+                        status: 'awaiting_approval',
+                        awaiting_approval_date: new Date().toISOString(),
+                      });
+                    }}
+                    disabled={savingWorkflow}
+                  >
+                    {savingWorkflow ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <Ionicons name="checkmark" size={20} color="#FFF" />
+                        <Text style={styles.workflowSaveButtonText}>Confirm Meeting & Submit for Approval</Text>
+                      </>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              );
+            }
+
+            // awaiting_approval status - show submitted financials, waiting for admin
+            if (deal.status === 'awaiting_approval') {
+              return (
+                <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
                   <View style={styles.workflowCardHeader}>
                     <Ionicons name="time" size={24} color="#F59E0B" />
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.workflowCardTitle}>Awaiting Admin Approval</Text>
-                      <Text style={styles.workflowCardDescription}>Financial details submitted for review</Text>
+                      <Text style={[styles.workflowCardTitle, { color: colors.foreground }]}>Awaiting Admin Approval</Text>
+                      <Text style={[styles.workflowCardDescription, { color: colors.mutedForeground }]}>Financial details submitted for review</Text>
                     </View>
                   </View>
 
                   {/* Submitted Financial Details */}
-                  <View style={styles.submittedFinancials}>
-                    <Text style={styles.submittedFinancialsTitle}>Submitted Values</Text>
+                  <View style={[styles.submittedFinancials, { backgroundColor: isDark ? colors.muted : '#F9FAFB' }]}>
+                    <Text style={[styles.submittedFinancialsTitle, { color: colors.foreground }]}>Submitted Values</Text>
                     <View style={styles.submittedFinancialsGrid}>
                       <View style={styles.submittedFinancialItem}>
-                        <Text style={styles.submittedFinancialLabel}>RCV</Text>
-                        <Text style={styles.submittedFinancialValue}>${(Number(deal.rcv) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>RCV</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>${(Number(deal.rcv) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                       </View>
                       <View style={styles.submittedFinancialItem}>
-                        <Text style={styles.submittedFinancialLabel}>ACV</Text>
-                        <Text style={styles.submittedFinancialValue}>${(Number(deal.acv) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>ACV</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>${(Number(deal.acv) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                       </View>
                       <View style={styles.submittedFinancialItem}>
-                        <Text style={styles.submittedFinancialLabel}>Deductible</Text>
-                        <Text style={styles.submittedFinancialValue}>${(Number(deal.deductible) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>Deductible</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>${(Number(deal.deductible) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                       </View>
                       <View style={styles.submittedFinancialItem}>
-                        <Text style={styles.submittedFinancialLabel}>Depreciation</Text>
-                        <Text style={styles.submittedFinancialValue}>${(Number(deal.depreciation) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
+                        <Text style={[styles.submittedFinancialLabel, { color: colors.mutedForeground }]}>Depreciation</Text>
+                        <Text style={[styles.submittedFinancialValue, { color: colors.foreground }]}>${(Number(deal.depreciation) || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}</Text>
                       </View>
                     </View>
                   </View>
 
-                  <View style={styles.awaitingApprovalNote}>
-                    <Ionicons name="information-circle" size={18} color="#6B7280" />
-                    <Text style={styles.awaitingApprovalText}>
+                  <View style={[styles.awaitingApprovalNote, { backgroundColor: isDark ? colors.muted : undefined }]}>
+                    <Ionicons name="information-circle" size={18} color={colors.mutedForeground} />
+                    <Text style={[styles.awaitingApprovalText, { color: colors.mutedForeground }]}>
                       Admin will review and approve these values. Once approved, your commission will be calculated.
                     </Text>
                   </View>
@@ -1757,8 +2462,18 @@ export default function DealDetailScreen() {
             const hasDepreciation = !!(workflowForm.depreciation ?? deal.depreciation);
             const hasAdjusterName = !!(workflowForm.adjuster_name ?? deal.adjuster_name);
             const hasAdjusterDate = !!(workflowForm.adjuster_meeting_date ?? deal.adjuster_meeting_date);
+
+            // Check if adjuster is marked as not assigned - use explicit boolean check
+            const adjusterNotAssigned = workflowForm.adjuster_not_assigned === true ||
+                                        (workflowForm.adjuster_not_assigned === undefined && deal.adjuster_not_assigned === true);
+
             const allFinancialsComplete = hasRcv && hasAcv && hasDeductible && hasDepreciation;
-            const allFieldsComplete = allFinancialsComplete && hasAdjusterName && hasAdjusterDate && hasLostStatement;
+
+            // If adjuster is not assigned, adjuster fields are NOT required
+            // Otherwise, both name and date are required
+            const adjusterFieldsComplete = adjusterNotAssigned ? true : (hasAdjusterName && hasAdjusterDate);
+
+            const allFieldsComplete = allFinancialsComplete && adjusterFieldsComplete && hasLostStatement;
 
             return (
               <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
@@ -1863,52 +2578,298 @@ export default function DealDetailScreen() {
 
                   <Text style={[styles.workflowFieldLabelText, { marginTop: 16, marginBottom: 8, fontWeight: '700', color: colors.foreground }]}>Adjuster Information</Text>
 
-                  <View style={styles.workflowFieldContainer}>
+                  {/* Date Type Toggle */}
+                  <View style={[styles.workflowFieldContainer, { marginBottom: 12 }]}>
                     <View style={styles.workflowFieldLabel}>
-                      <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Adjuster Name</Text>
-                      {hasAdjusterName && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                      <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Date Type</Text>
                     </View>
-                    <TextInput
-                      style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
-                      value={String(workflowForm.adjuster_name ?? deal.adjuster_name ?? '')}
-                      onChangeText={(text) => handleWorkflowFieldChange('adjuster_name', text)}
-                      placeholder="Enter adjuster name"
-                      placeholderTextColor={colors.mutedForeground}
-                    />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TouchableOpacity
+                        style={[
+                          styles.toggleButton,
+                          { backgroundColor: isDark ? colors.secondary : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
+                          (workflowForm.date_type ?? deal.date_type ?? 'discovery') === 'discovery' && styles.toggleButtonActive
+                        ]}
+                        onPress={() => handleWorkflowFieldChange('date_type', 'discovery')}
+                      >
+                        <Text style={[
+                          styles.toggleButtonText,
+                          (workflowForm.date_type ?? deal.date_type ?? 'discovery') === 'discovery' && styles.toggleButtonTextActive
+                        ]}>Date of Discovery</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.toggleButton,
+                          { backgroundColor: isDark ? colors.secondary : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
+                          (workflowForm.date_type ?? deal.date_type) === 'loss' && styles.toggleButtonActive
+                        ]}
+                        onPress={() => handleWorkflowFieldChange('date_type', 'loss')}
+                      >
+                        <Text style={[
+                          styles.toggleButtonText,
+                          (workflowForm.date_type ?? deal.date_type) === 'loss' && styles.toggleButtonTextActive
+                        ]}>Date of Loss</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
+
                   <View style={styles.workflowFieldContainer}>
                     <View style={styles.workflowFieldLabel}>
-                      <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Adjuster Meeting Date</Text>
-                      {hasAdjusterDate && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                      <Text style={[styles.workflowFieldLabelText, { color: colors.foreground }]}>
+                        {(workflowForm.date_type ?? deal.date_type ?? 'discovery') === 'discovery' ? 'Date of Discovery' : 'Date of Loss'}
+                      </Text>
+                      {!!(workflowForm.date_of_loss ?? deal.date_of_loss) && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
                     </View>
                     <TouchableOpacity
-                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.secondary : '#FFFFFF', borderColor: colors.border }]}
+                      style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
                       onPress={() => {
-                        const currentDate = workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date;
-                        if (currentDate) {
-                          setAdjusterDatePickerValue(new Date(currentDate as string));
+                        const currentValue = workflowForm.date_of_loss ?? deal.date_of_loss;
+                        if (currentValue && typeof currentValue === 'string') {
+                          try {
+                            setDateOfLossPickerValue(new Date(currentValue));
+                          } catch {
+                            setDateOfLossPickerValue(new Date());
+                          }
                         } else {
-                          setAdjusterDatePickerValue(new Date());
+                          setDateOfLossPickerValue(new Date());
                         }
-                        setShowAdjusterDatePicker(true);
+                        setShowDateOfLossPicker(true);
                       }}
                     >
-                      <Ionicons name="calendar" size={20} color={colors.primary} />
-                      <Text style={[styles.datePickerButtonText, { color: colors.foreground }, !(workflowForm.adjuster_meeting_date ?? deal.adjuster_meeting_date) && { color: colors.mutedForeground }]}>
-                        {workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date
-                          ? format(new Date(String(workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date)), 'MMMM d, yyyy')
-                          : 'Select date'
-                        }
+                      <Text style={{ color: (workflowForm.date_of_loss ?? deal.date_of_loss) ? colors.foreground : colors.mutedForeground }}>
+                        {(workflowForm.date_of_loss ?? deal.date_of_loss)
+                          ? format(new Date(String(workflowForm.date_of_loss ?? deal.date_of_loss)), 'MMM d, yyyy')
+                          : 'Select date'}
                       </Text>
-                      <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                      <Ionicons name="calendar" size={20} color={colors.mutedForeground} />
                     </TouchableOpacity>
+                    {showDateOfLossPicker && (
+                      Platform.OS === 'ios' ? (
+                        <Modal transparent animationType="slide" visible={showDateOfLossPicker}>
+                          <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                            <View style={{ backgroundColor: isDark ? colors.muted : '#FFFFFF', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                <TouchableOpacity onPress={() => setShowDateOfLossPicker(false)}>
+                                  <Text style={{ color: colors.mutedForeground, fontSize: 16 }}>Cancel</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => {
+                                  handleWorkflowFieldChange('date_of_loss', format(dateOfLossPickerValue, 'yyyy-MM-dd'));
+                                  setShowDateOfLossPicker(false);
+                                }}>
+                                  <Text style={{ color: staticColors.primary, fontSize: 16, fontWeight: '600' }}>Done</Text>
+                                </TouchableOpacity>
+                              </View>
+                              <DateTimePicker
+                                value={dateOfLossPickerValue}
+                                mode="date"
+                                display="spinner"
+                                onChange={(event, date) => {
+                                  if (date) setDateOfLossPickerValue(date);
+                                }}
+                                textColor={colors.foreground}
+                              />
+                            </View>
+                          </View>
+                        </Modal>
+                      ) : (
+                        <DateTimePicker
+                          value={dateOfLossPickerValue}
+                          mode="date"
+                          display="default"
+                          onChange={(event, date) => {
+                            setShowDateOfLossPicker(false);
+                            if (event.type === 'set' && date) {
+                              handleWorkflowFieldChange('date_of_loss', format(date, 'yyyy-MM-dd'));
+                            }
+                          }}
+                        />
+                      )
+                    )}
                   </View>
+
+                  {/* Adjuster Not Assigned Toggle */}
+                  <View style={[styles.workflowFieldContainer, { marginTop: 16, marginBottom: 12 }]}>
+                    <TouchableOpacity
+                      style={[
+                        styles.checkboxRow,
+                        { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }
+                      ]}
+                      onPress={() => {
+                        const newValue = !(workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned);
+                        handleWorkflowFieldChange('adjuster_not_assigned', newValue);
+                        if (newValue) {
+                          // Auto-fill N/A values
+                          handleWorkflowFieldChange('adjuster_name', 'N/A');
+                          handleWorkflowFieldChange('adjuster_phone', 'N/A');
+                          handleWorkflowFieldChange('adjuster_meeting_date', null);
+                        } else {
+                          // Clear N/A values
+                          handleWorkflowFieldChange('adjuster_name', '');
+                          handleWorkflowFieldChange('adjuster_phone', '');
+                        }
+                      }}
+                    >
+                      <View style={[
+                        styles.checkbox,
+                        !!(workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned) && styles.checkboxActive
+                      ]}>
+                        {!!(workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned) && (
+                          <Ionicons name="checkmark" size={14} color="#FFF" />
+                        )}
+                      </View>
+                      <Text style={[styles.checkboxLabel, { color: colors.foreground }]}>Adjuster Not Yet Assigned</Text>
+                    </TouchableOpacity>
+                    <Text style={[styles.checkboxHint, { color: colors.mutedForeground }]}>
+                      Check this if the claim hasn't been assigned to an adjuster yet
+                    </Text>
+                  </View>
+
+                  {/* Only show adjuster fields if not marked as N/A */}
+                  {!(workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned) && (
+                    <>
+                      <View style={styles.workflowFieldContainer}>
+                        <View style={styles.workflowFieldLabel}>
+                          <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Adjuster Name</Text>
+                          {hasAdjusterName && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                        </View>
+                        <TextInput
+                          style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
+                          value={String(workflowForm.adjuster_name ?? deal.adjuster_name ?? '')}
+                          onChangeText={(text) => handleWorkflowFieldChange('adjuster_name', text)}
+                          placeholder="Enter adjuster name"
+                          placeholderTextColor={colors.mutedForeground}
+                        />
+                      </View>
+
+                      <View style={styles.workflowFieldContainer}>
+                        <View style={styles.workflowFieldLabel}>
+                          <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Adjuster Phone</Text>
+                          {!!(workflowForm.adjuster_phone ?? deal.adjuster_phone) && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                        </View>
+                        <TextInput
+                          style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
+                          value={String(workflowForm.adjuster_phone ?? deal.adjuster_phone ?? '')}
+                          onChangeText={(text) => handleWorkflowFieldChange('adjuster_phone', text)}
+                          placeholder="Enter adjuster phone"
+                          placeholderTextColor={colors.mutedForeground}
+                          keyboardType="phone-pad"
+                        />
+                        {/* Call Adjuster Button */}
+                        {!!(workflowForm.adjuster_phone ?? deal.adjuster_phone) && (workflowForm.adjuster_phone ?? deal.adjuster_phone) !== 'N/A' && (
+                          <TouchableOpacity
+                            style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(59, 130, 246, 0.1)', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8, alignSelf: 'flex-start' }}
+                            onPress={() => {
+                              const rawPhone = String(workflowForm.adjuster_phone ?? deal.adjuster_phone);
+                              // Keep + for international, remove other non-digits
+                              const phone = rawPhone.replace(/[^\d+]/g, '');
+                              if (phone && phone.length >= 7) {
+                                Linking.openURL(`tel:${phone}`).catch(() => {
+                                  Alert.alert('Error', 'Unable to make phone call');
+                                });
+                              } else {
+                                Alert.alert('Invalid Phone', 'Please enter a valid phone number');
+                              }
+                            }}
+                          >
+                            <Ionicons name="call" size={16} color="#3B82F6" />
+                            <Text style={{ color: '#3B82F6', fontSize: 14, fontWeight: '500' }}>Call Adjuster</Text>
+                          </TouchableOpacity>
+                        )}
+                      </View>
+
+                      {/* Notes Section */}
+                      <View style={styles.workflowFieldContainer}>
+                        <View style={styles.workflowFieldLabel}>
+                          <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Notes</Text>
+                        </View>
+                        <TextInput
+                          style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground, minHeight: 80, textAlignVertical: 'top' }]}
+                          value={String(workflowForm.notes ?? deal.notes ?? '')}
+                          onChangeText={(text) => handleWorkflowFieldChange('notes', text)}
+                          placeholder="Add notes about the deal..."
+                          placeholderTextColor={colors.mutedForeground}
+                          multiline
+                          numberOfLines={3}
+                        />
+                      </View>
+
+                      <View style={styles.workflowFieldContainer}>
+                        <View style={styles.workflowFieldLabel}>
+                          <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Adjuster Meeting Date</Text>
+                          {hasAdjusterDate && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                        </View>
+                        <TouchableOpacity
+                          style={[styles.datePickerButton, { backgroundColor: isDark ? colors.secondary : '#FFFFFF', borderColor: colors.border }]}
+                          onPress={() => {
+                            const currentDate = workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date;
+                            if (currentDate) {
+                              setAdjusterDatePickerValue(new Date(currentDate as string));
+                            } else {
+                              setAdjusterDatePickerValue(new Date());
+                            }
+                            setShowAdjusterDatePicker(true);
+                          }}
+                        >
+                          <Ionicons name="calendar" size={20} color={colors.primary} />
+                          <Text style={[styles.datePickerButtonText, { color: colors.foreground }, !(workflowForm.adjuster_meeting_date ?? deal.adjuster_meeting_date) && { color: colors.mutedForeground }]}>
+                            {workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date
+                              ? format(new Date(String(workflowForm.adjuster_meeting_date || deal.adjuster_meeting_date)), 'MMMM d, yyyy')
+                              : 'Select date'
+                            }
+                          </Text>
+                          <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                    </>
+                  )}
                 </View>
 
                 {/* Save Button - disabled if requirements not met */}
                 <TouchableOpacity
                   style={[styles.workflowSaveButton, (!allFieldsComplete || savingWorkflow) && { opacity: 0.5 }]}
-                  onPress={handleSaveAndProgress}
+                  onPress={async () => {
+                    setSavingWorkflow(true);
+                    try {
+                      // Filter out fields that might not exist in database yet or have invalid values
+                      const newFieldsToFilterOut = ['date_type', 'adjuster_not_assigned'];
+                      const filteredWorkflowForm = Object.fromEntries(
+                        Object.entries(workflowForm).filter(([key, value]) => {
+                          // Filter out new fields that may not exist in DB
+                          if (newFieldsToFilterOut.includes(key)) return false;
+                          // Filter out timestamp fields with invalid string values like "N/A"
+                          if (key === 'adjuster_meeting_date' && (value === 'N/A' || value === '')) return false;
+                          return true;
+                        })
+                      );
+
+                      const updates: Partial<Deal> = { ...filteredWorkflowForm };
+
+                      // Determine next status based on adjuster_not_assigned
+                      if (adjusterNotAssigned) {
+                        // Skip adjuster_met and go directly to awaiting_approval
+                        updates.status = 'awaiting_approval';
+                        updates.awaiting_approval_date = new Date().toISOString();
+                      } else {
+                        // Go to adjuster_met (adjuster scheduled)
+                        updates.status = 'adjuster_met';
+                        // Note: adjuster_meeting_date is already set from the form
+                      }
+
+                      const response = await dealsApi.update(deal.id, updates);
+                      if (response.error) throw new Error(response.error);
+
+                      queryClient.invalidateQueries({ queryKey: ['deals'] });
+                      queryClient.invalidateQueries({ queryKey: ['deal', id] });
+
+                      Alert.alert('Success', `Deal moved to: ${statusConfig[updates.status]?.label || updates.status}`);
+                      setWorkflowForm({});
+                      refetch();
+                    } catch (error) {
+                      Alert.alert('Error', 'Failed to update: ' + (error instanceof Error ? error.message : 'Unknown error'));
+                    } finally {
+                      setSavingWorkflow(false);
+                    }
+                  }}
                   disabled={!allFieldsComplete || savingWorkflow}
                 >
                   {savingWorkflow ? (
@@ -1916,7 +2877,9 @@ export default function DealDetailScreen() {
                   ) : (
                     <>
                       <Ionicons name="checkmark" size={20} color="#FFF" />
-                      <Text style={styles.workflowSaveButtonText}>Save & Submit for Approval</Text>
+                      <Text style={styles.workflowSaveButtonText}>
+                        {adjusterNotAssigned ? 'Save & Submit for Approval' : 'Save & Schedule Adjuster'}
+                      </Text>
                     </>
                   )}
                 </TouchableOpacity>
@@ -1925,7 +2888,8 @@ export default function DealDetailScreen() {
                   <Text style={styles.workflowWarning}>
                     {!hasLostStatement ? '⚠ Lost statement must be uploaded' :
                      !allFinancialsComplete ? '⚠ All financial fields are required' :
-                     '⚠ Adjuster information is required'}
+                     !adjusterFieldsComplete ? '⚠ Adjuster information is required (or mark as "Adjuster Later")' :
+                     '⚠ Please complete all required fields'}
                   </Text>
                 )}
               </View>
@@ -2069,9 +3033,34 @@ export default function DealDetailScreen() {
                   )}
                 </TouchableOpacity>
 
+                {/* Skip for now option */}
+                {!hasDeductibleReceipt && (
+                  <TouchableOpacity
+                    style={[styles.skipButton, { borderColor: colors.border, marginTop: 8 }]}
+                    onPress={() => {
+                      Alert.alert(
+                        'Skip Deductible Collection?',
+                        'You can continue to material selection, but you must collect the deductible before the deal can be marked complete.',
+                        [
+                          { text: 'Cancel', style: 'cancel' },
+                          {
+                            text: 'Skip for Now',
+                            onPress: () => {
+                              updateMutation.mutate({ status: 'deductible_collected', collect_deductible_date: null });
+                            }
+                          }
+                        ]
+                      );
+                    }}
+                  >
+                    <Ionicons name="arrow-forward" size={18} color={colors.mutedForeground} />
+                    <Text style={[styles.skipButtonText, { color: colors.mutedForeground }]}>Skip for Now (collect later)</Text>
+                  </TouchableOpacity>
+                )}
+
                 {!hasDeductibleReceipt && (
                   <Text style={styles.workflowWarning}>
-                    ⚠ Deductible receipt must be uploaded before proceeding
+                    ⚠ Deductible must be collected before deal completion
                   </Text>
                 )}
               </View>
@@ -2158,12 +3147,12 @@ export default function DealDetailScreen() {
           // Rep step with required fields
           if (hasRequiredFields) {
             return (
-              <View style={styles.workflowCard}>
+              <View style={[styles.workflowCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
                 <View style={styles.workflowCardHeader}>
                   <Ionicons name="clipboard" size={24} color={colors.primary} />
                   <View style={{ flex: 1 }}>
-                    <Text style={styles.workflowCardTitle}>{currentStep.label}</Text>
-                    <Text style={styles.workflowCardDescription}>{currentStep.description}</Text>
+                    <Text style={[styles.workflowCardTitle, { color: colors.foreground }]}>{currentStep.label}</Text>
+                    <Text style={[styles.workflowCardDescription, { color: colors.mutedForeground }]}>{currentStep.description}</Text>
                   </View>
                 </View>
 
@@ -2173,6 +3162,120 @@ export default function DealDetailScreen() {
                     const currentValue = workflowForm[req.field] ?? deal[req.field] ?? '';
                     const isFieldComplete = currentValue !== '' && currentValue !== null && currentValue !== undefined;
 
+                    // Special handling for date_of_loss field - with Date Type toggle
+                    if (req.field === 'date_of_loss') {
+                      return (
+                        <View key={req.field}>
+                          {/* Date Type Toggle */}
+                          <View style={[styles.workflowFieldContainer, { marginBottom: 8 }]}>
+                            <View style={styles.workflowFieldLabel}>
+                              <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Date Type</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <TouchableOpacity
+                                style={[
+                                  styles.toggleButton,
+                                  { backgroundColor: isDark ? colors.secondary : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
+                                  (workflowForm.date_type ?? deal.date_type ?? 'discovery') === 'discovery' && styles.toggleButtonActive
+                                ]}
+                                onPress={() => handleWorkflowFieldChange('date_type', 'discovery')}
+                              >
+                                <Text style={[
+                                  styles.toggleButtonText,
+                                  (workflowForm.date_type ?? deal.date_type ?? 'discovery') === 'discovery' && styles.toggleButtonTextActive
+                                ]}>Date of Discovery</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={[
+                                  styles.toggleButton,
+                                  { backgroundColor: isDark ? colors.secondary : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
+                                  (workflowForm.date_type ?? deal.date_type ?? 'loss') === 'loss' && styles.toggleButtonActive
+                                ]}
+                                onPress={() => handleWorkflowFieldChange('date_type', 'loss')}
+                              >
+                                <Text style={[
+                                  styles.toggleButtonText,
+                                  (workflowForm.date_type ?? deal.date_type ?? 'loss') === 'loss' && styles.toggleButtonTextActive
+                                ]}>Date of Loss</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                          <View style={styles.workflowFieldContainer}>
+                            <View style={styles.workflowFieldLabel}>
+                              <Text style={[styles.workflowFieldLabelText, { color: colors.foreground }]}>
+                                {(workflowForm.date_type ?? deal.date_type ?? 'loss') === 'discovery' ? 'Date of Discovery' : 'Date of Loss'}
+                              </Text>
+                              {isFieldComplete && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                            </View>
+                            <TouchableOpacity
+                              style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }]}
+                              onPress={() => {
+                                const currentValue = workflowForm[req.field] ?? deal[req.field];
+                                if (currentValue) {
+                                  try {
+                                    setDateOfLossPickerValue(new Date(currentValue as string));
+                                  } catch {
+                                    setDateOfLossPickerValue(new Date());
+                                  }
+                                } else {
+                                  setDateOfLossPickerValue(new Date());
+                                }
+                                setShowDateOfLossPicker(true);
+                              }}
+                            >
+                              <Text style={{ color: (workflowForm[req.field] ?? deal[req.field]) ? colors.foreground : colors.mutedForeground }}>
+                                {(workflowForm[req.field] ?? deal[req.field])
+                                  ? format(new Date(workflowForm[req.field] as string ?? deal[req.field] as string), 'MMM d, yyyy')
+                                  : 'Select date'}
+                              </Text>
+                              <Ionicons name="calendar" size={20} color={colors.mutedForeground} />
+                            </TouchableOpacity>
+                            {showDateOfLossPicker && (
+                              Platform.OS === 'ios' ? (
+                                <Modal transparent animationType="slide" visible={showDateOfLossPicker}>
+                                  <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' }}>
+                                    <View style={{ backgroundColor: isDark ? colors.muted : '#FFFFFF', padding: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+                                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                                        <TouchableOpacity onPress={() => setShowDateOfLossPicker(false)}>
+                                          <Text style={{ color: colors.mutedForeground, fontSize: 16 }}>Cancel</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => {
+                                          handleWorkflowFieldChange(req.field, format(dateOfLossPickerValue, 'yyyy-MM-dd'));
+                                          setShowDateOfLossPicker(false);
+                                        }}>
+                                          <Text style={{ color: staticColors.primary, fontSize: 16, fontWeight: '600' }}>Done</Text>
+                                        </TouchableOpacity>
+                                      </View>
+                                      <DateTimePicker
+                                        value={dateOfLossPickerValue}
+                                        mode="date"
+                                        display="spinner"
+                                        onChange={(event, date) => {
+                                          if (date) setDateOfLossPickerValue(date);
+                                        }}
+                                        textColor={colors.foreground}
+                                      />
+                                    </View>
+                                  </View>
+                                </Modal>
+                              ) : (
+                                <DateTimePicker
+                                  value={dateOfLossPickerValue}
+                                  mode="date"
+                                  display="default"
+                                  onChange={(event, date) => {
+                                    setShowDateOfLossPicker(false);
+                                    if (event.type === 'set' && date) {
+                                      handleWorkflowFieldChange(req.field, format(date, 'yyyy-MM-dd'));
+                                    }
+                                  }}
+                                />
+                              )
+                            )}
+                          </View>
+                        </View>
+                      );
+                    }
 
                     if (req.type === 'text' && req.field === 'approval_type') {
                       return (
@@ -2204,21 +3307,87 @@ export default function DealDetailScreen() {
                       );
                     }
 
+                    // Special handling for adjuster_name - add the toggle before it
+                    if (req.field === 'adjuster_name') {
+                      const adjusterNotAssigned = !!(workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned);
+                      return (
+                        <View key={req.field}>
+                          {/* Adjuster Not Assigned Toggle */}
+                          <View style={[styles.workflowFieldContainer, { marginTop: 12, marginBottom: 8 }]}>
+                            <TouchableOpacity
+                              style={[
+                                styles.checkboxRow,
+                                { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB' }
+                              ]}
+                              onPress={() => {
+                                const newValue = !adjusterNotAssigned;
+                                handleWorkflowFieldChange('adjuster_not_assigned', newValue);
+                                if (newValue) {
+                                  handleWorkflowFieldChange('adjuster_name', 'N/A');
+                                  handleWorkflowFieldChange('adjuster_phone', 'N/A');
+                                  // Don't set adjuster_meeting_date - it's a timestamp and can't be "N/A"
+                                } else {
+                                  handleWorkflowFieldChange('adjuster_name', '');
+                                  handleWorkflowFieldChange('adjuster_phone', '');
+                                }
+                              }}
+                            >
+                              <View style={[
+                                styles.checkbox,
+                                adjusterNotAssigned && styles.checkboxActive
+                              ]}>
+                                {adjusterNotAssigned && (
+                                  <Ionicons name="checkmark" size={14} color="#FFF" />
+                                )}
+                              </View>
+                              <Text style={[styles.checkboxLabel, { color: colors.foreground }]}>Adjuster Not Yet Assigned</Text>
+                            </TouchableOpacity>
+                            <Text style={[styles.checkboxHint, { color: colors.mutedForeground }]}>
+                              Check this if the claim hasn't been assigned to an adjuster yet
+                            </Text>
+                          </View>
+
+                          {/* Only show adjuster name field if not marked as N/A */}
+                          {!adjusterNotAssigned && (
+                            <View style={styles.workflowFieldContainer}>
+                              <View style={styles.workflowFieldLabel}>
+                                <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>{req.label}</Text>
+                                {isFieldComplete && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
+                              </View>
+                              <TextInput
+                                style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
+                                value={String(workflowForm[req.field] ?? deal[req.field] ?? '')}
+                                onChangeText={(text) => handleWorkflowFieldChange(req.field, text)}
+                                placeholder={`Enter ${req.label.toLowerCase()}`}
+                                placeholderTextColor={colors.mutedForeground}
+                              />
+                            </View>
+                          )}
+                        </View>
+                      );
+                    }
+
+                    // Skip adjuster_phone and adjuster_meeting_date if adjuster not assigned
+                    if ((req.field === 'adjuster_phone' || req.field === 'adjuster_meeting_date') &&
+                        (workflowForm.adjuster_not_assigned ?? deal.adjuster_not_assigned)) {
+                      return null;
+                    }
+
                     return (
                       <View key={req.field} style={styles.workflowFieldContainer}>
                         <View style={styles.workflowFieldLabel}>
-                          <Text style={styles.workflowFieldLabelText}>{req.label}</Text>
+                          <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>{req.label}</Text>
                           {isFieldComplete && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
                         </View>
                         <TextInput
-                          style={styles.workflowInput}
+                          style={[styles.workflowInput, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border, color: colors.foreground }]}
                           value={String(workflowForm[req.field] ?? deal[req.field] ?? '')}
                           onChangeText={(text) => {
                             const value = req.type === 'number' ? (parseFloat(text) || null) : text;
                             handleWorkflowFieldChange(req.field, value);
                           }}
                           placeholder={`Enter ${req.label.toLowerCase()}`}
-                          placeholderTextColor="#9CA3AF"
+                          placeholderTextColor={colors.mutedForeground}
                           keyboardType={req.type === 'number' ? 'numeric' : req.type === 'date' ? 'default' : 'default'}
                         />
                       </View>
@@ -2230,24 +3399,24 @@ export default function DealDetailScreen() {
                 {deal.status === 'inspection_scheduled' && (
                   <View style={styles.workflowFieldContainer}>
                     <View style={styles.workflowFieldLabel}>
-                      <Text style={styles.workflowFieldLabelText}>Agreement Signature</Text>
+                      <Text style={[styles.workflowFieldLabelText, { color: colors.mutedForeground }]}>Agreement Signature</Text>
                       {(deal.contract_signed || deal.insurance_agreement_url) && <Ionicons name="checkmark-circle" size={16} color="#22C55E" />}
                     </View>
                     {deal.contract_signed ? (
-                      <View style={styles.signatureComplete}>
-                        <Text style={styles.signatureCompleteText}>✓ Contract signed on {deal.signed_date ? format(new Date(deal.signed_date), 'MMM d, yyyy') : 'N/A'}</Text>
+                      <View style={[styles.signatureComplete, { backgroundColor: isDark ? colors.secondary : '#ECFDF5' }]}>
+                        <Text style={[styles.signatureCompleteText, { color: '#22C55E' }]}>✓ Contract signed on {deal.signed_date ? format(new Date(deal.signed_date), 'MMM d, yyyy') : 'N/A'}</Text>
                       </View>
                     ) : deal.insurance_agreement_url ? (
-                      <View style={styles.signatureComplete}>
-                        <Text style={styles.signatureCompleteText}>✓ Agreement document uploaded</Text>
+                      <View style={[styles.signatureComplete, { backgroundColor: isDark ? colors.secondary : '#ECFDF5' }]}>
+                        <Text style={[styles.signatureCompleteText, { color: '#22C55E' }]}>✓ Agreement document uploaded</Text>
                       </View>
                     ) : (
                       <TouchableOpacity
-                        style={styles.signatureButton}
+                        style={[styles.signatureButton, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: colors.border }]}
                         onPress={() => setActiveTab('docs')}
                       >
                         <Ionicons name="document-text" size={20} color={colors.primary} />
-                        <Text style={styles.signatureButtonText}>Go to Docs Tab to Sign or Upload Agreement</Text>
+                        <Text style={[styles.signatureButtonText, { color: colors.foreground }]}>Go to Docs Tab to Sign or Upload Agreement</Text>
                       </TouchableOpacity>
                     )}
                   </View>
@@ -2334,7 +3503,24 @@ export default function DealDetailScreen() {
                   <Ionicons name="person" size={18} color={colors.primary} />
                   <Text style={[styles.cardTitle, { color: colors.foreground }]}>Homeowner</Text>
                 </View>
-                <TouchableOpacity onPress={() => setIsEditingOverview(!isEditingOverview)}>
+                <TouchableOpacity onPress={() => {
+                  if (!isEditingOverview) {
+                    // Starting to edit - populate form with current deal values
+                    setOverviewForm({
+                      homeowner_name: deal.homeowner_name || '',
+                      homeowner_phone: deal.homeowner_phone || '',
+                      homeowner_email: deal.homeowner_email || '',
+                      address: deal.address || '',
+                      city: deal.city || '',
+                      state: deal.state || '',
+                      zip_code: deal.zip_code || '',
+                      roof_type: deal.roof_type || '',
+                      roof_squares: deal.roof_squares?.toString() || '',
+                      notes: deal.notes || '',
+                    });
+                  }
+                  setIsEditingOverview(!isEditingOverview);
+                }}>
                   <Ionicons name={isEditingOverview ? "close" : "pencil"} size={18} color={colors.mutedForeground} />
                 </TouchableOpacity>
               </View>
@@ -2375,6 +3561,16 @@ export default function DealDetailScreen() {
                         autoCapitalize="none"
                       />
                     </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Roofing System Type</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                      value={overviewForm.roof_type}
+                      onChangeText={(v) => setOverviewForm({ ...overviewForm, roof_type: v })}
+                      placeholder="e.g., Composition Shingle, Metal, Tile"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
                   </View>
                   <TouchableOpacity style={styles.saveButton} onPress={handleSaveOverview} disabled={updateMutation.isPending}>
                     {updateMutation.isPending ? (
@@ -2420,7 +3616,7 @@ export default function DealDetailScreen() {
                 </View>
                 <View style={styles.infoItem}>
                   <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Roof Type</Text>
-                  <Text style={[styles.infoValue, { color: colors.foreground }]}>{deal.roof_type || '-'}</Text>
+                  <Text style={[styles.infoValue, { color: colors.foreground }]}>{deal.roofing_system_type || deal.roof_type || '-'}</Text>
                 </View>
                 <View style={styles.infoItem}>
                   <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Squares</Text>
@@ -2435,6 +3631,19 @@ export default function DealDetailScreen() {
                 <View style={styles.cardTitleRow}>
                   <Ionicons name="construct" size={18} color={colors.primary} />
                   <Text style={[styles.cardTitle, { color: colors.foreground }]}>Material Specifications</Text>
+                  {/* Autosave indicator */}
+                  {isEditingMaterials && (
+                    <View style={{ marginLeft: 8 }}>
+                      {materialsSaving ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <ActivityIndicator size="small" color="#F59E0B" />
+                          <Text style={{ color: '#F59E0B', fontSize: 11 }}>Saving...</Text>
+                        </View>
+                      ) : materialsLastSaved ? (
+                        <Text style={{ color: '#22C55E', fontSize: 11 }}>✓ Saved</Text>
+                      ) : null}
+                    </View>
+                  )}
                 </View>
                 <TouchableOpacity
                   onPress={() => {
@@ -2446,6 +3655,15 @@ export default function DealDetailScreen() {
                         material_color: materialsForm.material_color || null,
                         drip_edge: materialsForm.drip_edge || null,
                         vent_color: materialsForm.vent_color || null,
+                      });
+                    } else {
+                      // Starting to edit - populate form with current deal values
+                      setMaterialsForm({
+                        material_category: deal.material_category || '',
+                        material_type: deal.material_type || '',
+                        material_color: deal.material_color || '',
+                        drip_edge: deal.drip_edge || '',
+                        vent_color: deal.vent_color || '',
                       });
                     }
                     setIsEditingMaterials(!isEditingMaterials);
@@ -2471,7 +3689,7 @@ export default function DealDetailScreen() {
                   <View style={styles.inputGroup}>
                     <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Material Category</Text>
                     <View style={styles.categoryButtons}>
-                      {['Single', 'Metal', 'Architectural', 'Architectural Metal'].map((cat) => (
+                      {['Shingle', 'Metal', 'Architectural', 'Architectural Metal'].map((cat) => (
                         <TouchableOpacity
                           key={cat}
                           style={[
@@ -2655,7 +3873,24 @@ export default function DealDetailScreen() {
                 </View>
                 {/* Only allow editing if financials are not locked */}
                 {!deal.approved_date && (
-                  <TouchableOpacity onPress={() => setIsEditingInsurance(!isEditingInsurance)}>
+                  <TouchableOpacity onPress={() => {
+                    if (!isEditingInsurance) {
+                      // Starting to edit - populate form with current deal values
+                      setInsuranceForm({
+                        insurance_company: deal.insurance_company || '',
+                        policy_number: deal.policy_number || '',
+                        claim_number: deal.claim_number || '',
+                        date_of_loss: deal.date_of_loss || '',
+                        deductible: deal.deductible?.toString() || '',
+                        rcv: deal.rcv?.toString() || '',
+                        acv: deal.acv?.toString() || '',
+                        depreciation: deal.depreciation?.toString() || '',
+                        adjuster_name: deal.adjuster_name || '',
+                        adjuster_phone: deal.adjuster_phone || '',
+                      });
+                    }
+                    setIsEditingInsurance(!isEditingInsurance);
+                  }}>
                     <Ionicons name={isEditingInsurance ? "close" : "pencil"} size={18} color="#6B7280" />
                   </TouchableOpacity>
                 )}
@@ -2719,6 +3954,16 @@ export default function DealDetailScreen() {
                         placeholderTextColor={colors.mutedForeground}
                       />
                     </View>
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Date of Loss</Text>
+                    <TextInput
+                      style={[styles.input, { backgroundColor: isDark ? colors.secondary : '#F9FAFB', borderColor: isDark ? colors.border : '#E5E7EB', color: colors.foreground }]}
+                      value={insuranceForm.date_of_loss}
+                      onChangeText={(v) => setInsuranceForm({ ...insuranceForm, date_of_loss: v })}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={colors.mutedForeground}
+                    />
                   </View>
                   <View style={styles.inputRow}>
                     <View style={[styles.inputGroup, { flex: 1 }]}>
@@ -2997,6 +4242,18 @@ export default function DealDetailScreen() {
             </View>
 
             {/* Commission Details Card - Only show after admin approves financials */}
+            {/* Hide/Show toggle for presenting to homeowner */}
+            <TouchableOpacity
+              style={[styles.hideCommissionToggle, { backgroundColor: isDark ? colors.secondary : '#F3F4F6', borderColor: colors.border }]}
+              onPress={() => setHideCommission(!hideCommission)}
+            >
+              <Ionicons name={hideCommission ? "eye-off" : "eye"} size={18} color={colors.mutedForeground} />
+              <Text style={{ color: colors.mutedForeground, fontSize: 13, marginLeft: 6 }}>
+                {hideCommission ? 'More Info' : 'Hide Info'}
+              </Text>
+            </TouchableOpacity>
+
+            {!hideCommission && (
             <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
               <View style={styles.cardTitleRow}>
                 <Ionicons name="cash" size={18} color="#22C55E" />
@@ -3077,6 +4334,7 @@ export default function DealDetailScreen() {
                 </View>
               )}
             </View>
+            )}
 
             {/* Adjuster Card */}
             <View style={[styles.card, { backgroundColor: isDark ? colors.muted : '#FFFFFF', borderColor: colors.border }]}>
@@ -3153,8 +4411,19 @@ export default function DealDetailScreen() {
                     </View>
                   </View>
 
-                  {/* View Signature if available */}
-                  {deal.signature_url && (
+                  {/* View Full Agreement Document */}
+                  {deal.agreement_document_url && (
+                    <TouchableOpacity
+                      style={[styles.docAction, { marginTop: 10 }]}
+                      onPress={() => handleViewReceipt(deal.agreement_document_url!, 'Signed Agreement')}
+                    >
+                      <Ionicons name="document-text" size={20} color={colors.primary} />
+                      <Text style={styles.docActionText}>View Full Agreement</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* View Signature only if no full agreement */}
+                  {deal.signature_url && !deal.agreement_document_url && (
                     <TouchableOpacity
                       style={[styles.docAction, { marginTop: 10 }]}
                       onPress={() => handleViewDocument(deal.signature_url!)}
@@ -3850,166 +5119,421 @@ export default function DealDetailScreen() {
         </View>
       </Modal>
 
-      {/* Agreement & Signature Modal */}
+      {/* Agreement & Signature Modal - Stepped Signing Flow */}
       <Modal visible={showSignaturePad} animationType="slide">
         <SafeAreaView style={styles.signatureModalContainer}>
           <View style={[styles.signatureModalHeader, { paddingTop: 16 }]}>
-            <TouchableOpacity onPress={() => setShowSignaturePad(false)} style={styles.signatureCloseBtn}>
+            <TouchableOpacity onPress={() => {
+              setShowSignaturePad(false);
+              setAgreementStep(0);
+              setFeeInitials(null);
+              setRepSignature(null);
+              setOwnerSignature(null);
+              setDeckingInitials(null);
+              setConstructionSignature(null);
+              setSupplementsSignature(null);
+            }} style={styles.signatureCloseBtn}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.signatureModalTitle}>Insurance Agreement</Text>
+            <Text style={styles.signatureModalTitle}>
+              {agreementStep === 0 ? 'Insurance Agreement' : `Signature ${agreementStep} of 6`}
+            </Text>
             <View style={{ width: 60 }} />
           </View>
 
-          <ScrollView
-            style={styles.agreementScrollView}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={agreementScrollEnabled}
-          >
-            {/* Company Header */}
-            <View style={styles.agreementHeader}>
-              <Text style={styles.agreementCompanyName}>TITAN PRIME SOLUTIONS</Text>
-              <Text style={styles.agreementTagline}>INSURED & BONDED</Text>
+          {/* Progress indicator */}
+          {agreementStep > 0 && (
+            <View style={styles.signatureProgress}>
+              {[1, 2, 3, 4, 5, 6].map((step) => (
+                <View
+                  key={step}
+                  style={[
+                    styles.signatureProgressDot,
+                    step <= agreementStep && { backgroundColor: colors.primary },
+                    step < agreementStep && { backgroundColor: '#22C55E' },
+                  ]}
+                />
+              ))}
             </View>
+          )}
 
-            {/* Deal Info */}
-            <View style={styles.agreementInfoGrid}>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Homeowner Name</Text>
-                <Text style={styles.agreementInfoValue}>{deal.homeowner_name}</Text>
-              </View>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Date</Text>
-                <Text style={styles.agreementInfoValue}>{format(new Date(), 'MMM d, yyyy')}</Text>
-              </View>
-              <View style={[styles.agreementInfoItem, { flex: 2 }]}>
-                <Text style={styles.agreementInfoLabel}>Address</Text>
-                <Text style={styles.agreementInfoValue}>
-                  {deal.address}{deal.city ? `, ${deal.city}` : ''}{deal.state ? `, ${deal.state}` : ''} {deal.zip_code || ''}
+          {/* Step 0: Read Agreement */}
+          {agreementStep === 0 && (
+            <>
+              <ScrollView
+                style={styles.agreementScrollView}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Company Header */}
+                <View style={styles.agreementHeader}>
+                  <Text style={styles.agreementCompanyName}>TITAN PRIME SOLUTIONS</Text>
+                  <Text style={styles.agreementTagline}>INSURANCE-CONTINGENT ROOFING AGREEMENT</Text>
+                </View>
+
+                <View style={styles.agreementDivider} />
+
+                {/* OWNER & CLAIM INFORMATION */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>OWNER & CLAIM INFORMATION</Text>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Owner Full Name:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_name || '________________________________'}</Text>
+                  </View>
+
+              <View style={styles.contractField}>
+                <Text style={styles.contractFieldLabel}>Property Address:</Text>
+                <Text style={styles.contractFieldValue}>
+                  {deal.address || '________________________________'}
+                  {deal.city ? `, ${deal.city}` : ''}
+                  {deal.state ? `, ${deal.state}` : ''}
+                  {deal.zip_code ? ` ${deal.zip_code}` : ''}
                 </Text>
               </View>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Insurance Company</Text>
-                <Text style={styles.agreementInfoValue}>{deal.insurance_company || '-'}</Text>
-              </View>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Claim Number</Text>
-                <Text style={styles.agreementInfoValue}>{deal.claim_number || '-'}</Text>
-              </View>
-            </View>
 
-            <View style={styles.agreementDivider} />
-
-            {/* Agreement Terms */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>INSURANCE AGREEMENT</Text>
-              <Text style={styles.agreementText}>
-                This agreement is contingent upon the approval of your claim by your insurance company.
-                Upon claim approval, Titan Prime Solutions will perform the repairs or replacements
-                specified by the "loss statement" provided by your insurance company. Repairs will be
-                performed for insurance funds only, with the homeowner being responsible for paying their
-                insurance deductible.
-              </Text>
-              <Text style={styles.agreementText}>
-                Any material upgrade or additional work authorized by the Homeowner will be an additional
-                charge to be paid for by the homeowner. The homeowner agrees to provide Titan Prime Solutions
-                with a copy of the insurance loss statement. In addition, Homeowner will pay Titan Prime Solutions
-                for any supplemental work approved by the insurance company for the amount of the insurance quote.
-              </Text>
-            </View>
-
-            {/* Cancellation Policy */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>CANCELLATION POLICY</Text>
-              <Text style={styles.agreementText}>
-                If this agreement is canceled by the Homeowner after the three days right of rescission,
-                but after approval for the claim, the homeowner agrees to pay Titan Prime Solutions for
-                20% of the contract price outlined on the insurance loss statement as the "RCV" or
-                "Replacement Cost Value". This is not as a penalty, but as compensation for claim services
-                provided by the project manager up to the time of cancellation.
-              </Text>
-            </View>
-
-            {/* Right of Rescission */}
-            <View style={[styles.agreementSection, styles.agreementHighlight]}>
-              <Text style={styles.agreementSectionTitle}>3 DAY RIGHT OF RESCISSION</Text>
-              <Text style={styles.agreementText}>
-                Homeowners shall have the right to cancel this contract within three (3) days after the
-                signing of the contract. Should the Homeowner decide to cancel the contract, the homeowner
-                must notify Titan Prime Solutions in writing. The notice of cancellation must be signed
-                and dated, and Homeowner must clearly state the intention to cancel.
-              </Text>
-            </View>
-
-            <View style={styles.agreementDivider} />
-
-            {/* Material Specifications */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>Material Specifications</Text>
-              <View style={styles.agreementInfoGrid}>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Category</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.material_category || '-'}</Text>
-                </View>
-                {(deal.material_category === 'Metal' || deal.material_category === 'Architectural Metal') && (
-                  <View style={styles.agreementInfoItem}>
-                    <Text style={styles.agreementInfoLabel}>Metal Type</Text>
-                    <Text style={styles.agreementInfoValue}>{deal.material_type || '-'}</Text>
+              <View style={styles.contractField}>
+                <Text style={styles.contractFieldLabel}>Primary Phone:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_phone || '________________________________'}</Text>
                   </View>
-                )}
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Material Color</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.material_color || '-'}</Text>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Email Address:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_email || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Insurance Carrier:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.insurance_company || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Policy ID:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.policy_number || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Claim Reference #:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.claim_number || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Reported Date of Loss:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.date_of_loss ? format(new Date(deal.date_of_loss), 'MMMM d, yyyy') : '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Roofing System Type (Existing):</Text>
+                    <Text style={styles.contractFieldValue}>{deal.roof_type || deal.material_category || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Assigned Adjuster Name:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.adjuster_name || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Adjuster Phone #:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.adjuster_phone || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Prime PRO:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.rep_name || '________________________________'}</Text>
+                  </View>
                 </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Drip Edge</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.drip_edge || '-'}</Text>
+
+                <View style={styles.agreementDivider} />
+
+                {/* INSURANCE CONTINGENCY & CLAIM SERVICES */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>INSURANCE CONTINGENCY & CLAIM SERVICES</Text>
+                  <Text style={styles.agreementText}>
+                    This Agreement is entered into based on the outcome of the insurance claim process. Titan Prime Solutions' scope of work is limited to items approved by the insurer. Owner is responsible for any applicable deductible and for any upgrades, additions, or services not included in the insurer's determination of coverage. Owner agrees to provide Titan Prime Solutions with relevant insurance documentation necessary to perform the work.
+                  </Text>
                 </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Vent Color</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.vent_color || '-'}</Text>
+
+                <View style={styles.agreementDivider} />
+
+                {/* INSURANCE CLAIM SERVICES FEE */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>INSURANCE CLAIM SERVICES FEE (APPROVAL-BASED)</Text>
+                  <Text style={styles.agreementText}>
+                    If Owner cancels this Agreement after insurance approval and after Titan Prime Solutions has performed insurance-related services, including inspections, measurements, documentation, claim preparation, or insurer coordination, Owner agrees to pay Titan Prime Solutions a flat claim services fee of $1,250.
+                  </Text>
+                  <Text style={styles.agreementText}>
+                    This fee reflects the reasonable value of services rendered and is not based on insurance proceeds. The fee becomes due and payable upon cancellation following claim approval.
+                  </Text>
+                  <View style={[styles.signatureRequiredBox, feeInitials && styles.signatureCompletedBox]}>
+                    <Text style={styles.signatureRequiredLabel}>$1,250 Claim Services Fee – Owner Initials</Text>
+                    {feeInitials ? (
+                      <Image source={{ uri: feeInitials }} style={styles.miniSignaturePreview} />
+                    ) : (
+                      <Text style={styles.signatureRequiredText}>Signature required in Step 1</Text>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Roof Squares</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.roof_squares || '-'}</Text>
+
+                <View style={styles.agreementDivider} />
+
+                {/* 3-DAY RIGHT TO CANCEL */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>3-DAY RIGHT TO CANCEL</Text>
+                  <Text style={styles.agreementText}>
+                    Owner may terminate this Agreement within three (3) business days of execution by providing written notice via email to titanprimesolutionstx@gmail.com, which must be received no later than the close of business on the third business day following execution of this Agreement.
+                  </Text>
+                  <Text style={styles.agreementText}>
+                    This Agreement is governed by the laws of the State of Texas.
+                  </Text>
                 </View>
+
+                <View style={styles.agreementDivider} />
+
+                {/* ACCEPTANCE */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>ACCEPTANCE</Text>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Prime PRO (Printed Name):</Text>
+                    <Text style={styles.contractFieldValue}>{deal.rep_name || '________________________________'}</Text>
+                  </View>
+                  <View style={[styles.signatureRequiredBox, repSignature && styles.signatureCompletedBox]}>
+                    <Text style={styles.signatureRequiredLabel}>Prime PRO Signature</Text>
+                    {repSignature ? (
+                      <Image source={{ uri: repSignature }} style={styles.miniSignaturePreview} />
+                    ) : (
+                      <Text style={styles.signatureRequiredText}>Signature required in Step 2</Text>
+                    )}
+                  </View>
+
+                  <View style={[styles.contractField, { marginTop: 16 }]}>
+                    <Text style={styles.contractFieldLabel}>Property Owner (Printed Name):</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_name || '________________________________'}</Text>
+                  </View>
+                  <View style={[styles.signatureRequiredBox, ownerSignature && styles.signatureCompletedBox]}>
+                    <Text style={styles.signatureRequiredLabel}>Property Owner Signature</Text>
+                    {ownerSignature ? (
+                      <Image source={{ uri: ownerSignature }} style={styles.miniSignaturePreview} />
+                    ) : (
+                      <Text style={styles.signatureRequiredText}>Signature required in Step 3</Text>
+                    )}
+                  </View>
+
+                  <View style={[styles.contractField, { marginTop: 16 }]}>
+                    <Text style={styles.contractFieldLabel}>Date Signed:</Text>
+                    <Text style={styles.contractFieldValue}>{format(new Date(), 'MMMM d, yyyy')}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.agreementDivider} />
+                <View style={styles.agreementDivider} />
+
+                {/* IMPORTANT NOTICE TO PROPERTY OWNER */}
+                <View style={styles.agreementSection}>
+                  <Text style={[styles.agreementSectionTitle, { color: '#92400E' }]}>IMPORTANT NOTICE TO PROPERTY OWNER</Text>
+
+                  <Text style={styles.agreementText}>
+                    Titan Prime Solutions will begin work on the scheduled installation date during normal construction hours and may mobilize crews, equipment, and materials without additional notice.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Roof installation requires fastening materials through roof decking in accordance with applicable building codes. As a result, fasteners may be visible from attic or interior roof areas.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Authorized representatives of Titan Prime Solutions, including crew members, supervisors, inspectors, and documentation personnel, may access the Property as required to perform or document the work.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    The Owner is responsible for removing vehicles, personal property, and exterior items from areas surrounding the Property that could be affected by falling debris, including furniture, planters, trailers, and patio or pool items.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    A dumpster or equipment trailer may be placed in the most accessible area of the Property and may temporarily block driveway or garage access.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Construction vibration may occur. The Owner should remove or secure items mounted on interior walls. Titan Prime Solutions is not responsible for damage to unsecured interior items.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Certain existing components, including skylights, drywall, ceiling finishes, gutters, stucco, paint, patio covers, or HVAC components, may be affected due to age, prior installation, or vibration. Titan Prime Solutions is not responsible for incidental damage to pre-existing materials resulting from normal and non-negligent construction activities.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Construction areas may contain nails, tools, cords, or debris. The Owner is responsible for keeping occupants and visitors clear of work areas. Titan Prime Solutions is not responsible for injuries resulting from failure to do so.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Permits may be posted on the Property as required and must remain until inspections are completed.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    If satellite, internet, or similar services require disconnection or adjustment, the Owner is responsible for coordinating reconnection. Titan Prime Solutions is not responsible for service interruptions or implied solar warranties.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    The Owner must disclose any concealed utilities, gas lines, electrical lines, refrigerant lines, or other systems beneath the roof decking prior to installation. Titan Prime Solutions is not responsible for damage to undisclosed conditions.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Existing HVAC components showing corrosion or deterioration will be reinstalled as-is unless replacement is authorized. Titan Prime Solutions is not responsible for issues related to pre-existing conditions.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    The Owner is responsible for HOA compliance, including material and color approvals.
+                  </Text>
+
+                  <View style={[styles.signatureRequiredBox, { backgroundColor: '#FEE2E2', borderColor: '#FECACA' }, deckingInitials && styles.signatureCompletedBox]}>
+                    <Text style={[styles.agreementText, { color: '#DC2626', fontWeight: '600', marginBottom: 8 }]}>
+                      Replacement of rotted decking, if discovered, will be charged at $3.00 per square foot.
+                    </Text>
+                    <Text style={styles.signatureRequiredLabel}>Owner Initials</Text>
+                    {deckingInitials ? (
+                      <Image source={{ uri: deckingInitials }} style={styles.miniSignaturePreview} />
+                    ) : (
+                      <Text style={styles.signatureRequiredText}>Signature required in Step 4</Text>
+                    )}
+                  </View>
+
+                  <Text style={styles.agreementText}>
+                    Abusive, threatening, or unprofessional conduct toward Contractor personnel will result in immediate suspension of work and termination of the Agreement, with the Owner responsible for costs incurred.
+                  </Text>
+                </View>
+
+                <View style={styles.agreementDivider} />
+
+                {/* ACKNOWLEDGMENT – CONSTRUCTION NOTICE */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>ACKNOWLEDGMENT – CONSTRUCTION NOTICE</Text>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Owner Name:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_name || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Property Address:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.address || '________________________________'}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+                    <View style={{ flex: 2 }}>
+                      <View style={[styles.signatureRequiredBox, constructionSignature && styles.signatureCompletedBox]}>
+                        <Text style={styles.signatureRequiredLabel}>Owner Signature</Text>
+                        {constructionSignature ? (
+                          <Image source={{ uri: constructionSignature }} style={styles.miniSignaturePreview} />
+                        ) : (
+                          <Text style={styles.signatureRequiredText}>Signature required in Step 5</Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contractFieldLabel}>Date:</Text>
+                      <Text style={styles.contractFieldValue}>{format(new Date(), 'MM/dd/yyyy')}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={styles.agreementDivider} />
+                <View style={styles.agreementDivider} />
+
+                {/* NOTICE REGARDING ADDITIONAL INSURANCE REQUESTS (SUPPLEMENTS) */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>NOTICE REGARDING ADDITIONAL INSURANCE REQUESTS (SUPPLEMENTS)</Text>
+
+                  <Text style={styles.agreementText}>
+                    During the course of an insurance-related roofing project, additional damage, labor, or materials may be identified that were not included in the insurer's initial estimate. When this occurs, Contractor may submit additional documentation to the insurance company requesting review of those items.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    These requests may be necessary when certain conditions were not visible at the time of the original inspection or when quantities differ from the insurer's original assessment. Examples may include additional roofing layers, damaged decking, required code items, disposal costs, or adjustments resulting from field measurements.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    For example, if the insurer's estimate is based on one material quantity, but actual installation requires a greater amount due to roof configuration, waste factors, or hidden conditions, additional documentation may be submitted for the difference.
+                  </Text>
+
+                  <Text style={styles.agreementText}>
+                    Insurance coverage decisions are governed by the terms and exclusions of the policy.
+                  </Text>
+                </View>
+
+                <View style={styles.agreementDivider} />
+
+                {/* ACKNOWLEDGMENT – INSURANCE SUPPLEMENTS */}
+                <View style={styles.agreementSection}>
+                  <Text style={styles.agreementSectionTitle}>ACKNOWLEDGMENT – INSURANCE SUPPLEMENTS</Text>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Owner Name:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.homeowner_name || '________________________________'}</Text>
+                  </View>
+
+                  <View style={styles.contractField}>
+                    <Text style={styles.contractFieldLabel}>Property Address:</Text>
+                    <Text style={styles.contractFieldValue}>{deal.address || '________________________________'}</Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+                    <View style={{ flex: 2 }}>
+                      <View style={[styles.signatureRequiredBox, supplementsSignature && styles.signatureCompletedBox]}>
+                        <Text style={styles.signatureRequiredLabel}>Owner Signature</Text>
+                        {supplementsSignature ? (
+                          <Image source={{ uri: supplementsSignature }} style={styles.miniSignaturePreview} />
+                        ) : (
+                          <Text style={styles.signatureRequiredText}>Signature required in Step 6</Text>
+                        )}
+                      </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.contractFieldLabel}>Date:</Text>
+                      <Text style={styles.contractFieldValue}>{format(new Date(), 'MM/dd/yyyy')}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+
+              {/* Footer - Start Signing */}
+              <View style={styles.signatureActions}>
+                <TouchableOpacity
+                  style={styles.signatureCancelButton}
+                  onPress={() => setShowSignaturePad(false)}
+                >
+                  <Text style={styles.signatureCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.signatureSaveButton}
+                  onPress={() => setAgreementStep(1)}
+                >
+                  <Ionicons name="create" size={20} color="#FFF" />
+                  <Text style={styles.signatureSaveText}>Start Signing (6 signatures)</Text>
+                </TouchableOpacity>
               </View>
-            </View>
+            </>
+          )}
 
-            {/* Warranty */}
-            <View style={[styles.agreementSection, styles.warrantySection]}>
-              <Text style={[styles.agreementSectionTitle, { color: colors.primary }]}>Warranty Information</Text>
-              <Text style={styles.warrantyItem}>• 5 Year Labor Warranty provided by Titan Prime Solutions</Text>
-              <Text style={styles.warrantyItem}>• 30-Year Manufacturer Warranty (No Charge Upgrade) (110 Mph Wind Rated)</Text>
-              <Text style={styles.warrantyItem}>• 40 Year Manufacturer Warranty (No Charge Upgrade) (150 Mph Wind Rated) on Metal Panels</Text>
-            </View>
-
-            {/* OSB Notice */}
-            <View style={[styles.agreementSection, styles.warningSection]}>
-              <Text style={styles.warningText}>
-                **ROTTED OSB WILL COST AN ADDITIONAL $3.00 PER SQFT TO REPLACE.
-              </Text>
-            </View>
-
-            <View style={styles.agreementDivider} />
-
-            {/* Signature Section */}
-            <View style={styles.agreementSignatureSection}>
-              <Text style={styles.agreementSectionTitle}>Homeowner Signature</Text>
-              <Text style={styles.agreementText}>
-                By signing below, I agree to and understand the terms above.
+          {/* Step 1: $1,250 Fee Initials */}
+          {agreementStep === 1 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>$1,250 Claim Services Fee</Text>
+              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
+              <Text style={styles.signatureStepDescription}>
+                By initialing below, Owner acknowledges the $1,250 claim services fee if canceling after insurance approval.
               </Text>
 
               <View style={styles.signatureCanvasContainer}>
                 <SignatureCanvas
-                  ref={signatureRef}
-                  onOK={handleSignatureSave}
-                  onEmpty={() => Alert.alert('Error', 'Please sign before saving')}
-                  onBegin={() => setAgreementScrollEnabled(false)}
-                  onEnd={() => setAgreementScrollEnabled(true)}
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setFeeInitials(sig);
+                    setAgreementStep(2);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please provide your initials')}
                   descriptionText=""
                   clearText="Clear"
-                  confirmText="Save Signature"
+                  confirmText="Confirm Initials"
                   webStyle={`
                     .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
                     .m-signature-pad--body { border: none; }
@@ -4022,34 +5546,270 @@ export default function DealDetailScreen() {
                 />
               </View>
 
-              <TouchableOpacity
-                onPress={() => signatureRef.current?.clearSignature()}
-                style={styles.clearSignatureBtn}
-              >
-                <Ionicons name="refresh" size={16} color="#6B7280" />
-                <Text style={styles.clearSignatureText}>Clear Signature</Text>
-              </TouchableOpacity>
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(0)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
             </View>
+          )}
 
-            <View style={{ height: 20 }} />
-          </ScrollView>
+          {/* Step 2: Prime PRO Signature */}
+          {agreementStep === 2 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Prime PRO Signature</Text>
+              <Text style={styles.signatureStepSubtitle}>{deal.rep_name || 'Sales Representative'}</Text>
+              <Text style={styles.signatureStepDescription}>
+                Prime PRO signature for the Acceptance section.
+              </Text>
 
-          {/* Footer Buttons */}
-          <View style={styles.signatureActions}>
-            <TouchableOpacity
-              style={styles.signatureCancelButton}
-              onPress={() => setShowSignaturePad(false)}
-            >
-              <Text style={styles.signatureCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.signatureSaveButton}
-              onPress={() => signatureRef.current?.readSignature()}
-            >
-              <Ionicons name="checkmark" size={20} color="#FFF" />
-              <Text style={styles.signatureSaveText}>Sign Agreement</Text>
-            </TouchableOpacity>
-          </View>
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setRepSignature(sig);
+                    setAgreementStep(3);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm Signature"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(1)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 3: Property Owner Signature */}
+          {agreementStep === 3 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Property Owner Signature</Text>
+              <Text style={styles.signatureStepSubtitle}>{deal.homeowner_name}</Text>
+              <Text style={styles.signatureStepDescription}>
+                Property owner signature for the Acceptance section.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setOwnerSignature(sig);
+                    setAgreementStep(4);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm Signature"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(2)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 4: Rotted Decking Initials */}
+          {agreementStep === 4 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Rotted Decking Fee</Text>
+              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
+              <View style={{ backgroundColor: '#FEE2E2', padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                <Text style={{ color: '#DC2626', fontWeight: '600', fontSize: 14 }}>
+                  Replacement of rotted decking, if discovered, will be charged at $3.00 per square foot.
+                </Text>
+              </View>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setDeckingInitials(sig);
+                    setAgreementStep(5);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please provide your initials')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm Initials"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(3)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 5: Construction Notice Signature */}
+          {agreementStep === 5 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Construction Notice</Text>
+              <Text style={styles.signatureStepSubtitle}>Acknowledgment Signature</Text>
+              <Text style={styles.signatureStepDescription}>
+                By signing, you acknowledge receipt of the Important Notice to Property Owner.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setConstructionSignature(sig);
+                    setAgreementStep(6);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm Signature"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(4)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 6: Insurance Supplements Signature */}
+          {agreementStep === 6 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Insurance Supplements</Text>
+              <Text style={styles.signatureStepSubtitle}>Acknowledgment Signature</Text>
+              <Text style={styles.signatureStepDescription}>
+                By signing, you acknowledge the Notice Regarding Additional Insurance Requests.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={agreementSignatureRef}
+                  onOK={(sig: string) => {
+                    setSupplementsSignature(sig);
+                    // All signatures complete - save agreement
+                    handleSignatureSave(sig);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Complete Agreement"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => setAgreementStep(5)} style={[styles.clearSignatureBtn, { marginRight: 8 }]}>
+                  <Ionicons name="arrow-back" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Back</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => agreementSignatureRef.current?.readSignature()} style={[styles.confirmSignatureBtn, { backgroundColor: '#22C55E' }]}>
+                  <Ionicons name="checkmark-circle" size={18} color="#FFF" />
+                  <Text style={styles.confirmSignatureText}>Complete & Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -4175,516 +5935,469 @@ export default function DealDetailScreen() {
         </TouchableOpacity>
       </Modal>
 
-      {/* Completion Form Signature Modal */}
+      {/* Completion Form Signature Modal - FINAL COMPLETION & WALK-THROUGH RECORD */}
       <Modal visible={showCompletionFormSignature} animationType="slide">
         <SafeAreaView style={styles.signatureModalContainer}>
           <View style={[styles.signatureModalHeader, { paddingTop: 16 }]}>
-            <TouchableOpacity onPress={() => setShowCompletionFormSignature(false)} style={styles.signatureCloseBtn}>
+            <TouchableOpacity onPress={() => {
+              setShowCompletionFormSignature(false);
+              setCompletionFormStep(0);
+              setSection1Initials(null);
+              setSection2Initials(null);
+              setRepCompletionSignature(null);
+              setHomeownerCompletionSignature(null);
+            }} style={styles.signatureCloseBtn}>
               <Ionicons name="close" size={24} color="#374151" />
             </TouchableOpacity>
-            <Text style={styles.signatureModalTitle}>Final Inspection Statement</Text>
+            <Text style={styles.signatureModalTitle}>Final Completion & Walk-Through</Text>
             <View style={{ width: 60 }} />
           </View>
 
-          <ScrollView
-            style={styles.agreementScrollView}
-            showsVerticalScrollIndicator={false}
-            scrollEnabled={agreementScrollEnabled}
-          >
-            {/* Company Header */}
-            <View style={styles.agreementHeader}>
-              <Text style={styles.agreementCompanyName}>TITAN PRIME SOLUTIONS</Text>
-              <Text style={styles.agreementTagline}>FINAL INSPECTION STATEMENT</Text>
-            </View>
-
-            {/* Property Info */}
-            <View style={styles.agreementInfoGrid}>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Homeowner Name</Text>
-                <Text style={styles.agreementInfoValue}>{deal.homeowner_name}</Text>
-              </View>
-              <View style={styles.agreementInfoItem}>
-                <Text style={styles.agreementInfoLabel}>Date</Text>
-                <Text style={styles.agreementInfoValue}>{format(new Date(), 'MMM d, yyyy')}</Text>
-              </View>
-              <View style={[styles.agreementInfoItem, { flex: 2 }]}>
-                <Text style={styles.agreementInfoLabel}>Property Address</Text>
-                <Text style={styles.agreementInfoValue}>
-                  {deal.address}{deal.city ? `, ${deal.city}` : ''}{deal.state ? `, ${deal.state}` : ''} {deal.zip_code || ''}
-                </Text>
+          {/* Step indicator */}
+          {completionFormStep > 0 && (
+            <View style={styles.signatureStepIndicator}>
+              <Text style={styles.signatureStepText}>Signature {completionFormStep} of 4</Text>
+              <View style={styles.signatureStepDots}>
+                {[1, 2, 3, 4].map(step => (
+                  <View
+                    key={step}
+                    style={[
+                      styles.signatureStepDot,
+                      step <= completionFormStep && styles.signatureStepDotActive
+                    ]}
+                  />
+                ))}
               </View>
             </View>
+          )}
 
-            {/* Work Completed Section */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>Work Completed</Text>
-              <View style={styles.agreementInfoGrid}>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Material Category</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.material_category || '-'}</Text>
-                </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Material Color</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.material_color || '-'}</Text>
-                </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Drip Edge</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.drip_edge || '-'}</Text>
-                </View>
-                <View style={styles.agreementInfoItem}>
-                  <Text style={styles.agreementInfoLabel}>Vent Color</Text>
-                  <Text style={styles.agreementInfoValue}>{deal.vent_color || '-'}</Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Inspection Checklist */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>Final Inspection Checklist</Text>
-              <View style={{ gap: 8, marginTop: 8 }}>
-                <Text style={styles.agreementText}>✓ All roofing materials have been installed according to manufacturer specifications</Text>
-                <Text style={styles.agreementText}>✓ All debris and materials have been removed from the property</Text>
-                <Text style={styles.agreementText}>✓ Gutters and downspouts have been cleared and are functional</Text>
-                <Text style={styles.agreementText}>✓ All flashing and vents have been properly installed</Text>
-                <Text style={styles.agreementText}>✓ Final walkthrough has been completed with homeowner</Text>
-              </View>
-            </View>
-
-            {/* Statement */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>Homeowner Acknowledgment</Text>
-              <Text style={styles.agreementText}>
-                I, the homeowner, have inspected the completed roofing work at the above address and confirm that:
-              </Text>
-              <View style={{ gap: 6, marginTop: 8 }}>
-                <Text style={styles.agreementText}>
-                  1. The work has been completed to my satisfaction.
-                </Text>
-                <Text style={styles.agreementText}>
-                  2. The work area has been cleaned and all debris has been removed.
-                </Text>
-                <Text style={styles.agreementText}>
-                  3. I have received information regarding the warranty for materials and workmanship.
-                </Text>
-                <Text style={styles.agreementText}>
-                  4. I authorize Titan Prime Solutions to collect any remaining balance due, including depreciation payments from the insurance company.
-                </Text>
-              </View>
-            </View>
-
-            {/* Warranty Info */}
-            <View style={styles.agreementSection}>
-              <Text style={styles.agreementSectionTitle}>Warranty Information</Text>
-              <Text style={styles.agreementText}>
-                Titan Prime Solutions provides a workmanship warranty for all labor and installation.
-                Material warranties are provided by the manufacturer. Please keep this document for your records.
-              </Text>
-            </View>
-
-            {/* Rep Signature Pad */}
-            <View style={styles.agreementSignatureSection}>
-              <Text style={styles.agreementSectionTitle}>Representative Signature</Text>
-              <Text style={styles.agreementText}>
-                By signing below, I (the representative) confirm this work has been completed.
-              </Text>
-
-              {deal.completion_form_signature_url ? (
-                <View style={{ alignItems: 'center', padding: 16, backgroundColor: '#F0FDF4', borderRadius: 8, marginTop: 8 }}>
-                  <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
-                  <Text style={{ color: '#22C55E', fontWeight: '600', marginTop: 4 }}>Rep Signature Saved</Text>
-                  {signedRepCompletionSigUrl && (
-                    <Image
-                      source={{ uri: signedRepCompletionSigUrl }}
-                      style={{ width: '100%', height: 80, resizeMode: 'contain', marginTop: 8 }}
-                    />
-                  )}
-                </View>
-              ) : (
-                <>
-                  <View style={styles.signatureCanvasContainer}>
-                    <SignatureCanvas
-                      ref={completionSignatureRef}
-                      onOK={(signature: string) => setRepCompletionSignature(signature)}
-                      onEmpty={() => {}}
-                      onBegin={() => setAgreementScrollEnabled(false)}
-                      onEnd={() => {
-                        setAgreementScrollEnabled(true);
-                        // Auto-capture signature when user lifts finger
-                        setTimeout(() => {
-                          completionSignatureRef.current?.readSignature();
-                        }, 100);
-                      }}
-                      descriptionText=""
-                      clearText="Clear"
-                      confirmText="Save"
-                      webStyle={`
-                        .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
-                        .m-signature-pad--body { border: none; }
-                        .m-signature-pad--footer { display: none; }
-                        body { background-color: #FFFFFF; margin: 0; padding: 0; }
-                        canvas { width: 100% !important; height: 100% !important; }
-                      `}
-                      backgroundColor="#FFFFFF"
-                      penColor="#111827"
-                    />
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        completionSignatureRef.current?.clearSignature();
-                        setRepCompletionSignature(null);
-                      }}
-                      style={styles.clearSignatureBtn}
-                    >
-                      <Ionicons name="refresh" size={16} color="#6B7280" />
-                      <Text style={styles.clearSignatureText}>Clear</Text>
-                    </TouchableOpacity>
-                    {repCompletionSignature && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                        <Text style={{ color: '#22C55E', marginLeft: 4, fontSize: 12 }}>Captured</Text>
-                      </View>
-                    )}
-                  </View>
-                </>
-              )}
-            </View>
-
-            {/* Homeowner Signature Pad */}
-            <View style={styles.agreementSignatureSection}>
-              <Text style={styles.agreementSectionTitle}>Homeowner Signature</Text>
-              <Text style={styles.agreementText}>
-                By signing below, I (the homeowner) confirm the work is complete and satisfactory.
-              </Text>
-
-              {deal.homeowner_completion_signature_url ? (
-                <View style={{ alignItems: 'center', padding: 16, backgroundColor: '#F0FDF4', borderRadius: 8, marginTop: 8 }}>
-                  <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
-                  <Text style={{ color: '#22C55E', fontWeight: '600', marginTop: 4 }}>Homeowner Signature Saved</Text>
-                  {signedHomeownerCompletionSigUrl && (
-                    <Image
-                      source={{ uri: signedHomeownerCompletionSigUrl }}
-                      style={{ width: '100%', height: 80, resizeMode: 'contain', marginTop: 8 }}
-                    />
-                  )}
-                </View>
-              ) : (
-                <>
-                  <View style={styles.signatureCanvasContainer}>
-                    <SignatureCanvas
-                      ref={homeownerCompletionSignatureRef}
-                      onOK={(signature: string) => setHomeownerCompletionSignature(signature)}
-                      onEmpty={() => {}}
-                      onBegin={() => setAgreementScrollEnabled(false)}
-                      onEnd={() => {
-                        setAgreementScrollEnabled(true);
-                        // Auto-capture signature when user lifts finger
-                        setTimeout(() => {
-                          homeownerCompletionSignatureRef.current?.readSignature();
-                        }, 100);
-                      }}
-                      descriptionText=""
-                      clearText="Clear"
-                      confirmText="Save"
-                      webStyle={`
-                        .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
-                        .m-signature-pad--body { border: none; }
-                        .m-signature-pad--footer { display: none; }
-                        body { background-color: #FFFFFF; margin: 0; padding: 0; }
-                        canvas { width: 100% !important; height: 100% !important; }
-                      `}
-                      backgroundColor="#FFFFFF"
-                      penColor="#111827"
-                    />
-                  </View>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        homeownerCompletionSignatureRef.current?.clearSignature();
-                        setHomeownerCompletionSignature(null);
-                      }}
-                      style={styles.clearSignatureBtn}
-                    >
-                      <Ionicons name="refresh" size={16} color="#6B7280" />
-                      <Text style={styles.clearSignatureText}>Clear</Text>
-                    </TouchableOpacity>
-                    {homeownerCompletionSignature && (
-                      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Ionicons name="checkmark-circle" size={16} color="#22C55E" />
-                        <Text style={{ color: '#22C55E', marginLeft: 4, fontSize: 12 }}>Captured</Text>
-                      </View>
-                    )}
-                  </View>
-                </>
-              )}
-            </View>
-
-            <View style={{ height: 20 }} />
-          </ScrollView>
-
-          {/* Footer Buttons */}
-          <View style={styles.signatureActions}>
-            <TouchableOpacity
-              style={styles.signatureCancelButton}
-              onPress={() => {
-                setShowCompletionFormSignature(false);
-                setRepCompletionSignature(null);
-                setHomeownerCompletionSignature(null);
-              }}
+          {/* Step 0: Read and fill form */}
+          {completionFormStep === 0 && (
+            <ScrollView
+              style={styles.agreementScrollView}
+              showsVerticalScrollIndicator={false}
             >
-              <Text style={styles.signatureCancelText}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.signatureSaveButton,
-                savingCompletionForm && { opacity: 0.7 }
-              ]}
-              disabled={savingCompletionForm}
-              onPress={async () => {
-                // Check if we have both signatures (either new or existing)
-                const hasRepSig = deal.completion_form_signature_url || repCompletionSignature;
-                const hasHomeownerSig = deal.homeowner_completion_signature_url || homeownerCompletionSignature;
+              {/* Company Header */}
+              <View style={styles.agreementHeader}>
+                <Text style={styles.agreementCompanyName}>TITAN PRIME SOLUTIONS</Text>
+                <Text style={styles.agreementTagline}>FINAL COMPLETION & WALK-THROUGH RECORD</Text>
+              </View>
 
-                if (!hasRepSig || !hasHomeownerSig) {
-                  Alert.alert('Signatures Required', 'Both representative and homeowner signatures are required. Please sign in both signature areas.');
-                  return;
-                }
+              <Text style={[styles.agreementText, { fontStyle: 'italic', marginBottom: 16 }]}>
+                This record relates to and is incorporated into the Roofing Agreement between Owner and Titan Prime Solutions.
+              </Text>
 
-                setSavingCompletionForm(true);
+              {/* Project Info */}
+              <View style={styles.contractField}>
+                <Text style={styles.contractFieldLabel}>Project Address:</Text>
+                <Text style={styles.contractFieldValue}>
+                  {deal.address || ''}
+                  {deal.city ? `, ${deal.city}` : ''}
+                  {deal.state ? `, ${deal.state}` : ''}
+                  {deal.zip_code ? ` ${deal.zip_code}` : ''}
+                </Text>
+              </View>
 
-                try {
-                  const updates: Partial<Deal> = {};
+              <View style={styles.contractField}>
+                <Text style={styles.contractFieldLabel}>Crew Lead Name:</Text>
+                <TextInput
+                  style={[styles.workflowInput, { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', marginTop: 4 }]}
+                  value={crewLeadName}
+                  onChangeText={setCrewLeadName}
+                  placeholder="Enter crew lead name"
+                  placeholderTextColor="#9CA3AF"
+                />
+              </View>
 
-                  console.log('[Completion Form] Starting save process...');
-                  console.log('[Completion Form] Rep signature exists:', !!repCompletionSignature);
-                  console.log('[Completion Form] Homeowner signature exists:', !!homeownerCompletionSignature);
-                  console.log('[Completion Form] Existing rep sig URL:', deal.completion_form_signature_url);
-                  console.log('[Completion Form] Existing homeowner sig URL:', deal.homeowner_completion_signature_url);
+              <View style={styles.contractField}>
+                <Text style={styles.contractFieldLabel}>Date of Review:</Text>
+                <Text style={styles.contractFieldValue}>{format(new Date(), 'MMMM d, yyyy')}</Text>
+              </View>
 
-                  // Upload rep signature if new
-                  if (repCompletionSignature && !deal.completion_form_signature_url) {
-                    console.log('[Completion Form] Uploading rep signature...');
-                    const repSignatureFileName = `rep_completion_signature-${Date.now()}.png`;
-                    const result = await uploadFile(
-                      repCompletionSignature,
-                      repSignatureFileName,
-                      'image/png',
-                      'completion_form',
-                      deal.id
-                    );
-                    console.log('[Completion Form] Rep signature upload result:', result);
-                    if (!result || !result.url) {
-                      // If upload failed to return URL, store the key instead so we can fetch signed URL later
-                      if (result?.key) {
-                        console.log('[Completion Form] No URL returned, storing key:', result.key);
-                        updates.completion_form_signature_url = result.key;
-                      } else {
-                        throw new Error('Failed to upload rep signature');
-                      }
-                    } else {
-                      updates.completion_form_signature_url = result.url;
-                    }
-                  }
+              {/* Walk-Through Type */}
+              <View style={[styles.agreementSection, { marginTop: 16 }]}>
+                <Text style={styles.contractFieldLabel}>Walk-Through Conducted (select one):</Text>
+                <View style={{ flexDirection: 'row', gap: 12, marginTop: 8 }}>
+                  {(['in_person', 'virtual', 'declined'] as const).map(type => (
+                    <TouchableOpacity
+                      key={type}
+                      style={[
+                        styles.categoryButton,
+                        { flex: 1, backgroundColor: '#F3F4F6', borderColor: '#E5E7EB' },
+                        walkThroughType === type && styles.categoryButtonActive
+                      ]}
+                      onPress={() => setWalkThroughType(type)}
+                    >
+                      <Text style={[
+                        styles.categoryButtonText,
+                        walkThroughType === type && styles.categoryButtonTextActive
+                      ]}>
+                        {type === 'in_person' ? 'In Person' : type === 'virtual' ? 'Virtual' : 'Declined'}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
 
-                  // Upload homeowner signature if new
-                  if (homeownerCompletionSignature && !deal.homeowner_completion_signature_url) {
-                    console.log('[Completion Form] Uploading homeowner signature...');
-                    const homeownerSignatureFileName = `homeowner_completion_signature-${Date.now()}.png`;
-                    const result = await uploadFile(
-                      homeownerCompletionSignature,
-                      homeownerSignatureFileName,
-                      'image/png',
-                      'completion_form',
-                      deal.id
-                    );
-                    console.log('[Completion Form] Homeowner signature upload result:', result);
-                    if (!result || !result.url) {
-                      // If upload failed to return URL, store the key instead so we can fetch signed URL later
-                      if (result?.key) {
-                        console.log('[Completion Form] No URL returned, storing key:', result.key);
-                        updates.homeowner_completion_signature_url = result.key;
-                      } else {
-                        throw new Error('Failed to upload homeowner signature');
-                      }
-                    } else {
-                      updates.homeowner_completion_signature_url = result.url;
-                    }
-                  }
+              {/* Individuals Present */}
+              <View style={[styles.agreementSection, { marginTop: 16 }]}>
+                <Text style={styles.agreementSectionTitle}>Individuals Present</Text>
 
-                  // Generate the full completion form HTML document with embedded signatures
-                  // Use base64 signatures for embedding in HTML (won't expire like signed URLs)
-                  const repSigUrl = repCompletionSignature || updates.completion_form_signature_url || deal.completion_form_signature_url;
-                  const homeownerSigUrl = homeownerCompletionSignature || updates.homeowner_completion_signature_url || deal.homeowner_completion_signature_url;
+                <View style={styles.contractField}>
+                  <Text style={styles.contractFieldLabel}>Owner(s):</Text>
+                  <TextInput
+                    style={[styles.workflowInput, { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', marginTop: 4 }]}
+                    value={individualsOwners || deal.homeowner_name}
+                    onChangeText={setIndividualsOwners}
+                    placeholder="Owner name(s)"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
 
-                  const completionFormHtml = `
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Final Inspection Statement - ${deal.homeowner_name}</title>
-  <style>
-    body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; color: #333; }
-    .header { background: #0F1E2E; color: white; padding: 20px; text-align: center; border-radius: 8px; margin-bottom: 20px; }
-    .header h1 { margin: 0; font-size: 24px; }
-    .header p { margin: 5px 0 0; opacity: 0.8; font-size: 14px; }
-    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
-    .info-item { background: #f9fafb; padding: 12px; border-radius: 6px; }
-    .info-label { font-size: 11px; color: #6b7280; margin-bottom: 4px; }
-    .info-value { font-size: 14px; font-weight: 600; color: #111827; }
-    .section { margin-bottom: 20px; }
-    .section-title { font-size: 14px; font-weight: 700; color: #111827; margin-bottom: 8px; border-bottom: 1px solid #e5e7eb; padding-bottom: 4px; }
-    .section-content { font-size: 12px; color: #4b5563; line-height: 1.6; }
-    .checklist { background: #f9fafb; padding: 15px; border-radius: 8px; }
-    .checklist-item { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 13px; }
-    .check { color: #22c55e; font-weight: bold; }
-    .materials { background: rgba(201, 162, 77, 0.1); padding: 15px; border-radius: 8px; margin: 15px 0; }
-    .materials-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .warranty { background: #f0fdf4; border: 1px solid #22c55e; padding: 15px; border-radius: 8px; margin-bottom: 20px; }
-    .signature-section { margin-top: 30px; padding-top: 20px; border-top: 2px solid #e5e7eb; }
-    .signature-row { display: flex; gap: 40px; justify-content: space-between; }
-    .signature-box { flex: 1; }
-    .signature-label { font-size: 12px; color: #6b7280; margin-bottom: 10px; font-weight: 600; }
-    .signature-image { max-width: 250px; max-height: 80px; border: 1px solid #e5e7eb; border-radius: 4px; background: white; }
-    .signature-date { font-size: 11px; color: #6b7280; margin-top: 8px; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <h1>TITAN PRIME SOLUTIONS</h1>
-    <p>FINAL INSPECTION STATEMENT</p>
-  </div>
+                <View style={styles.contractField}>
+                  <Text style={styles.contractFieldLabel}>Titan PRO Crew Lead / Representative:</Text>
+                  <TextInput
+                    style={[styles.workflowInput, { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', marginTop: 4 }]}
+                    value={individualsTitanPro || deal.rep_name || ''}
+                    onChangeText={setIndividualsTitanPro}
+                    placeholder="Rep name"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
 
-  <div class="info-grid">
-    <div class="info-item">
-      <div class="info-label">Homeowner Name</div>
-      <div class="info-value">${deal.homeowner_name || '-'}</div>
-    </div>
-    <div class="info-item">
-      <div class="info-label">Date</div>
-      <div class="info-value">${format(new Date(), 'MMMM d, yyyy')}</div>
-    </div>
-    <div class="info-item" style="grid-column: span 2;">
-      <div class="info-label">Property Address</div>
-      <div class="info-value">${deal.address || ''}${deal.city ? `, ${deal.city}` : ''}${deal.state ? `, ${deal.state}` : ''} ${deal.zip_code || ''}</div>
-    </div>
-  </div>
+                <View style={styles.contractField}>
+                  <Text style={styles.contractFieldLabel}>Other(s):</Text>
+                  <TextInput
+                    style={[styles.workflowInput, { backgroundColor: '#F9FAFB', borderColor: '#E5E7EB', marginTop: 4 }]}
+                    value={individualsOthers}
+                    onChangeText={setIndividualsOthers}
+                    placeholder="Other individuals present (optional)"
+                    placeholderTextColor="#9CA3AF"
+                  />
+                </View>
+              </View>
 
-  <div class="section">
-    <div class="section-title">Work Completed</div>
-    <div class="materials">
-      <div class="materials-grid">
-        <div class="info-item">
-          <div class="info-label">Material Category</div>
-          <div class="info-value">${deal.material_category || '-'}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Material Color</div>
-          <div class="info-value">${deal.material_color || '-'}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Drip Edge</div>
-          <div class="info-value">${deal.drip_edge || '-'}</div>
-        </div>
-        <div class="info-item">
-          <div class="info-label">Vent Color</div>
-          <div class="info-value">${deal.vent_color || '-'}</div>
-        </div>
-      </div>
-    </div>
-  </div>
+              <View style={styles.agreementDivider} />
 
-  <div class="section">
-    <div class="section-title">Final Inspection Checklist</div>
-    <div class="checklist">
-      <div class="checklist-item"><span class="check">✓</span> All roofing materials have been installed according to manufacturer specifications</div>
-      <div class="checklist-item"><span class="check">✓</span> All debris and materials have been removed from the property</div>
-      <div class="checklist-item"><span class="check">✓</span> Gutters and downspouts have been cleared and are functional</div>
-      <div class="checklist-item"><span class="check">✓</span> All flashing and vents have been properly installed</div>
-      <div class="checklist-item"><span class="check">✓</span> Final walkthrough has been completed with homeowner</div>
-    </div>
-  </div>
+              {/* SECTION 1 */}
+              <View style={styles.agreementSection}>
+                <Text style={styles.agreementSectionTitle}>SECTION 1 – WALK-THROUGH STATUS</Text>
+                <Text style={styles.agreementText}>
+                  Owner acknowledges that a final walk-through of the roofing work was offered and either completed or declined at Owner's discretion. If declined, Owner accepts the condition of the work as observed at the time of completion.
+                </Text>
+                <Text style={[styles.agreementText, { marginTop: 8 }]}>
+                  Owner signing below represents and warrants that they have authority to sign on behalf of all owners of the Property.
+                </Text>
 
-  <div class="section">
-    <div class="section-title">Homeowner Acknowledgment</div>
-    <div class="section-content">
-      <p>I, the homeowner, have inspected the completed roofing work at the above address and confirm that:</p>
-      <ol style="margin-top: 10px; padding-left: 20px;">
-        <li style="margin-bottom: 8px;">The work has been completed to my satisfaction.</li>
-        <li style="margin-bottom: 8px;">The work area has been cleaned and all debris has been removed.</li>
-        <li style="margin-bottom: 8px;">I have received information regarding the warranty for materials and workmanship.</li>
-        <li style="margin-bottom: 8px;">I authorize Titan Prime Solutions to collect any remaining balance due, including depreciation payments from the insurance company.</li>
-      </ol>
-    </div>
-  </div>
+                <View style={[styles.signatureRequiredBox, section1Initials && styles.signatureCompletedBox, { marginTop: 12 }]}>
+                  <Text style={styles.signatureRequiredLabel}>Owner Initials</Text>
+                  {section1Initials ? (
+                    <Image source={{ uri: section1Initials }} style={styles.miniSignaturePreview} />
+                  ) : (
+                    <Text style={styles.signatureRequiredText}>Signature required in Step 1</Text>
+                  )}
+                </View>
+              </View>
 
-  <div class="warranty">
-    <div class="section-title" style="color: #22c55e; border: none;">Warranty Information</div>
-    <p style="font-size: 13px; margin: 0;">Titan Prime Solutions provides a workmanship warranty for all labor and installation. Material warranties are provided by the manufacturer. Please keep this document for your records.</p>
-  </div>
+              <View style={styles.agreementDivider} />
 
-  <div class="signature-section">
-    <div class="section-title">Signatures</div>
-    <div class="signature-row">
-      <div class="signature-box">
-        <div class="signature-label">Representative Signature</div>
-        <img src="${repSigUrl}" class="signature-image" alt="Rep Signature" />
-        <div class="signature-date">Signed on: ${format(new Date(), 'MMMM d, yyyy')} at ${format(new Date(), 'h:mm a')}</div>
-      </div>
-      <div class="signature-box">
-        <div class="signature-label">Homeowner Signature</div>
-        <img src="${homeownerSigUrl}" class="signature-image" alt="Homeowner Signature" />
-        <div class="signature-date">Signed on: ${format(new Date(), 'MMMM d, yyyy')} at ${format(new Date(), 'h:mm a')}</div>
-      </div>
-    </div>
-  </div>
-</body>
-</html>
-                  `.trim();
+              {/* SECTION 2 */}
+              <View style={styles.agreementSection}>
+                <Text style={styles.agreementSectionTitle}>SECTION 2 – ITEMS REQUIRING REVIEW (IF ANY)</Text>
+                <Text style={styles.agreementText}>
+                  If Owner believes any portion of the work is incomplete or requires attention, list below:
+                </Text>
 
-                  // Store the completion form document as a data URL (base64 HTML)
-                  const completionFormBase64 = btoa(unescape(encodeURIComponent(completionFormHtml)));
-                  const completionFormDataUrl = `data:text/html;base64,${completionFormBase64}`;
-                  updates.completion_form_url = completionFormDataUrl;
+                <TextInput
+                  style={[styles.workflowInput, {
+                    backgroundColor: '#F9FAFB',
+                    borderColor: '#E5E7EB',
+                    marginTop: 8,
+                    minHeight: 100,
+                    textAlignVertical: 'top',
+                    paddingTop: 12
+                  }]}
+                  value={reviewItems}
+                  onChangeText={setReviewItems}
+                  placeholder="List any items requiring review (leave blank if none)"
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                  numberOfLines={4}
+                />
 
-                  // Update status since both signatures are complete
-                  updates.status = 'completion_signed';
-                  updates.completion_signed_date = new Date().toISOString();
+                <Text style={[styles.agreementText, { marginTop: 16 }]}>
+                  Titan Prime Solutions acknowledges receipt of the items listed above and will review them. This section establishes a seven (7) day review and resolution period.
+                </Text>
+                <Text style={[styles.agreementText, { marginTop: 8 }]}>
+                  If no items are listed above, Owner acknowledges that no outstanding issues were identified at the time of review.
+                </Text>
 
-                  console.log('[Completion Form] Saving updates:', {
-                    completion_form_signature_url: updates.completion_form_signature_url ? 'SET' : 'NOT SET',
-                    homeowner_completion_signature_url: updates.homeowner_completion_signature_url ? 'SET' : 'NOT SET',
-                    completion_form_url: updates.completion_form_url ? 'SET (length: ' + updates.completion_form_url.length + ')' : 'NOT SET',
-                    status: updates.status,
-                    completion_signed_date: updates.completion_signed_date,
-                  });
+                <View style={[styles.signatureRequiredBox, section2Initials && styles.signatureCompletedBox, { marginTop: 12 }]}>
+                  <Text style={styles.signatureRequiredLabel}>Owner Initials (confirming listed items are complete and accurate)</Text>
+                  {section2Initials ? (
+                    <Image source={{ uri: section2Initials }} style={styles.miniSignaturePreview} />
+                  ) : (
+                    <Text style={styles.signatureRequiredText}>Signature required in Step 2</Text>
+                  )}
+                </View>
+              </View>
 
-                  // Use mutateAsync to wait for the mutation to complete
-                  await updateMutation.mutateAsync(updates);
+              <View style={styles.agreementDivider} />
 
-                  // Refetch the deal to get the updated data
-                  await refetch();
+              {/* SECTION 3 */}
+              <View style={styles.agreementSection}>
+                <Text style={styles.agreementSectionTitle}>SECTION 3 – COMPLETION CONFIRMATION</Text>
+                <Text style={styles.agreementText}>
+                  Owner confirms that all agreed-upon roofing work has been completed in accordance with the Agreement and that the Property is in substantially the same condition as prior to installation, reasonable wear and tear excepted.
+                </Text>
+                <Text style={[styles.agreementText, { marginTop: 8 }]}>
+                  This acknowledgment does not modify, expand, or replace any manufacturer or contractor warranties provided under the Agreement.
+                </Text>
 
+                <View style={{ flexDirection: 'row', gap: 16, marginTop: 16 }}>
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.signatureRequiredBox, homeownerCompletionSignature && styles.signatureCompletedBox]}>
+                      <Text style={styles.signatureRequiredLabel}>Owner Signature</Text>
+                      {homeownerCompletionSignature ? (
+                        <Image source={{ uri: homeownerCompletionSignature }} style={styles.miniSignaturePreview} />
+                      ) : (
+                        <Text style={styles.signatureRequiredText}>Step 3</Text>
+                      )}
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <View style={[styles.signatureRequiredBox, repCompletionSignature && styles.signatureCompletedBox]}>
+                      <Text style={styles.signatureRequiredLabel}>Titan PRO Signature</Text>
+                      {repCompletionSignature ? (
+                        <Image source={{ uri: repCompletionSignature }} style={styles.miniSignaturePreview} />
+                      ) : (
+                        <Text style={styles.signatureRequiredText}>Step 4</Text>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              <View style={{ height: 100 }} />
+            </ScrollView>
+          )}
+
+          {/* Step 1: Section 1 Owner Initials */}
+          {completionFormStep === 1 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Section 1 - Walk-Through Status</Text>
+              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
+              <Text style={styles.signatureStepDescription}>
+                Owner acknowledges the walk-through was offered and either completed or declined.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={completionFormSignatureRef}
+                  onOK={(sig: string) => {
+                    setSection1Initials(sig);
+                    setCompletionFormStep(2);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 2: Section 2 Owner Initials */}
+          {completionFormStep === 2 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Section 2 - Items Review</Text>
+              <Text style={styles.signatureStepSubtitle}>Owner Initials Required</Text>
+              <Text style={styles.signatureStepDescription}>
+                Confirming listed items are complete and accurate, or no issues identified.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={completionFormSignatureRef}
+                  onOK={(sig: string) => {
+                    setSection2Initials(sig);
+                    setCompletionFormStep(3);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 3: Owner Signature */}
+          {completionFormStep === 3 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Section 3 - Completion Confirmation</Text>
+              <Text style={styles.signatureStepSubtitle}>Owner Signature</Text>
+              <Text style={styles.signatureStepDescription}>
+                Owner confirms all agreed-upon roofing work has been completed.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={completionFormSignatureRef}
+                  onOK={(sig: string) => {
+                    setHomeownerCompletionSignature(sig);
+                    setCompletionFormStep(4);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.readSignature()} style={styles.confirmSignatureBtn}>
+                  <Text style={styles.confirmSignatureText}>Confirm & Next</Text>
+                  <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Step 4: Titan PRO Signature */}
+          {completionFormStep === 4 && (
+            <View style={styles.signatureStepContainer}>
+              <Text style={styles.signatureStepTitle}>Section 3 - Completion Confirmation</Text>
+              <Text style={styles.signatureStepSubtitle}>Titan PRO Signature</Text>
+              <Text style={styles.signatureStepDescription}>
+                Representative confirms the work is complete.
+              </Text>
+
+              <View style={styles.signatureCanvasContainer}>
+                <SignatureCanvas
+                  ref={completionFormSignatureRef}
+                  onOK={async (sig: string) => {
+                    setRepCompletionSignature(sig);
+                    // All signatures collected - save the form
+                    await handleSaveCompletionForm(sig);
+                  }}
+                  onEmpty={() => Alert.alert('Error', 'Please sign before continuing')}
+                  descriptionText=""
+                  clearText="Clear"
+                  confirmText="Confirm"
+                  webStyle={`
+                    .m-signature-pad { box-shadow: none; border: none; border-radius: 0; }
+                    .m-signature-pad--body { border: none; }
+                    .m-signature-pad--footer { display: none; }
+                    body { background-color: #FFFFFF; margin: 0; padding: 0; }
+                    canvas { width: 100% !important; height: 100% !important; }
+                  `}
+                  backgroundColor="#FFFFFF"
+                  penColor="#111827"
+                />
+              </View>
+
+              <View style={styles.signatureStepActions}>
+                <TouchableOpacity onPress={() => completionFormSignatureRef.current?.clearSignature()} style={styles.clearSignatureBtn}>
+                  <Ionicons name="refresh" size={16} color="#6B7280" />
+                  <Text style={styles.clearSignatureText}>Clear</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => completionFormSignatureRef.current?.readSignature()}
+                  style={[styles.confirmSignatureBtn, savingCompletionForm && { opacity: 0.7 }]}
+                  disabled={savingCompletionForm}
+                >
+                  {savingCompletionForm ? (
+                    <ActivityIndicator size="small" color="#FFF" />
+                  ) : (
+                    <>
+                      <Text style={styles.confirmSignatureText}>Save & Complete</Text>
+                      <Ionicons name="checkmark" size={18} color="#FFF" />
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
+
+          {/* Footer - only show on Step 0 */}
+          {completionFormStep === 0 && (
+            <View style={styles.signatureActions}>
+              <TouchableOpacity
+                style={styles.signatureCancelButton}
+                onPress={() => {
                   setShowCompletionFormSignature(false);
-                  setRepCompletionSignature(null);
-                  setHomeownerCompletionSignature(null);
-                  // Don't show alert here - the mutation onSuccess already shows one
-                } catch (error) {
-                  console.error('[Completion Form] Error saving:', error);
-                  Alert.alert('Error', `Failed to save signatures: ${error instanceof Error ? error.message : 'Unknown error'}`);
-                } finally {
-                  setSavingCompletionForm(false);
-                }
-              }}
-            >
-              {savingCompletionForm ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Ionicons name="checkmark" size={20} color="#FFF" />
-              )}
-              <Text style={styles.signatureSaveText}>Save Form</Text>
-            </TouchableOpacity>
-          </View>
+                  setCompletionFormStep(0);
+                }}
+              >
+                <Text style={styles.signatureCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[
+                  styles.signatureSaveButton,
+                  (!crewLeadName || !walkThroughType) && { opacity: 0.5 }
+                ]}
+                disabled={!crewLeadName || !walkThroughType}
+                onPress={() => setCompletionFormStep(1)}
+              >
+                <Text style={styles.signatureSaveText}>Begin Signing</Text>
+                <Ionicons name="arrow-forward" size={18} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+          )}
         </SafeAreaView>
       </Modal>
 
@@ -4736,6 +6449,7 @@ export default function DealDetailScreen() {
           )}
         </SafeAreaView>
       </Modal>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -4914,6 +6628,19 @@ const styles = StyleSheet.create({
   viewInvoiceButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, backgroundColor: '#3B82F6', borderRadius: 8 },
   viewInvoiceText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
 
+  // Toggle buttons for date type
+  toggleButton: { flex: 1, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  toggleButtonActive: { backgroundColor: staticColors.primary, borderColor: staticColors.primary },
+  toggleButtonText: { fontSize: 12, fontWeight: '500', color: '#374151' },
+  toggleButtonTextActive: { color: '#FFF' },
+
+  // Checkbox for adjuster not assigned
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 10, borderWidth: 1 },
+  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: '#D1D5DB', alignItems: 'center', justifyContent: 'center' },
+  checkboxActive: { backgroundColor: staticColors.primary, borderColor: staticColors.primary },
+  checkboxLabel: { fontSize: 14, fontWeight: '500' },
+  checkboxHint: { fontSize: 12, marginTop: 6, marginLeft: 34 },
+
   // Commission Details
   commissionBreakdown: { backgroundColor: '#F9FAFB', borderRadius: 10, padding: 12, gap: 8 },
   commissionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
@@ -5035,6 +6762,30 @@ const styles = StyleSheet.create({
   warrantyItem: { fontSize: 12, color: '#374151', marginBottom: 6 },
   warningSection: { backgroundColor: 'rgba(239, 68, 68, 0.1)', padding: 16, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)' },
   warningText: { fontSize: 12, fontWeight: '600', color: '#DC2626' },
+  feeBox: { backgroundColor: '#FFFFFF', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB' },
+  feeText: { fontSize: 13, fontWeight: '600', color: '#111827' },
+  noticeItem: { fontSize: 12, color: '#374151', lineHeight: 20, marginBottom: 8 },
+  contractField: { marginBottom: 12 },
+  contractFieldLabel: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
+  contractFieldValue: { fontSize: 14, color: '#111827', fontWeight: '500', borderBottomWidth: 1, borderBottomColor: '#D1D5DB', paddingBottom: 4 },
+  initialsBox: { backgroundColor: '#F9FAFB', padding: 16, borderRadius: 8, borderWidth: 1, borderColor: '#E5E7EB', marginTop: 12 },
+  initialsLabel: { fontSize: 12, color: '#374151', fontWeight: '500' },
+  initialsLine: { flex: 1, height: 1, backgroundColor: '#111827', marginLeft: 8, marginBottom: 2 },
+  signatureLine: { height: 40, borderBottomWidth: 1, borderBottomColor: '#111827' },
+  signatureProgress: { flexDirection: 'row', justifyContent: 'center', gap: 8, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' },
+  signatureProgressDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#E5E7EB' },
+  signatureRequiredBox: { backgroundColor: '#FEF3C7', padding: 12, borderRadius: 8, borderWidth: 1, borderColor: '#FCD34D', marginTop: 8 },
+  signatureCompletedBox: { backgroundColor: '#D1FAE5', borderColor: '#6EE7B7' },
+  signatureRequiredLabel: { fontSize: 12, fontWeight: '600', color: '#374151', marginBottom: 4 },
+  signatureRequiredText: { fontSize: 11, color: '#6B7280', fontStyle: 'italic' },
+  miniSignaturePreview: { width: 120, height: 40, resizeMode: 'contain', marginTop: 4 },
+  signatureStepContainer: { flex: 1, padding: 20 },
+  signatureStepTitle: { fontSize: 22, fontWeight: 'bold', color: '#111827', textAlign: 'center' },
+  signatureStepSubtitle: { fontSize: 14, color: '#6B7280', textAlign: 'center', marginTop: 4 },
+  signatureStepDescription: { fontSize: 13, color: '#374151', textAlign: 'center', marginTop: 12, lineHeight: 20, paddingHorizontal: 20 },
+  signatureStepActions: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 16, gap: 12 },
+  confirmSignatureBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: staticColors.primary, paddingVertical: 14, borderRadius: 10 },
+  confirmSignatureText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
   agreementSignatureSection: { marginTop: 16 },
   clearSignatureBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 8 },
   clearSignatureText: { fontSize: 13, color: '#6B7280' },
@@ -5059,6 +6810,10 @@ const styles = StyleSheet.create({
 
   // Workflow Warning
   workflowWarning: { color: '#F59E0B', fontSize: 12, textAlign: 'center', marginTop: 8 },
+
+  // Skip Button
+  skipButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: '#D1D5DB', borderRadius: 8, backgroundColor: 'transparent' },
+  skipButtonText: { fontSize: 14, fontWeight: '500' },
 
   // Payment Amount Card (for Collect ACV/Deductible)
   paymentAmountCard: { backgroundColor: 'rgba(34, 197, 94, 0.1)', borderRadius: 10, padding: 16, marginBottom: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(34, 197, 94, 0.3)' },
@@ -5098,4 +6853,7 @@ const styles = StyleSheet.create({
   datePickerPreviewText: { fontSize: 16, fontWeight: '600', color: staticColors.primary },
   datePickerConfirmBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: staticColors.primary, paddingVertical: 14, borderRadius: 10, marginTop: 12 },
   datePickerConfirmText: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
+
+  // Hide Commission Toggle
+  hideCommissionToggle: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, marginBottom: 12 },
 });

@@ -24,7 +24,7 @@ const statusConfig: Record<string, { label: string; color: string; bgColor: stri
   collect_deductible: { label: 'Collect Ded.', color: 'text-amber-600', bgColor: 'bg-amber-100' },
   install_scheduled: { label: 'Scheduled', color: 'text-cyan-600', bgColor: 'bg-cyan-100' },
   installed: { label: 'Installed', color: 'text-teal-600', bgColor: 'bg-teal-100' },
-  invoice_sent: { label: 'Invoice Sent', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
+  invoice_sent: { label: 'RCV Sent', color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
   depreciation_collected: { label: 'Dep. Collected', color: 'text-teal-600', bgColor: 'bg-teal-100' },
   complete: { label: 'Complete', color: 'text-emerald-600', bgColor: 'bg-emerald-100' },
   cancelled: { label: 'Cancelled', color: 'text-red-600', bgColor: 'bg-red-100' },
@@ -160,7 +160,7 @@ export default function AdminDeals() {
                 <SelectItem value="collect_deductible">Collect Deductible</SelectItem>
                 <SelectItem value="install_scheduled">Scheduled</SelectItem>
                 <SelectItem value="installed">Installed</SelectItem>
-                <SelectItem value="invoice_sent">Invoice Sent</SelectItem>
+                <SelectItem value="invoice_sent">RCV Sent</SelectItem>
                 <SelectItem value="depreciation_collected">Depreciation Collected</SelectItem>
                 <SelectItem value="complete">Complete</SelectItem>
               </SelectContent>

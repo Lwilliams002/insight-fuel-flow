@@ -122,6 +122,27 @@ export default function RepDashboard() {
     return sum + value;
   }, 0);
 
+  // Calculate commission stats
+  const commissionStats = useMemo(() => {
+    if (!deals) return { totalCommission: 0, paidCommission: 0 };
+
+    let totalCommission = 0;
+    let paidCommission = 0;
+
+    deals.forEach(deal => {
+      if (deal.deal_commissions && deal.deal_commissions.length > 0) {
+        const commission = deal.deal_commissions[0];
+        const amount = safeNumber(commission.commission_amount);
+        totalCommission += amount;
+        if (commission.paid) {
+          paidCommission += amount;
+        }
+      }
+    });
+
+    return { totalCommission, paidCommission };
+  }, [deals]);
+
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: colors.background }]} edges={['top']}>
       {/* Header Bar - matching web */}
@@ -237,6 +258,28 @@ export default function RepDashboard() {
                     ${pipelineValue >= 1000000 ? `${(pipelineValue / 1000000).toFixed(1)}M` : pipelineValue >= 1000 ? `${(pipelineValue / 1000).toFixed(0)}k` : Math.round(pipelineValue).toString()}
                   </Text>
                   <Text style={[styles.pipelineLabel, { color: colors.mutedForeground }]}>Pipeline Value</Text>
+                </View>
+              </View>
+            </View>
+            {/* Commission Stats Row */}
+            <View style={[styles.pipelineRow, { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12, marginTop: 12 }]}>
+              <View style={styles.pipelineStat}>
+                <Ionicons name="wallet" size={24} color={colors.primary} />
+                <View>
+                  <Text style={[styles.pipelineValue, { color: colors.primary }]}>
+                    ${commissionStats.totalCommission >= 1000 ? `${(commissionStats.totalCommission / 1000).toFixed(1)}k` : Math.round(commissionStats.totalCommission).toString()}
+                  </Text>
+                  <Text style={[styles.pipelineLabel, { color: colors.mutedForeground }]}>Commission Value</Text>
+                </View>
+              </View>
+              <View style={[styles.pipelineDivider, { backgroundColor: colors.border }]} />
+              <View style={styles.pipelineStat}>
+                <Ionicons name="checkmark-circle" size={24} color="#22C55E" />
+                <View>
+                  <Text style={[styles.pipelineValue, { color: '#22C55E' }]}>
+                    ${commissionStats.paidCommission >= 1000 ? `${(commissionStats.paidCommission / 1000).toFixed(1)}k` : Math.round(commissionStats.paidCommission).toString()}
+                  </Text>
+                  <Text style={[styles.pipelineLabel, { color: colors.mutedForeground }]}>Commission Paid</Text>
                 </View>
               </View>
             </View>

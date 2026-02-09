@@ -137,28 +137,28 @@ export default function SettingsScreen() {
         </View>
 
         {/* Menu */}
-        <View style={styles.menuCard}>
+        <View style={[styles.menuCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
           {menuItems.map((item, index) => (
             <TouchableOpacity
               key={item.label}
               style={[
                 styles.menuItem,
-                index < menuItems.length - 1 && styles.menuItemBorder,
+                index < menuItems.length - 1 && [styles.menuItemBorder, { borderBottomColor: isDark ? colors.border : '#F3F4F6' }],
               ]}
             >
               <View style={styles.menuItemLeft}>
-                <View style={styles.menuIconContainer}>
-                  <Ionicons name={item.icon} size={20} color="#6B7280" />
+                <View style={[styles.menuIconContainer, { backgroundColor: isDark ? colors.muted : '#F3F4F6' }]}>
+                  <Ionicons name={item.icon} size={20} color={colors.mutedForeground} />
                 </View>
-                <Text style={styles.menuItemText}>{item.label}</Text>
+                <Text style={[styles.menuItemText, { color: colors.foreground }]}>{item.label}</Text>
               </View>
-              <Ionicons name="chevron-forward" size={18} color="#9CA3AF" />
+              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           ))}
         </View>
 
         {/* Sign Out */}
-        <TouchableOpacity onPress={handleSignOut} style={styles.signOutCard}>
+        <TouchableOpacity onPress={handleSignOut} style={[styles.signOutCard, { backgroundColor: isDark ? colors.muted : '#FFFFFF' }]}>
           <View style={styles.signOutContent}>
             <Ionicons name="log-out-outline" size={20} color="#EF4444" />
             <Text style={styles.signOutText}>Sign Out</Text>
@@ -166,7 +166,7 @@ export default function SettingsScreen() {
         </TouchableOpacity>
 
         {/* Version */}
-        <Text style={styles.versionText}>Titan Prime CRM v1.0.0 (Admin)</Text>
+        <Text style={[styles.versionText, { color: colors.mutedForeground }]}>Titan Prime CRM v1.0.0 (Admin)</Text>
       </ScrollView>
     </SafeAreaView>
   );
@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
   },
   roleText: {
     fontSize: 12,
-    color: colors.primary,
+    color: staticColors.primary,
     fontWeight: '600',
   },
   migrationCard: {

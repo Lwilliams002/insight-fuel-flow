@@ -9,7 +9,7 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { awsConfig } from '../constants/config';
 
-type UserRole = 'admin' | 'rep' | null;
+type UserRole = 'admin' | 'rep' | 'crew' | null;
 
 interface User {
   sub: string;
@@ -26,6 +26,8 @@ interface AuthContextType {
   signIn: (email: string, password: string) => Promise<{ error: Error | null; newPasswordRequired?: boolean }>;
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: Error | null }>;
   completeNewPassword: (newPassword: string) => Promise<{ error: Error | null }>;
+  forgotPassword: (email: string) => Promise<{ error: Error | null }>;
+  confirmForgotPassword: (email: string, code: string, newPassword: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
   getIdToken: () => Promise<string | null>;
 }
@@ -124,6 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (groups.includes('admin')) return 'admin';
     if (groups.includes('rep')) return 'rep';
+    if (groups.includes('crew')) return 'crew';
     return null;
   }, []);
 
@@ -272,6 +275,52 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const forgotPassword = async (email: string): Promise<{ error: Error | null }> => {
+    console.log('[Auth] Initiating forgot password for:', email);
+
+    const cognitoUser = new CognitoUser({
+      Username: email.toLowerCase(),
+      Pool: userPool,
+      Storage: cognitoStorage as any,
+    });
+
+    return new Promise((resolve) => {
+      cognitoUser.forgotPassword({
+        onSuccess: () => {
+          console.log('[Auth] Forgot password code sent successfully');
+          resolve({ error: null });
+        },
+        onFailure: (err) => {
+          console.error('[Auth] Forgot password error:', err);
+          resolve({ error: err });
+        },
+      });
+    });
+  };
+
+  const confirmForgotPassword = async (email: string, code: string, newPassword: string): Promise<{ error: Error | null }> => {
+    console.log('[Auth] Confirming forgot password for:', email);
+
+    const cognitoUser = new CognitoUser({
+      Username: email.toLowerCase(),
+      Pool: userPool,
+      Storage: cognitoStorage as any,
+    });
+
+    return new Promise((resolve) => {
+      cognitoUser.confirmPassword(code, newPassword, {
+        onSuccess: () => {
+          console.log('[Auth] Password reset successful');
+          resolve({ error: null });
+        },
+        onFailure: (err) => {
+          console.error('[Auth] Confirm password error:', err);
+          resolve({ error: err });
+        },
+      });
+    });
+  };
+
   const signOut = async (): Promise<void> => {
     try {
       const cognitoUser = userPool.getCurrentUser();
@@ -339,6 +388,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         signIn,
         signUp,
         completeNewPassword,
+        forgotPassword,
+        confirmForgotPassword,
         signOut,
         getIdToken,
       }}

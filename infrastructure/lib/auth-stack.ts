@@ -13,6 +13,7 @@ export class AuthStack extends cdk.Stack {
   public readonly userPoolClient: cognito.UserPoolClient;
   public readonly adminGroup: cognito.CfnUserPoolGroup;
   public readonly repGroup: cognito.CfnUserPoolGroup;
+  public readonly crewGroup: cognito.CfnUserPoolGroup;
 
   constructor(scope: Construct, id: string, props: AuthStackProps) {
     super(scope, id, props);
@@ -82,6 +83,14 @@ export class AuthStack extends cdk.Stack {
       groupName: 'rep',
       description: 'Sales representatives',
       precedence: 2,
+    });
+
+    // Create Crew Group
+    this.crewGroup = new cognito.CfnUserPoolGroup(this, 'CrewGroup', {
+      userPoolId: this.userPool.userPoolId,
+      groupName: 'crew',
+      description: 'Installation crew leads',
+      precedence: 3,
     });
 
     // Output the User Pool details

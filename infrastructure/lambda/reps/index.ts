@@ -44,13 +44,18 @@ async function listReps(user: any, event: APIGatewayProxyEvent) {
   // Check if requesting closers for assignment
   const queryParams = event.queryStringParameters || {};
   const forAssignment = queryParams.for_assignment === 'true';
+  const accountType = queryParams.account_type; // 'admin', 'rep', or 'crew'
+
+  console.log('[listReps] Query params:', JSON.stringify(queryParams));
+  console.log('[listReps] accountType:', accountType);
 
   // If requesting closers for assignment, return senior and manager level reps
   if (forAssignment) {
     const closers = await query(
-      `SELECT r.*, p.full_name, p.email, p.avatar_url
+      `SELECT r.*, p.full_name, p.email, p.avatar_url, ur.role as account_type
        FROM reps r
        JOIN profiles p ON p.id = r.user_id
+       LEFT JOIN user_roles ur ON ur.user_id = r.user_id
        WHERE r.commission_level IN ('senior', 'manager')
        AND r.active = true
        ORDER BY p.full_name`
@@ -58,22 +63,79 @@ async function listReps(user: any, event: APIGatewayProxyEvent) {
     return success(closers);
   }
 
-  // Admin can see all reps, rep can only see themselves
+  // Admin can see all users, rep can only see themselves
   if (!isAdmin(user)) {
     const rep = await queryOne(
-      `SELECT r.*, p.full_name, p.email, p.avatar_url
+      `SELECT r.*, p.full_name, p.email, p.avatar_url, ur.role as account_type
        FROM reps r
        JOIN profiles p ON p.id = r.user_id
+       LEFT JOIN user_roles ur ON ur.user_id = r.user_id
        WHERE r.user_id = $1`,
       [user.sub]
     );
     return success(rep ? [rep] : []);
   }
 
+  // For admins: filter by account_type
+  if (accountType === 'admin') {
+    console.log('[listReps] Fetching admins...');
+    // Get admins from profiles/user_roles (not in reps table)
+    const admins = await query(
+      `SELECT p.id as user_id, p.id, p.full_name, p.email, p.avatar_url, 
+              ur.role as account_type, true as active,
+              'manager' as commission_level, 0 as default_commission_percent,
+              false as can_self_gen, null as manager_id, false as training_completed,
+              p.created_at
+       FROM profiles p
+       JOIN user_roles ur ON ur.user_id = p.id
+       WHERE ur.role = 'admin'
+       ORDER BY p.full_name`
+    );
+    console.log('[listReps] Found admins:', admins.length);
+    return success(admins);
+  }
+
+  if (accountType === 'crew') {
+    console.log('[listReps] Fetching crew leads...');
+    // Get crew leads from profiles/user_roles (not in reps table)
+    const crewLeads = await query(
+      `SELECT p.id as user_id, p.id, p.full_name, p.email, p.avatar_url,
+              ur.role as account_type, true as active,
+              'junior' as commission_level, 0 as default_commission_percent,
+              false as can_self_gen, null as manager_id, false as training_completed,
+              p.created_at
+       FROM profiles p
+       JOIN user_roles ur ON ur.user_id = p.id
+       WHERE ur.role = 'crew'
+       ORDER BY p.full_name`
+    );
+    console.log('[listReps] Found crew leads:', crewLeads.length);
+    return success(crewLeads);
+  }
+
+  if (accountType === 'rep') {
+    console.log('[listReps] Fetching reps...');
+    // Get only sales reps (users with 'rep' role in user_roles who are in reps table)
+    const reps = await query(
+      `SELECT r.*, p.full_name, p.email, p.avatar_url, 'rep' as account_type
+       FROM reps r
+       JOIN profiles p ON p.id = r.user_id
+       JOIN user_roles ur ON ur.user_id = r.user_id
+       WHERE ur.role = 'rep'
+       ORDER BY p.full_name`
+    );
+    console.log('[listReps] Found reps:', reps.length);
+    return success(reps);
+  }
+
+  // Default (no filter): return all reps from the reps table
+  // This is for backwards compatibility
+  console.log('[listReps] No accountType specified, returning all reps...');
   const reps = await query(
-    `SELECT r.*, p.full_name, p.email, p.avatar_url
+    `SELECT r.*, p.full_name, p.email, p.avatar_url, COALESCE(ur.role, 'rep') as account_type
      FROM reps r
      JOIN profiles p ON p.id = r.user_id
+     LEFT JOIN user_roles ur ON ur.user_id = r.user_id
      ORDER BY p.full_name`
   );
 

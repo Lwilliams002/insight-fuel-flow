@@ -193,7 +193,6 @@ export default function RepDeals() {
                             <div className="flex-1 max-w-[120px]">
                               <Progress value={progress} className="h-1.5" />
                             </div>
-                            <span className="text-xs text-muted-foreground">{progress}%</span>
                           </div>
                         </div>
                         <ChevronRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />

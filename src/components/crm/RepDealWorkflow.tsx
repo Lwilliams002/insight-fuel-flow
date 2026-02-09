@@ -139,7 +139,7 @@ const workflowSteps: {
   },
   {
     status: 'completion_signed',
-    label: 'Invoice Sent',
+    label: 'RCV Sent',
     description: 'Final invoice sent to insurance for depreciation',
     icon: Lock,
     requiredFields: [],
@@ -311,7 +311,9 @@ export function RepDealWorkflow({ deal, onUpdate }: RepDealWorkflowProps) {
       <div className="space-y-2">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold">Deal Progress</h3>
-          <Badge variant="outline">{progress}% Complete</Badge>
+          <Badge variant="outline">
+            {statusConfig[deal.status]?.label || deal.status}
+          </Badge>
         </div>
         <Progress value={progress} className="h-2" />
       </div>

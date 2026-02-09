@@ -60,11 +60,26 @@ async function createRep(event: APIGatewayProxyEvent) {
     return badRequest('Request body required');
   }
 
-  const { email, password, fullName, commissionLevel = 'junior', canSelfGen = true, managerId } = body;
+  const { email, password, fullName, accountType = 'rep', commissionLevel = 'junior', canSelfGen = true, managerId } = body;
 
   if (!email || !password || !fullName) {
     return badRequest('email, password, and fullName are required');
   }
+
+  // Validate account type
+  const validAccountTypes = ['rep', 'crew', 'admin'];
+  if (!validAccountTypes.includes(accountType)) {
+    return badRequest('Invalid account type. Must be rep, crew, or admin');
+  }
+
+  // If creating an admin, delegate to createAdmin function
+  if (accountType === 'admin') {
+    return createAdmin(event);
+  }
+
+  // Determine the Cognito group based on account type
+  const cognitoGroup = accountType === 'crew' ? 'crew' : 'rep';
+  const userRole = accountType === 'crew' ? 'crew' : 'rep';
 
   try {
     // Create user in Cognito
@@ -96,11 +111,11 @@ async function createRep(event: APIGatewayProxyEvent) {
 
     await cognitoClient.send(setPasswordCommand);
 
-    // Add to rep group
+    // Add to appropriate group
     const addToGroupCommand = new AdminAddUserToGroupCommand({
       UserPoolId: USER_POOL_ID,
       Username: email,
-      GroupName: 'rep',
+      GroupName: cognitoGroup,
     });
 
     await cognitoClient.send(addToGroupCommand);
@@ -116,28 +131,33 @@ async function createRep(event: APIGatewayProxyEvent) {
     // Create user role
     await execute(
       `INSERT INTO user_roles (user_id, role)
-       VALUES ($1, 'rep')
-       ON CONFLICT (user_id) DO UPDATE SET role = 'rep'`,
-      [cognitoUserId]
+       VALUES ($1, $2::app_role)
+       ON CONFLICT (user_id) DO UPDATE SET role = $2::app_role`,
+      [cognitoUserId, userRole]
     );
 
-    // Create rep record with commission percentage
-    const commissionLevelPercentages: Record<string, number> = {
-      'junior': 5,
-      'senior': 10,
-      'manager': 13,
-    };
-    const defaultCommissionPercent = commissionLevelPercentages[commissionLevel] || 5;
+    // For reps, create rep record with commission percentage
+    // For crew leads, we skip this step (they don't have commission)
+    let rep = null;
+    if (accountType === 'rep') {
+      const commissionLevelPercentages: Record<string, number> = {
+        'junior': 5,
+        'senior': 10,
+        'manager': 13,
+      };
+      const defaultCommissionPercent = commissionLevelPercentages[commissionLevel] || 5;
 
-    const rep = await queryOne(
-      `INSERT INTO reps (user_id, commission_level, default_commission_percent, can_self_gen, manager_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [cognitoUserId, commissionLevel, defaultCommissionPercent, canSelfGen, managerId]
-    );
+      rep = await queryOne(
+        `INSERT INTO reps (user_id, commission_level, default_commission_percent, can_self_gen, manager_id)
+         VALUES ($1, $2, $3, $4, $5)
+         RETURNING *`,
+        [cognitoUserId, commissionLevel, defaultCommissionPercent, canSelfGen, managerId]
+      );
+    }
 
+    const accountTypeLabel = accountType === 'crew' ? 'Crew Lead' : 'Rep';
     return created({
-      message: 'Rep created successfully',
+      message: `${accountTypeLabel} created successfully`,
       userId: cognitoUserId,
       rep,
     });
@@ -229,78 +249,101 @@ async function createAdmin(event: APIGatewayProxyEvent) {
 }
 
 async function syncReps() {
-  // List all users in the 'rep' group from Cognito
-  const listUsersCommand = new ListUsersInGroupCommand({
-    UserPoolId: USER_POOL_ID,
-    GroupName: 'rep',
-    Limit: 60,
-  });
+  let totalSynced = 0;
+  let totalSkipped = 0;
+  const errors: string[] = [];
 
-  const cognitoResponse = await cognitoClient.send(listUsersCommand);
-  const cognitoUsers = cognitoResponse.Users || [];
-
-  let synced = 0;
-  let skipped = 0;
-
-  for (const cognitoUser of cognitoUsers) {
-    const username = cognitoUser.Username;
-    if (!username) continue;
-
-    // Get user attributes
-    const emailAttr = cognitoUser.Attributes?.find(a => a.Name === 'email');
-    const nameAttr = cognitoUser.Attributes?.find(a => a.Name === 'name');
-    const email = emailAttr?.Value || username;
-    const fullName = nameAttr?.Value || email.split('@')[0];
-
-    // Check if profile already exists
-    const existingProfile = await queryOne(
-      'SELECT id FROM profiles WHERE id = $1',
-      [username]
+  // First, check if 'crew' enum value exists
+  try {
+    const enumCheck = await query(
+      `SELECT enumlabel FROM pg_enum WHERE enumtypid = 'app_role'::regtype`,
+      []
     );
+    console.log('[syncReps] Available app_role enum values:', enumCheck.map((e: any) => e.enumlabel));
+  } catch (e) {
+    console.error('[syncReps] Error checking enum values:', e);
+  }
 
-    if (existingProfile) {
-      skipped++;
-      continue;
+  // Sync all three groups: admin, rep, crew
+  const groups = ['admin', 'rep', 'crew'];
+
+  for (const groupName of groups) {
+    try {
+      console.log(`[syncReps] Syncing group: ${groupName}`);
+      const listUsersCommand = new ListUsersInGroupCommand({
+        UserPoolId: USER_POOL_ID,
+        GroupName: groupName,
+        Limit: 60,
+      });
+
+      const cognitoResponse = await cognitoClient.send(listUsersCommand);
+      const cognitoUsers = cognitoResponse.Users || [];
+      console.log(`[syncReps] Found ${cognitoUsers.length} users in Cognito group: ${groupName}`);
+
+      for (const cognitoUser of cognitoUsers) {
+        const username = cognitoUser.Username;
+        if (!username) continue;
+
+        // Get user attributes
+        const emailAttr = cognitoUser.Attributes?.find(a => a.Name === 'email');
+        const nameAttr = cognitoUser.Attributes?.find(a => a.Name === 'name');
+        const email = emailAttr?.Value || username;
+        const fullName = nameAttr?.Value || email.split('@')[0];
+
+        try {
+          // Create or update profile
+          await execute(
+            `INSERT INTO profiles (id, email, full_name)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id) DO UPDATE SET email = $2, full_name = $3`,
+            [username, email, fullName]
+          );
+
+          // Create or update user role - cast to app_role enum
+          await execute(
+            `INSERT INTO user_roles (user_id, role)
+             VALUES ($1, $2::app_role)
+             ON CONFLICT (user_id) DO UPDATE SET role = $2::app_role`,
+            [username, groupName]
+          );
+
+          // For reps, also create rep record if it doesn't exist
+          if (groupName === 'rep') {
+            const existingRep = await queryOne(
+              'SELECT id FROM reps WHERE user_id = $1',
+              [username]
+            );
+
+            if (!existingRep) {
+              await execute(
+                `INSERT INTO reps (user_id, commission_level, can_self_gen)
+                 VALUES ($1, 'junior', true)`,
+                [username]
+              );
+            }
+          }
+
+          totalSynced++;
+          console.log(`[syncReps] Successfully synced user: ${email} as ${groupName}`);
+        } catch (userError) {
+          const userErrorMsg = `Error syncing user ${email} in group ${groupName}: ${userError instanceof Error ? userError.message : String(userError)}`;
+          console.error(`[syncReps] ${userErrorMsg}`);
+          errors.push(userErrorMsg);
+        }
+      }
+    } catch (error) {
+      const errorMsg = `Error syncing group ${groupName}: ${error instanceof Error ? error.message : String(error)}`;
+      console.error(`[syncReps] ${errorMsg}`);
+      errors.push(errorMsg);
+      // Continue with other groups even if one fails
     }
-
-    // Create profile
-    await execute(
-      `INSERT INTO profiles (id, email, full_name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (id) DO UPDATE SET email = $2, full_name = $3`,
-      [username, email, fullName]
-    );
-
-    // Create user role
-    await execute(
-      `INSERT INTO user_roles (user_id, role)
-       VALUES ($1, 'rep')
-       ON CONFLICT (user_id) DO UPDATE SET role = 'rep'`,
-      [username]
-    );
-
-    // Check if rep record exists
-    const existingRep = await queryOne(
-      'SELECT id FROM reps WHERE user_id = $1',
-      [username]
-    );
-
-    if (!existingRep) {
-      await execute(
-        `INSERT INTO reps (user_id, commission_level, can_self_gen)
-         VALUES ($1, 'junior', true)`,
-        [username]
-      );
-    }
-
-    synced++;
   }
 
   return success({
-    message: `Synced ${synced} rep(s), ${skipped} already existed`,
-    synced,
-    skipped,
-    total: cognitoUsers.length,
+    message: `Synced ${totalSynced} user(s) across all groups`,
+    synced: totalSynced,
+    skipped: totalSkipped,
+    errors: errors.length > 0 ? errors : undefined,
   });
 }
 

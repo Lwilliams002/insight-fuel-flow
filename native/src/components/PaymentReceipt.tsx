@@ -74,15 +74,6 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
   const [signatureDataUrl, setSignatureDataUrl] = useState<string | null>(null);
   const [scrollEnabled, setScrollEnabled] = useState(true);
 
-  // Check if material specifications are complete (required for ACV receipt)
-  const hasMaterialSpecs = !!(
-    deal.material_category &&
-    deal.material_color
-  );
-
-  // For ACV receipt, material specs are required
-  const canGenerateReceipt = type !== 'acv' || hasMaterialSpecs;
-
   // Load logo on mount
   useEffect(() => {
     getLogoBase64().then(setLogoBase64);
@@ -528,24 +519,11 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
           <Text style={styles.summaryAmount}>${parseFloat(amount || '0').toLocaleString()}</Text>
         </View>
 
-        {/* Material Specs Warning for ACV */}
-        {type === 'acv' && !hasMaterialSpecs && (
-          <View style={styles.warningCard}>
-            <Ionicons name="warning" size={24} color="#F59E0B" />
-            <View style={styles.warningContent}>
-              <Text style={styles.warningTitle}>Material Specifications Required</Text>
-              <Text style={styles.warningText}>
-                Please fill out the material specifications (category, color) in the Insurance tab before generating the ACV receipt.
-              </Text>
-            </View>
-          </View>
-        )}
-
         {/* Generate Button */}
         <TouchableOpacity
-          style={[styles.generateButton, (generating || !signatureDataUrl || !canGenerateReceipt) && styles.generateButtonDisabled]}
+          style={[styles.generateButton, (generating || !signatureDataUrl) && styles.generateButtonDisabled]}
           onPress={generatePDF}
-          disabled={generating || !signatureDataUrl || !canGenerateReceipt}
+          disabled={generating || !signatureDataUrl}
         >
           {generating ? (
             <ActivityIndicator size="small" color="#FFF" />
@@ -557,9 +535,6 @@ export function PaymentReceipt({ deal, repName, type, onClose, onSave }: Payment
           )}
         </TouchableOpacity>
 
-        {!canGenerateReceipt && (
-          <Text style={styles.disabledHint}>Complete material specifications to generate receipt</Text>
-        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>

@@ -22,7 +22,7 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   install_scheduled: { label: 'Scheduled', color: '#06B6D4' },
   installed: { label: 'Installed', color: '#14B8A6' },
   completion_signed: { label: 'Completion Form', color: '#06B6D4' },
-  invoice_sent: { label: 'Invoice Sent', color: '#6366F1' },
+  invoice_sent: { label: 'RCV Sent', color: '#6366F1' },
   depreciation_collected: { label: 'Depreciation', color: '#8B5CF6' },
   complete: { label: 'Complete', color: '#10B981' },
   paid: { label: 'Paid', color: '#059669' },
@@ -34,17 +34,6 @@ const phaseConfig = {
   finalizing: { label: 'Finalizing', icon: '📋', color: '#EAB308', borderColor: '#EAB308' },
   complete: { label: 'Complete', icon: '✅', color: '#22C55E', borderColor: '#22C55E' },
 };
-
-function getProgressPercentage(status: string): number {
-  const statusOrder = [
-    'lead', 'inspection_scheduled', 'claim_filed', 'signed', 'adjuster_met', 'awaiting_approval',
-    'approved', 'acv_collected', 'deductible_collected', 'materials_selected',
-    'install_scheduled', 'installed', 'completion_signed', 'invoice_sent', 'depreciation_collected', 'complete', 'paid'
-  ];
-  const index = statusOrder.indexOf(status);
-  if (index === -1) return 0;
-  return Math.round(((index + 1) / statusOrder.length) * 100);
-}
 
 type ViewMode = 'pipeline' | 'leads';
 type PhaseFilter = 'sign' | 'build' | 'finalizing' | 'complete' | null;
@@ -87,7 +76,7 @@ export default function DealsScreen() {
   const leads = deals?.filter(d => d.status === 'lead') || [];
 
   // Calculate phase values with proper number validation
-  const safeNumber = (val: any): number => {
+  const safeNumber = (val: string | number | null | undefined): number => {
     if (val === null || val === undefined || val === '') return 0;
     const num = typeof val === 'number' ? val : Number(val);
     // Only filter out truly invalid numbers, not legitimate large values
@@ -96,7 +85,7 @@ export default function DealsScreen() {
   };
 
   // Get deal value - prefer RCV, fall back to total_price
-  const getDealValue = (d: any): number => {
+  const getDealValue = (d: { rcv?: number | null; total_price?: number | null }): number => {
     const rcv = safeNumber(d.rcv);
     const totalPrice = safeNumber(d.total_price);
     return rcv > 0 ? rcv : totalPrice;
@@ -269,7 +258,6 @@ export default function DealsScreen() {
         ) : (
           filteredDeals.map((deal) => {
             const config = statusConfig[deal.status] || statusConfig.lead;
-            const progress = getProgressPercentage(deal.status);
 
             return (
               <TouchableOpacity
@@ -296,12 +284,6 @@ export default function DealsScreen() {
                       <Text style={[styles.dealPrice, { color: colors.foreground }]}>
                         ${(deal.rcv || deal.total_price || 0).toLocaleString()}
                       </Text>
-                      <View style={styles.progressContainer}>
-                        <View style={[styles.progressBar, { backgroundColor: isDark ? colors.secondary : '#E5E7EB' }]}>
-                          <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: colors.primary }]} />
-                        </View>
-                        <Text style={[styles.progressText, { color: colors.mutedForeground }]}>{progress}%</Text>
-                      </View>
                     </View>
                   </View>
                   <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
@@ -521,28 +503,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#22C55E',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  progressBar: {
-    width: 60,
-    height: 6,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 3,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: staticColors.primary,
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    width: 30,
   },
   filterIndicator: {
     flexDirection: 'row',

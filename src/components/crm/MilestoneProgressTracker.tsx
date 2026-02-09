@@ -44,7 +44,7 @@ const milestones: { status: DealStatus; icon: React.ElementType; label: string; 
   { status: 'collect_deductible', icon: DollarSign, label: 'Collect Ded.', phase: 'build' },
   { status: 'install_scheduled', icon: Calendar, label: 'Inst. Sched.', phase: 'build' },
   { status: 'installed', icon: Home, label: 'Installed', phase: 'build' },
-  { status: 'invoice_sent', icon: Send, label: 'Invoice Sent', phase: 'finalizing' },
+{ status: 'invoice_sent', icon: Send, label: 'RCV Sent', phase: 'finalizing' },
   { status: 'depreciation_collected', icon: DollarSign, label: 'Depreciation', phase: 'finalizing' },
   { status: 'complete', icon: Trophy, label: 'Complete', phase: 'finalizing' },
 ];
