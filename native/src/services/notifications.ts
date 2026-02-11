@@ -25,7 +25,7 @@ const defaultSettings: NotificationSettings = {
   enabled: true,
   appointmentReminders: true,
   eventReminders: true,
-  reminderMinutes: 30,
+  reminderMinutes: 60, // 1 hour before
 };
 
 // Get notification settings from storage

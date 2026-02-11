@@ -7,9 +7,12 @@ import * as Location from 'expo-location';
 import * as DocumentPicker from 'expo-document-picker';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
+import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
 import { pinsApi, dealsApi, Pin, uploadFile } from '../../src/services/api';
 import { colors as staticColors } from '../../src/constants/config';
 import { useTheme } from '../../src/contexts/ThemeContext';
+import { scheduleAppointmentReminder } from '../../src/services/notifications';
 
 type MapType = 'standard' | 'hybrid';
 type PinStatus = 'lead' | 'followup' | 'appointment' | 'installed' | 'renter' | 'not_interested';
@@ -102,6 +105,25 @@ export default function MapScreen() {
         // Set up pin details and open modal after a short delay
         setTimeout(() => {
           setSelectedPin(pin);
+          // Parse existing appointment date/time if present
+          let appointmentDate = '';
+          let appointmentTime = '09:00';
+          let appointmentEndTime = '10:00';
+          let appointmentAllDay = false;
+
+          if (pin.appointment_date) {
+            const apptDate = new Date(pin.appointment_date);
+            appointmentDate = format(apptDate, 'yyyy-MM-dd');
+            appointmentTime = format(apptDate, 'HH:mm');
+          }
+          if (pin.appointment_end_date) {
+            const endDate = new Date(pin.appointment_end_date);
+            appointmentEndTime = format(endDate, 'HH:mm');
+          }
+          if (pin.appointment_all_day) {
+            appointmentAllDay = pin.appointment_all_day;
+          }
+
           setEditPinForm({
             homeowner_name: pin.homeowner_name || '',
             homeowner_phone: pin.homeowner_phone || '',
@@ -109,6 +131,10 @@ export default function MapScreen() {
             address: pin.address || '',
             status: (pin.status as PinStatus) || 'lead',
             notes: pin.notes || '',
+            appointment_date: appointmentDate,
+            appointment_time: appointmentTime,
+            appointment_end_time: appointmentEndTime,
+            appointment_all_day: appointmentAllDay,
           });
           setShowPinDetailModal(true);
           Animated.spring(pinDetailSlideAnim, {
@@ -218,7 +244,16 @@ export default function MapScreen() {
     address: '',
     status: 'lead' as PinStatus,
     notes: '',
+    appointment_date: '',
+    appointment_time: '09:00',
+    appointment_end_time: '10:00',
+    appointment_all_day: false,
   });
+
+  // Date/Time picker states for appointment
+  const [showAppointmentDatePicker, setShowAppointmentDatePicker] = useState(false);
+  const [showAppointmentTimePicker, setShowAppointmentTimePicker] = useState(false);
+  const [showAppointmentEndTimePicker, setShowAppointmentEndTimePicker] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -274,6 +309,25 @@ export default function MapScreen() {
   // Handle pin marker press - open detail modal
   const handlePinPress = (pin: Pin) => {
     setSelectedPin(pin);
+    // Parse existing appointment date/time if present
+    let appointmentDate = '';
+    let appointmentTime = '09:00';
+    let appointmentEndTime = '10:00';
+    let appointmentAllDay = false;
+
+    if (pin.appointment_date) {
+      const apptDate = new Date(pin.appointment_date);
+      appointmentDate = format(apptDate, 'yyyy-MM-dd');
+      appointmentTime = format(apptDate, 'HH:mm');
+    }
+    if (pin.appointment_end_date) {
+      const endDate = new Date(pin.appointment_end_date);
+      appointmentEndTime = format(endDate, 'HH:mm');
+    }
+    if (pin.appointment_all_day) {
+      appointmentAllDay = pin.appointment_all_day;
+    }
+
     setEditPinForm({
       homeowner_name: pin.homeowner_name || '',
       homeowner_phone: pin.homeowner_phone || '',
@@ -281,6 +335,10 @@ export default function MapScreen() {
       address: pin.address || '',
       status: (pin.status as PinStatus) || 'lead',
       notes: pin.notes || '',
+      appointment_date: appointmentDate,
+      appointment_time: appointmentTime,
+      appointment_end_time: appointmentEndTime,
+      appointment_all_day: appointmentAllDay,
     });
     openPinDetailModal();
   };
@@ -306,8 +364,38 @@ export default function MapScreen() {
     });
   };
 
-  const handleUpdatePin = () => {
+  const handleUpdatePin = async () => {
     if (!selectedPin) return;
+
+    // Build appointment date/time if status is appointment and date is set
+    let appointmentDate: string | null = null;
+    let appointmentEndDate: string | null = null;
+
+    if (editPinForm.status === 'appointment' && editPinForm.appointment_date) {
+      if (editPinForm.appointment_all_day) {
+        // For all-day events, just use the date at midnight
+        appointmentDate = `${editPinForm.appointment_date}T00:00:00`;
+        appointmentEndDate = `${editPinForm.appointment_date}T23:59:59`;
+      } else {
+        // Combine date and time
+        appointmentDate = `${editPinForm.appointment_date}T${editPinForm.appointment_time}:00`;
+        appointmentEndDate = `${editPinForm.appointment_date}T${editPinForm.appointment_end_time}:00`;
+      }
+
+      // Schedule notification 1 hour before
+      try {
+        const apptDateTime = new Date(appointmentDate);
+        await scheduleAppointmentReminder(
+          selectedPin.id,
+          editPinForm.homeowner_name || 'Appointment',
+          editPinForm.address || 'No address',
+          apptDateTime,
+          60 // 60 minutes = 1 hour before
+        );
+      } catch (error) {
+        console.log('Failed to schedule notification:', error);
+      }
+    }
 
     updatePinMutation.mutate({
       id: selectedPin.id,
@@ -318,6 +406,9 @@ export default function MapScreen() {
         homeowner_email: editPinForm.homeowner_email || null,
         address: editPinForm.address || null,
         notes: editPinForm.notes || null,
+        appointment_date: appointmentDate,
+        appointment_end_date: appointmentEndDate,
+        appointment_all_day: editPinForm.status === 'appointment' ? editPinForm.appointment_all_day : null,
       },
     });
   };
@@ -781,7 +872,20 @@ export default function MapScreen() {
                           { backgroundColor: isDark ? colors.muted : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' },
                           editPinForm.status === option.value && { backgroundColor: option.color },
                         ]}
-                        onPress={() => setEditPinForm({ ...editPinForm, status: option.value })}
+                        onPress={() => {
+                          // If switching to appointment status and no date set, default to today with default times
+                          if (option.value === 'appointment' && !editPinForm.appointment_date) {
+                            setEditPinForm({
+                              ...editPinForm,
+                              status: option.value,
+                              appointment_date: format(new Date(), 'yyyy-MM-dd'),
+                              appointment_time: '09:00',
+                              appointment_end_time: '10:00', // 1 hour after start
+                            });
+                          } else {
+                            setEditPinForm({ ...editPinForm, status: option.value });
+                          }
+                        }}
                       >
                         <View style={[styles.statusChipDot, { backgroundColor: option.color }]} />
                         <Text style={[
@@ -796,6 +900,134 @@ export default function MapScreen() {
                   </View>
                 </ScrollView>
               </View>
+
+              {/* Appointment Scheduling Section - Only show when status is 'appointment' */}
+              {editPinForm.status === 'appointment' && (
+                <View style={[styles.appointmentSection, { backgroundColor: isDark ? colors.muted : '#F3F4F6', borderColor: isDark ? colors.border : '#E5E7EB' }]}>
+                  <View style={styles.appointmentHeader}>
+                    <Ionicons name="calendar" size={20} color="#8B5CF6" />
+                    <Text style={[styles.appointmentTitle, { color: colors.foreground }]}>Schedule Appointment</Text>
+                  </View>
+
+                  {/* All Day Toggle */}
+                  <View style={styles.allDayRow}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground, marginBottom: 0 }]}>All Day</Text>
+                    <Switch
+                      value={editPinForm.appointment_all_day}
+                      onValueChange={(value) => setEditPinForm({ ...editPinForm, appointment_all_day: value })}
+                      trackColor={{ false: '#D1D5DB', true: '#8B5CF6' }}
+                      thumbColor="#FFFFFF"
+                    />
+                  </View>
+
+                  {/* Date Picker */}
+                  <View style={styles.inputGroup}>
+                    <Text style={[styles.inputLabel, { color: colors.foreground }]}>Date</Text>
+                    <TouchableOpacity
+                      style={[styles.datePickerButton, { backgroundColor: isDark ? colors.background : '#FFFFFF', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                      onPress={() => setShowAppointmentDatePicker(true)}
+                    >
+                      <Ionicons name="calendar-outline" size={18} color={colors.mutedForeground} />
+                      <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                        {editPinForm.appointment_date ? format(new Date(editPinForm.appointment_date), 'MMMM d, yyyy') : 'Select date'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Time Pickers - Only show if not all day */}
+                  {!editPinForm.appointment_all_day && (
+                    <View style={styles.timePickerRow}>
+                      <View style={[styles.inputGroup, { flex: 1, marginRight: 8 }]}>
+                        <Text style={[styles.inputLabel, { color: colors.foreground }]}>Start Time</Text>
+                        <TouchableOpacity
+                          style={[styles.datePickerButton, { backgroundColor: isDark ? colors.background : '#FFFFFF', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                          onPress={() => setShowAppointmentTimePicker(true)}
+                        >
+                          <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                          <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                            {editPinForm.appointment_time}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={[styles.inputGroup, { flex: 1, marginLeft: 8 }]}>
+                        <Text style={[styles.inputLabel, { color: colors.foreground }]}>End Time</Text>
+                        <TouchableOpacity
+                          style={[styles.datePickerButton, { backgroundColor: isDark ? colors.background : '#FFFFFF', borderColor: isDark ? colors.border : '#E5E7EB' }]}
+                          onPress={() => setShowAppointmentEndTimePicker(true)}
+                        >
+                          <Ionicons name="time-outline" size={18} color={colors.mutedForeground} />
+                          <Text style={[styles.datePickerText, { color: colors.foreground }]}>
+                            {editPinForm.appointment_end_time}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  )}
+
+                  <Text style={[styles.appointmentHint, { color: colors.mutedForeground }]}>
+                    📅 This appointment will appear in your calendar. You'll receive a notification 1 hour before.
+                  </Text>
+                </View>
+              )}
+
+              {/* Date/Time Pickers */}
+              {showAppointmentDatePicker && (
+                <DateTimePicker
+                  value={editPinForm.appointment_date ? new Date(editPinForm.appointment_date) : new Date()}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    setShowAppointmentDatePicker(Platform.OS === 'ios');
+                    if (date) {
+                      setEditPinForm({ ...editPinForm, appointment_date: format(date, 'yyyy-MM-dd') });
+                    }
+                  }}
+                />
+              )}
+              {showAppointmentTimePicker && (
+                <DateTimePicker
+                  value={(() => {
+                    const [hours, minutes] = editPinForm.appointment_time.split(':').map(Number);
+                    const date = new Date();
+                    date.setHours(hours, minutes, 0, 0);
+                    return date;
+                  })()}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    setShowAppointmentTimePicker(Platform.OS === 'ios');
+                    if (date) {
+                      const startTime = format(date, 'HH:mm');
+                      // Set end time to 1 hour after start time
+                      const endDate = new Date(date.getTime() + 60 * 60 * 1000);
+                      const endTime = format(endDate, 'HH:mm');
+                      setEditPinForm({
+                        ...editPinForm,
+                        appointment_time: startTime,
+                        appointment_end_time: endTime,
+                      });
+                    }
+                  }}
+                />
+              )}
+              {showAppointmentEndTimePicker && (
+                <DateTimePicker
+                  value={(() => {
+                    const [hours, minutes] = editPinForm.appointment_end_time.split(':').map(Number);
+                    const date = new Date();
+                    date.setHours(hours, minutes, 0, 0);
+                    return date;
+                  })()}
+                  mode="time"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  onChange={(event, date) => {
+                    setShowAppointmentEndTimePicker(Platform.OS === 'ios');
+                    if (date) {
+                      setEditPinForm({ ...editPinForm, appointment_end_time: format(date, 'HH:mm') });
+                    }
+                  }}
+                />
+              )}
 
               {/* Homeowner Name */}
               <View style={styles.inputGroup}>
@@ -1455,5 +1687,49 @@ const styles = StyleSheet.create({
     color: '#EF4444',
     marginTop: 8,
     textAlign: 'center',
+  },
+  // Appointment scheduling styles
+  appointmentSection: {
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  appointmentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  appointmentTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  allDayRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  datePickerButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  datePickerText: {
+    fontSize: 15,
+  },
+  timePickerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  appointmentHint: {
+    fontSize: 13,
+    marginTop: 12,
+    lineHeight: 18,
   },
 });

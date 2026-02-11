@@ -131,7 +131,7 @@
    "Properties": {
     "Code": {
      "S3Bucket": "cdk-hnb659fds-assets-880147167659-us-east-1",
-     "S3Key": "5afad190dde42362fbaa9a91431286517e169f02b7fa7facec4379a95f5b394d.zip"
+     "S3Key": "a0670ac44f3771ed2fcdb1a2455f2634123bdb0a1b93185b296f502caac7d82b.zip"
     },
     "Environment": {
      "Variables": {
@@ -199,7 +199,7 @@
    ],
    "Metadata": {
     "aws:cdk:path": "InsightFuelFlow-Api-dev/DealsFunction/Resource",
-    "aws:asset:path": "asset.5afad190dde42362fbaa9a91431286517e169f02b7fa7facec4379a95f5b394d",
+    "aws:asset:path": "asset.a0670ac44f3771ed2fcdb1a2455f2634123bdb0a1b93185b296f502caac7d82b",
     "aws:asset:is-bundled": true,
     "aws:asset:property": "Code"
    }

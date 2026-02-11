@@ -320,9 +320,9 @@ async function createDealFromPin(user: any, event: APIGatewayProxyEvent) {
       );
     }
 
-    // Update the pin with the deal_id and change status to 'installed'
+    // Update the pin with the deal_id but keep status as 'lead'
     await client.query(
-      `UPDATE rep_pins SET deal_id = $1, status = 'installed', updated_at = NOW() WHERE id = $2`,
+      `UPDATE rep_pins SET deal_id = $1, updated_at = NOW() WHERE id = $2`,
       [deal.id, pin_id]
     );
 
